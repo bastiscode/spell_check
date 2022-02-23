@@ -1,0 +1,8 @@
+type: SEC_WORDS_NMT
+
+noise: ${from_file:noise/mixed.yaml}
+tokenizers:
+  input_tokenizer: ${from_file:tokenizer/bpe_default.yaml}
+  output_tokenizer: ${from_file:tokenizer/bpe_default.yaml}
+
+encoding_scheme: "tokens"

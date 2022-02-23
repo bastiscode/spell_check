@@ -1,0 +1,41 @@
+version: "3"
+
+services:
+#  spell_check:
+#    build: .
+#    ports:
+#      - "8501:8501"
+#      - "8502:6006"
+#    container_name: spell_check
+#    command:
+#      - make demo
+#    volumes:
+#      - ./data:/spell_check/data
+#      - ./experiments:/spell_check/experiments
+#      - ./spelling_correction/benchmarks:/spell_check/spelling_correction/benchmarks
+#    networks:
+#      - default
+  languagetool:
+    image: erikvl87/languagetool
+    ports:
+      - "8010"
+    environment:
+      - langtool_languageModel=/ngrams
+      - Java_Xms=512m
+      - Java_Xmx=1g
+    volumes:
+      - ./third_party/languagetool:/ngrams
+    networks:
+      - default
+  languagetool_load_balance:
+    image: nginx:latest
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "8010:8010"
+    depends_on:
+      - languagetool
+
+networks:
+  default:
+

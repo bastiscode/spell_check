@@ -1,0 +1,4 @@
+type: TOKENIZATION_REPAIR_NMT
+
+noise: ${from_file:noise/tokenization_repair.yaml}
+encoding_scheme: "chars"

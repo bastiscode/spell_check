@@ -1,0 +1,10 @@
+type: CHAINED
+noise_cfgs:
+  - ${from_file:noise/mixed.yaml}
+  - type: WHITESPACE
+    no_whitespace_p: 0.2
+    insert_whitespace_p: 0.1
+    delete_whitespace_p: 0.2
+overrides:
+  - true
+  - false

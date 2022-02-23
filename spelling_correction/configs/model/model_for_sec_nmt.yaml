@@ -1,0 +1,16 @@
+type: MODEL_FOR_GRAPH2SEQ
+
+embedding: ${from_file:embedding/node_embedding.yaml}
+gnn: ${from_file:gnn/general_gnn.yaml}
+
+node_hidden_dim: ${oc.env:GNN_LIB_HIDDEN_DIM,512}
+edge_hidden_dim: ${oc.env:GNN_LIB_EDGE_HIDDEN_DIM,256}
+hidden_feature: "h"
+
+context_node_types: ["token", "word"]
+decoder_dropout: 0.1
+decoder_num_layers: ${oc.env:GNN_LIB_NUM_DECODER_LAYERS,3}
+
+tokenizers:
+  token: ${from_file:tokenizer/bpe_default.yaml}
+  output_tokenizer: ${from_file:tokenizer/bpe_default.yaml}

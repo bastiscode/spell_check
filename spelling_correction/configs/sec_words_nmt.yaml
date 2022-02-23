@@ -1,0 +1,28 @@
+variant: ${from_file:variant/sec_words_nmt.yaml}
+model: ${from_file:model/model_for_sec_words_nmt.yaml}
+optimizer: ${from_file:optimizer/adamw.yaml}
+lr_scheduler: ${from_file:lr_scheduler/step_with_0.05_warmup.yaml}
+
+experiment_dir: ${oc.env:GNN_LIB_EXPERIMENT_DIR}
+data_dir: ${oc.env:GNN_LIB_DATA_DIR}
+datasets:
+  - ${oc.env:GNN_LIB_DATA_DIR}/processed/wikidump_sed_words_and_sec
+  - ${oc.env:GNN_LIB_DATA_DIR}/processed/bookcorpus_sed_words_and_sec
+  - ${oc.env:GNN_LIB_DATA_DIR}/processed/neuspell
+dataset_limits:
+  - ${oc.env:GNN_LIB_DATA_LIMIT}
+  - ${oc.env:GNN_LIB_DATA_LIMIT}
+  - 10000000 # high enough limit for neuspell, contains "only" ~2.7 mio sequences
+val_splits:
+  - 2000
+  - 2000
+  - 1000
+
+experiment_name: ${oc.env:GNN_LIB_EXPERIMENT_NAME,dummy}
+epochs: ${oc.env:GNN_LIB_EPOCHS,1}
+batch_max_length: ${oc.env:GNN_LIB_BATCH_MAX_LENGTH,4096}
+bucket_span: ${oc.env:GNN_LIB_BUCKET_SPAN,4}
+log_per_epoch: ${oc.env:GNN_LIB_LOG_PER_EPOCH,100}
+eval_per_epoch: ${oc.env:GNN_LIB_EVAL_PER_EPOCH,4}
+seed: 22
+mixed_precision: ${oc.env:GNN_LIB_MIXED_PRECISION,true}

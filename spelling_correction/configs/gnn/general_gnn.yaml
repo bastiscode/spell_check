@@ -1,0 +1,9 @@
+type: GENERAL_GNN
+
+num_layers: ${oc.env:GNN_LIB_NUM_LAYERS,6}
+dropout: 0.1
+norm: layer
+message_scheme: ${oc.env:GNN_LIB_MESSAGE_SCHEME,attention}
+message_gating: ${oc.env:GNN_LIB_MESSAGE_GATING,false}
+node_update: ${oc.env:GNN_LIB_NODE_UPDATE,residual}
+share_parameters: ${oc.env:GNN_LIB_SHARE_PARAMETERS,false}

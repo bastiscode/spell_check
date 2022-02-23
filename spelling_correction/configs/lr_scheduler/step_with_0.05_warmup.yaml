@@ -1,0 +1,4 @@
+type: STEP_WITH_WARMUP
+warmup_steps: 0.05
+reduce_factor: 0.1
+reduce_at: [0.75, 0.9]

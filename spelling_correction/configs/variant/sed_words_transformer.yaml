@@ -1,0 +1,5 @@
+type: SED_WORDS
+
+noise: ${from_file:noise/mixed.yaml}
+tokenizer: ${from_file:tokenizer/bpe_default.yaml}
+encoding_scheme: "tokens"

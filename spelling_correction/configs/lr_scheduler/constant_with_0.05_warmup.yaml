@@ -1,0 +1,2 @@
+type: CONSTANT_WITH_WARMUP
+warmup_steps: 0.05

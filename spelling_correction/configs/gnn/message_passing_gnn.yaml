@@ -1,0 +1,10 @@
+type: MESSAGE_PASSING_GNN
+
+num_layers: ${oc.env:GNN_LIB_NUM_LAYERS,6}
+edge_num_layers: 3
+node_num_layers: 3
+message_aggregation: "sum"
+dropout: 0.1
+norm: layer
+recurrent_update: true
+message_gating: true

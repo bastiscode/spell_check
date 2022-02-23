@@ -1,0 +1,12 @@
+type: SED_WORDS
+
+noise: ${from_file:noise/mixed.yaml}
+tokenizer: ${from_file:tokenizer/bpe_default.yaml}
+
+add_word_features: ${oc.env:GNN_LIB_ADD_WORD_FEATURES,true}
+add_dependency_info: ${oc.env:GNN_LIB_ADD_DEPENDENCY_INFO,false}
+dictionary_file: ${oc.env:GNN_LIB_DICTIONARY,${oc.env:GNN_LIB_DATA_DIR}/dictionaries/merged_train_100k.txt}
+encoding_scheme: "whitespace_words"
+word_fully_connected: ${oc.env:GNN_LIB_WORD_FULLY_CONNECTED,false}
+token_fully_connected: ${oc.env:GNN_LIB_TOKEN_FULLY_CONNECTED,true}
+index: ${oc.env:GNN_LIB_SPELL_CHECK_INDEX,null}

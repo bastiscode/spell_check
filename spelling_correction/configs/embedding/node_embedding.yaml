@@ -1,0 +1,3 @@
+init_embeddings_along_edge_type: "in"
+learned_position_embedding: false
+embed_positions: true
