@@ -13,8 +13,8 @@ import numpy as np
 import spacy
 from spacy import Vocab
 from spacy.tokens import Token, Doc
-from torch.utils.data import Sampler, DistributedSampler, Dataset, DataLoader
 from torch import distributed as dist
+from torch.utils.data import Sampler, DistributedSampler, Dataset
 
 from gnn_lib.utils import common
 from gnn_lib.utils.distributed import DistributedDevice
@@ -500,7 +500,7 @@ def fix_unicode(sequence: str) -> str:
     return ftfy.fix_text(sequence)
 
 
-def is_valid_sequence(sequence: str, min_length: int = 10, max_length: int = 512, min_words: int = 2) -> bool:
+def is_valid_sequence(sequence: str, min_length: int = 0, max_length: int = -1, min_words: int = 0) -> bool:
     """
     Check if a string is a valid sequence in the
     sense that it is a proper sentence/expression.
@@ -511,6 +511,8 @@ def is_valid_sequence(sequence: str, min_length: int = 10, max_length: int = 512
     :param min_words: minimum number of words in string
     :return: bool whether string is valid
     """
+    if max_length < 0:
+        max_length = float("inf")
     # from tokenization repair repo
     f = re.compile(r" [.,;]( |$)|<|>|\"\"|\(\)| ' |\([,;]|colspan")
     if f.search(sequence) is not None:
@@ -658,62 +660,3 @@ def edit_token(token: str,
 
     assert len(token) == len(edits)
     return token, edits, exclude_indices
-
-
-class StringDataset(Dataset):
-    def __init__(self, sequences: List[str], sort_by_length: bool = False):
-        self.sequences = sequences
-        self.sort_by_length = sort_by_length
-        if not self.sort_by_length:
-            self.indices = list(range(len(self.sequences)))
-        else:
-            indices_lengths = sorted(
-                [(i, len(s)) for i, s in enumerate(self.sequences)],
-                key=lambda item: -item[1]
-            )
-            self.indices = [idx for idx, _ in indices_lengths]
-
-    def __getitem__(self, idx: int) -> Tuple[str, int]:
-        return self.sequences[self.indices[idx]], self.indices[idx]
-
-    def __len__(self) -> int:
-        return len(self.sequences)
-
-    @staticmethod
-    def collate_fn(batch: List[Tuple[str, Dict]]) -> Tuple[List[str], Dict]:
-        return [b[0] for b in batch], {"indices": [b[1] for b in batch]}
-
-
-def get_string_dataset_and_loader(
-        file_path: str,
-        sort_by_length: bool,
-        batch_size: int,
-        limit: Optional[int] = None
-) -> Tuple[StringDataset, DataLoader]:
-    text_data: List[str] = []
-    with open(file_path, "r", encoding="utf8") as in_file:  # type: TextIO
-        for i, line in enumerate(in_file):
-            if limit is not None and i >= limit:
-                break
-            line = clean_sequence(line)
-            if line == "":
-                continue
-            text_data.append(line)
-
-    test_dataset = StringDataset(text_data, sort_by_length=sort_by_length)
-    test_loader = DataLoader(
-        dataset=test_dataset,
-        batch_size=batch_size,
-        collate_fn=test_dataset.collate_fn,
-        pin_memory=True
-    )
-
-    return test_dataset, test_loader
-
-
-def reorder_data(items: List, original_indices: List[int]) -> List:
-    assert len(items) == len(original_indices)
-    reordered_items = [None] * len(items)
-    for item, idx in zip(items, original_indices):
-        reordered_items[idx] = item
-    return reordered_items

@@ -123,11 +123,16 @@ def get_num_parameters(module: nn.Module, unused_parameters: Optional[Set[str]] 
 
 def get_cpu_info() -> str:
     if platform.system() == "Linux":
-        cpuinfo = subprocess.check_output("cat /proc/cpuinfo", shell=True).decode("utf8").strip()
-        for line in cpuinfo.split("\n"):
-            if "model name" in line:
-                return re.sub(".*model name.*: ", "", line.strip(), 1)
-    return f"cpu: {platform.processor()}"
+        try:
+            with open("/proc/cpuinfo", "r") as inf:
+                cpu_info = inf.read()
+                cpuinfo = subprocess.check_output("cat /proc/cpuinfo").decode("utf8").strip()
+                for line in cpuinfo.split("\n"):
+                    if "model name" in line:
+                        return re.sub(".*model name.*: ", "", line.strip(), 1)
+        except Exception:
+            return platform.processor()
+    return platform.processor()
 
 
 def get_device_info(device: torch.device) -> str:
@@ -138,3 +143,15 @@ def get_device_info(device: torch.device) -> str:
 
 def disable_tqdm() -> bool:
     return os.getenv("GNN_LIB_DISABLE_TQDM", "false") == "true"
+
+
+_MIXED_PRECISION = False
+
+
+def set_mixed_precision(v: bool) -> None:
+    global _MIXED_PRECISION
+    _MIXED_PRECISION = v
+
+
+def mixed_precision() -> bool:
+    return _MIXED_PRECISION

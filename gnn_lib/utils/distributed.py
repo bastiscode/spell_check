@@ -18,7 +18,7 @@ class DistributedDevice:
         assert self.local_rank < torch.cuda.device_count(), \
             f"found {torch.cuda.device_count()} available GPUs, " \
             f"but local_rank is {self.local_rank} (should be in [0..NumGPUs))"
-        self.device = torch.device(f"cuda:{self.local_rank}")
+        self.device = torch.device(self.local_rank)
 
     @property
     def is_local_main_process(self) -> bool:

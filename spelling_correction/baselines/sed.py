@@ -1,5 +1,5 @@
 import os
-from typing import List, Optional
+from typing import List, Optional, Any, Dict
 
 from spacy.tokens import Token
 
@@ -21,7 +21,7 @@ class SEDSequenceOODBaseline(Baseline):
     def _word_in_dict(self, word: Token) -> bool:
         return word.text.lower() in self.dictionary or word.text in self.dictionary
 
-    def inference(self, sequences: List[str]) -> List[int]:
+    def inference(self, sequences: List[str], **kwargs: Dict[str, Any]) -> List[int]:
         predictions = []
         for sequence in sequences:
             prediction = 0
@@ -45,13 +45,13 @@ class SEDSequenceFromSECBaseline(Baseline):
     def name(self) -> str:
         return self.sec.name
 
-    def inference(self, sequences: List[str]) -> List[int]:
+    def inference(self, sequences: List[str], **kwargs: Dict[str, Any]) -> List[int]:
         predictions = self.sec.inference(sequences)
         return [int(p != s) for p, s in zip(predictions, sequences)]
 
 
 class SEDWordsOODBaseline(SEDSequenceOODBaseline):
-    def inference(self, sequences: List[str]) -> List[List[int]]:
+    def inference(self, sequences: List[str], **kwargs: Dict[str, Any]) -> List[List[int]]:
         predictions = []
         for sequence in sequences:
             prediction = []
@@ -75,7 +75,7 @@ class SEDWordsOODBaseline(SEDSequenceOODBaseline):
 
 
 class SEDWordsFromSECBaseline(SEDSequenceFromSECBaseline):
-    def inference(self, sequences: List[str]) -> List[List[int]]:
+    def inference(self, sequences: List[str], **kwargs: Dict[str, Any]) -> List[List[int]]:
         corrections = self.sec.inference(sequences)
         predictions = []
         for c, s in zip(corrections, sequences):

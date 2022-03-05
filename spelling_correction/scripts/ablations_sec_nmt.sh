@@ -22,7 +22,7 @@ export GNN_LIB_MASTER_PORT=$(python -c "import random; print(random.randrange(10
 ablations_type=${ABLATIONS_TYPE:-"ABLATIONS_TYPE is not defined"}
 
 if [[ $ablations_type == "transformer" ]]; then
-  config="$config_dir/sec_nmt_transformer.yaml"
+  config="$config_dir/sec_nmt_transformer_paragraphs.yaml"
   rel_config=$(realpath "$config" --relative-to "$workspace")
   echo "Starting ablation with config $(realpath "$config" --relative-to "$config_dir")"
   export GNN_LIB_EXPERIMENT_NAME="transformer_sec_nmt"

@@ -38,7 +38,12 @@ def train(args: argparse.Namespace, device: DistributedDevice) -> None:
         cfg = OmegaConf.merge(schema, cfg)
         resuming_training = False
     else:
-        cfg = gnn_lib.load_experiment_config(args.resume)
+        # allow data dir to be overriden when resuming training, because you might train on a different node
+        # where the local temporary data directory is different
+        override_env_vars = {}
+        if "GNN_LIB_DATA_DIR" in os.environ:
+            override_env_vars["GNN_LIB_DATA_DIR"] = os.environ["GNN_LIB_DATA_DIR"]
+        cfg = gnn_lib.load_experiment_config(args.resume, override_env_vars=override_env_vars)
         resuming_training = True
 
     logger.info(f"Using distributed device: {device}")
@@ -46,6 +51,7 @@ def train(args: argparse.Namespace, device: DistributedDevice) -> None:
     torch.manual_seed(cfg.seed)
     torch.backends.cudnn.benchmark = True
     torch.use_deterministic_algorithms(False)
+    common.set_mixed_precision(cfg.mixed_precision)
 
     if device.is_main_process and not resuming_training:
         # retry up to ten times with two seconds delay
@@ -102,12 +108,11 @@ def train(args: argparse.Namespace, device: DistributedDevice) -> None:
         cfg=cfg.model,
         device=device.device,
     )
-
     optimizer = get_optimizer_from_config(
         cfg=cfg.optimizer,
         model=model
     )
-    grad_scaler = amp.GradScaler(enabled=cfg.mixed_precision)
+    grad_scaler = amp.GradScaler(enabled=common.mixed_precision())
 
     if resuming_training:
         # load last checkpoint
@@ -132,6 +137,8 @@ def train(args: argparse.Namespace, device: DistributedDevice) -> None:
         if device.is_main_process:
             logger.info(f"Successfully loaded weights from {cfg.start_from_checkpoint}")
 
+    torch.cuda.set_device(device.local_rank)
+    model = model.to(device.local_rank)
     model = DistributedDataParallel(model, device_ids=[device.local_rank], output_device=device.local_rank)
 
     # this makes sure we can use DDP with parameter sharing and gradient checkpointing,
@@ -382,7 +389,6 @@ def initialize() -> DistributedDevice:
             f"rank={rank}, local_rank={local_rank}, world_size={world_size}, local_world_size={local_world_size}"
         )
 
-    torch.cuda.set_device(local_rank)
     dist.init_process_group(
         backend=dist.Backend.NCCL,
         init_method="env://",
@@ -405,6 +411,5 @@ def de_initialize() -> None:
 
 
 if __name__ == "__main__":
-    # mp.set_start_method("spawn")
     train(parse_args(), initialize())
     de_initialize()

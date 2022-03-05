@@ -1,15 +1,19 @@
+import math
 from typing import Dict, Optional, Union, Tuple, Callable
 
 import dgl
 import einops
+import torch
 from dgl import function as dfn, DGLError
 from dgl.ops import edge_softmax
-from dgl.udf import EdgeBatch
+from dgl.udf import EdgeBatch, NodeBatch
 from dgl.utils import expand_as_pair
-import torch
 from torch import nn
-from torch.nn import functional as F
+from torch.cuda import amp
+from torch.nn import functional as F, init
 from torch.utils.checkpoint import checkpoint as cp
+
+from gnn_lib.utils import common
 
 
 class ConvolutionLayer(nn.Module):
@@ -31,6 +35,8 @@ class ConvolutionLayer(nn.Module):
 
         if activation is None:
             activation_module = nn.Identity()
+        elif activation == "tanh":
+            activation_module = nn.Tanh()
         elif activation == "relu":
             activation_module = nn.ReLU()
         elif activation == "gelu":
@@ -41,7 +47,9 @@ class ConvolutionLayer(nn.Module):
         self.out_transforms = nn.ModuleDict({
             node_type: nn.Sequential(
                 nn.Linear(node_hidden_dim, node_hidden_dim),
-                activation_module
+                activation_module,
+                nn.Dropout(dropout),
+                nn.Linear(node_hidden_dim, node_hidden_dim)
             )
             for node_type in sample_g.ntypes
         })
@@ -65,6 +73,10 @@ class ConvolutionLayer(nn.Module):
             })
 
         self.normalize = "out_in_degree"
+
+    def node_update(self, nodes: NodeBatch) -> Dict[str, torch.Tensor]:
+        with amp.autocast(enabled=common.mixed_precision()):
+            return {"update": self.out_transforms[nodes.ntype](nodes.data["update"])}
 
     def forward(self,
                 g: dgl.DGLHeteroGraph,
@@ -96,18 +108,47 @@ class ConvolutionLayer(nn.Module):
                 rel_graph.srcdata[f"messages_{rel_type_str}"] = messages
                 rel_graph.dstdata[f"norm_{rel_type_str}"] = norm
 
-            g.multi_update_all(
-                {
-                    e_type: (
-                        dfn.u_mul_v(f"messages_{'_'.join(e_type)}", f"norm_{'_'.join(e_type)}", "messages"),
-                        dfn.sum("messages", "update")
-                    ) for e_type in g.canonical_etypes if g.num_edges(e_type) > 0
-                },
-                cross_reducer="sum",
-                apply_node_func=lambda nodes: {"update": self.out_transforms[nodes.ntype](nodes.data["update"])}
-            )
+            # explicitly turn off mixed precision for multi update all because this raises errors when running on fp16
+            with amp.autocast(enabled=False):
+                g.multi_update_all(
+                    {
+                        e_type: (
+                            dfn.u_mul_v(f"messages_{'_'.join(e_type)}", f"norm_{'_'.join(e_type)}", "messages"),
+                            dfn.sum("messages", "update")
+                        ) for e_type in g.canonical_etypes if g.num_edges(e_type) > 0
+                    },
+                    cross_reducer="sum",
+                    apply_node_func=self.node_update
+                )
 
             return {g.ntypes[0]: g.ndata["update"]} if g.is_homogeneous else g.ndata["update"]
+
+
+class MultiHeadLinear(nn.Module):
+    def __init__(self, num_heads: int, head_in_dim: int, head_out_dim: int, bias: bool = True) -> None:
+        super().__init__()
+        self.num_heads = num_heads
+        self.head_in_dim = head_in_dim
+        self.head_out_dim = head_out_dim
+
+        self.weights = nn.Parameter(
+            torch.empty(self.num_heads, self.head_in_dim, self.head_out_dim, dtype=torch.float)
+        )
+        self.bias = nn.Parameter(torch.zeros(self.num_heads, self.head_out_dim, dtype=torch.float))
+
+        self.reset_parameters()
+
+    def reset_parameters(self) -> None:
+        # from pytorch linear layer
+        for head in range(self.num_heads):
+            init.kaiming_uniform_(self.weights[head].T, a=math.sqrt(5))
+            fan_in, _ = init._calculate_fan_in_and_fan_out(self.weights[head].T)
+            bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
+            init.uniform_(self.bias[head], -bound, bound)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        assert len(x.shape) == 3, f"expect x to be of shape [B, H, HD] where B=batch, H=num_heads, HD=head_dim"
+        return (x.unsqueeze(-1) * self.weights.unsqueeze(0)).sum(-2) + self.bias
 
 
 class AttentionLayer(nn.Module):
@@ -140,24 +181,28 @@ class AttentionLayer(nn.Module):
             for node_type in dst_types
         })
 
-        self.edge_transforms = nn.ModuleDict({
-            edge_type: nn.Linear(node_hidden_dim, node_hidden_dim)
-            for edge_type in sample_g.etypes
-        })
-
         if num_heads is None:
             num_heads = max(node_hidden_dim // 64, 1)
         self.num_heads = num_heads
         self.head_dim = node_hidden_dim // num_heads
         self.scale = self.head_dim ** -0.5
 
+        self.edge_transforms = nn.ModuleDict({
+            # edge_type: MultiHeadLinear(self.num_heads, self.head_dim, self.head_dim)
+            edge_type: nn.Linear(node_hidden_dim, node_hidden_dim)
+            for edge_type in sample_g.etypes
+        })
+
         self.message_gating = message_gating
         if self.message_gating:
+            # message gating for attention is done on head level
             self.gate_transforms = nn.ModuleDict({
                 edge_type: nn.Sequential(
+                    # MultiHeadLinear(self.num_heads, self.head_dim, self.head_dim),
                     nn.Linear(node_hidden_dim, node_hidden_dim),
                     nn.GELU(),
                     nn.Dropout(dropout),
+                    # MultiHeadLinear(self.num_heads, self.head_dim, 1),
                     nn.Linear(node_hidden_dim, 1),
                     nn.Sigmoid()
                 )
@@ -176,11 +221,6 @@ class AttentionLayer(nn.Module):
                 if rel_graph.number_of_edges() == 0:
                     continue
 
-                # if edge_feat is not None:
-                #     e_feat = edge_feat[(src, edge, dst)]
-                # else:
-                #     e_feat = torch.zeros()
-
                 k_feat = self.key_transforms[src](feat[src])
                 k_feat = self.edge_transforms[edge](k_feat)
 
@@ -193,28 +233,13 @@ class AttentionLayer(nn.Module):
                     messages = self.gate_transforms[edge](v_feat) * messages
 
                 rel_type_str = "_".join((src, edge, dst))
-                rel_graph.dstdata["queries"] = einops.rearrange(
-                    q_feat,
-                    "n (h hf) -> n h hf",
-                    h=self.num_heads,
-                    hf=self.head_dim
-                )
-                rel_graph.srcdata["keys"] = einops.rearrange(
-                    k_feat,
-                    "n (h hf) -> n h hf",
-                    h=self.num_heads,
-                    hf=self.head_dim
-                )
-                rel_graph.srcdata[f"messages_{rel_type_str}"] = einops.rearrange(
-                    messages,
-                    "n (h hf) -> n h hf",
-                    h=self.num_heads,
-                    hf=self.head_dim
-                )
+                rel_graph.dstdata["queries"] = q_feat.view(-1, self.num_heads, self.head_dim)
+                rel_graph.srcdata["keys"] = k_feat.view(-1, self.num_heads, self.head_dim)
+                rel_graph.srcdata[f"messages_{rel_type_str}"] = messages.view(-1, self.num_heads, self.head_dim)
 
-                rel_graph.apply_edges(dfn.u_dot_v("keys", "queries", f"attn_weights_{rel_type_str}"))
+                rel_graph.apply_edges(dfn.u_dot_v("keys", "queries", "attn_scores"))
                 rel_graph.edata[f"attn_weights_{rel_type_str}"] = self.attention_dropout(
-                    edge_softmax(rel_graph, rel_graph.edata[f"attn_weights_{rel_type_str}"])
+                    edge_softmax(rel_graph, rel_graph.edata["attn_scores"])
                 )
 
             g.multi_update_all(
@@ -232,7 +257,6 @@ class AttentionLayer(nn.Module):
                     )
                 }
             )
-
             return {g.ntypes[0]: g.ndata["update"]} if g.is_homogeneous else g.ndata["update"]
 
 
@@ -277,8 +301,7 @@ class MessagePassingLayer(nn.Module):
                 nn.Linear(edge_hidden_dim, edge_hidden_dim),
                 nn.GELU(),
                 nn.Dropout(dropout),
-                nn.Linear(edge_hidden_dim, edge_hidden_dim),
-                nn.LayerNorm(edge_hidden_dim)
+                nn.Linear(edge_hidden_dim, edge_hidden_dim)
             )
             for edge_type in sample_g.etypes
         })
@@ -313,6 +336,7 @@ class MessagePassingLayer(nn.Module):
             uve_feat.append(edges.data["edge"])
         messages_fn = _cat_and_forward_checkpoint(self.edge_transforms[e_type])
         messages = cp(messages_fn, *uve_feat)
+        # messages = self.edge_transforms[e_type](torch.cat(uve_feat, dim=1))
         if self.message_gating:
             gating_fn = _cat_and_forward_checkpoint(self.gate_transforms[e_type])
             messages = cp(gating_fn, *uve_feat) * messages

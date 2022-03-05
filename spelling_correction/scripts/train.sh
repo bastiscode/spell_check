@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --partition=alldlc_gpu-rtx2080
-#SBATCH --nodes=2
-#SBATCH --ntasks-per-node=4
-#SBATCH --gres=gpu:4
+#SBATCH --nodes=4
+#SBATCH --ntasks-per-node=2
+#SBATCH --gres=gpu:2
 #SBATCH --job-name=training
 #SBATCH --mail-user=sebastian.walter98@gmail.com
 #SBATCH --mail-type=END,FAIL
@@ -39,6 +39,11 @@ else
   workspace=/work/dlclarge1/swalter-masters_thesis/masters_thesis
   cd $workspace
   source ../env/bin/activate
+
+#  sync_datasets=${SYNC_DATASETS?"Could not find SYNC_DATASETS env variable"}
+#  srun $script_dir/sync_data.sh $workspace $TMPDIR "$sync_datasets"
+#  data_dir=$TMPDIR/data
+
   data_dir=$workspace/data
   experiment_dir=$workspace/experiments
 
@@ -51,6 +56,8 @@ fi
 export GNN_LIB_CONFIG_DIR=$workspace/spelling_correction/configs
 export GNN_LIB_DATA_DIR=$data_dir
 export GNN_LIB_EXPERIMENT_DIR=$experiment_dir
+
+echo "config dir: $GNN_LIB_CONFIG_DIR, data_dir: $GNN_LIB_DATA_DIR, experiment_dir: $GNN_LIB_EXPERIMENT_DIR"
 
 # for pytorch distributed
 export MASTER_ADDR=$master_addr
@@ -70,6 +77,9 @@ if [[ $config != "" ]]; then
 else
   train_cmd="gnn_lib/train.py --resume $resume"
 fi
+
+echo "GPU information:"
+nvidia-smi
 
 if [[ $is_local == true ]]; then
   echo "Starting local training with cmd $train_cmd"

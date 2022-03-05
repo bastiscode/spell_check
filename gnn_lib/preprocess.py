@@ -48,7 +48,7 @@ def preprocess(args: argparse.Namespace) -> None:
         lmdb_name="lmdb",
         files=files,
         max_length=cfg.max_length,
-        sample_limit=cfg.limit,
+        sample_limit=cfg.limit if cfg.limit is not None else int(1e15),
         preprocess_kwargs={"spell_check_index_dir": cfg.spell_check_index_dir,
                            "spell_check_index_num_neighbors": cfg.spell_check_index_num_neighbors,
                            "tokenizer_cfg": cfg.tokenizer,

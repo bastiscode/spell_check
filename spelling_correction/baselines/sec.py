@@ -1,7 +1,7 @@
 import json
 import os
 import re
-from typing import List, Optional, Dict, Iterable
+from typing import List, Optional, Dict, Iterable, Any
 
 import Levenshtein
 import numpy as np
@@ -11,6 +11,7 @@ import torch
 
 from gnn_lib.data import utils
 from gnn_lib.utils import io
+
 from spelling_correction import DICTIONARIES_DIR
 from spelling_correction.baselines import Baseline
 
@@ -43,7 +44,7 @@ class SECCTDBaseline(Baseline):
         max_freq = max(closest_words.values())
         return [w for w, freq in closest_words.items() if freq == max_freq]
 
-    def inference(self, sequences: List[str]) -> List[str]:
+    def inference(self, sequences: List[str], **kwargs: Dict[str, Any]) -> List[str]:
         predictions = []
         for seq in sequences:
             predicted_words = []
@@ -64,7 +65,7 @@ class SECDummyBaseline(Baseline):
     def name(self) -> str:
         return "dummy"
 
-    def inference(self, sequences: List[str]) -> List[str]:
+    def inference(self, sequences: List[str], **kwargs: Dict[str, Any]) -> List[str]:
         return sequences
 
 
@@ -79,7 +80,7 @@ class SECJamspellBaseline(Baseline):
     def name(self) -> str:
         return "jamspell"
 
-    def inference(self, sequences: List[str]) -> List[str]:
+    def inference(self, sequences: List[str], **kwargs: Dict[str, Any]) -> List[str]:
         return [self.spell_checker.FixFragment(sequence) for sequence in sequences]
 
 
@@ -110,7 +111,7 @@ class SECHunspellBaseline(Baseline):
             corrections.append(word.text)
         return utils.de_tokenize_words(corrections, doc)
 
-    def inference(self, sequences: List[str]) -> List[str]:
+    def inference(self, sequences: List[str], **kwargs: Dict[str, Any]) -> List[str]:
         return [self._correct_sequence(sequence) for sequence in sequences]
 
 
@@ -142,7 +143,7 @@ class SECAspellBaseline(Baseline):
             corrections.append(word.text)
         return utils.de_tokenize_words(corrections, doc)
 
-    def inference(self, sequences: List[str]) -> List[str]:
+    def inference(self, sequences: List[str], **kwargs: Dict[str, Any]) -> List[str]:
         return [self._correct_sequence(sequence) for sequence in sequences]
 
 
@@ -150,13 +151,13 @@ class SECNeuspellBaseline(Baseline):
     def __init__(self, model_name: str, seed: Optional[int] = None):
         super().__init__(seed)
         import neuspell
-        device = "cuda" if torch.cuda.is_available() else "cpu"
+        device = "cpu" # "cuda" if torch.cuda.is_available() else "cpu"
         if model_name == "bert":
             self.spell_checker = neuspell.BertChecker(
                 pretrained=True,
                 device=device
             )
-        elif model_name == "elmo_scrnn":
+        elif model_name == "sclstm_elmo":
             self.spell_checker = neuspell.SclstmelmoChecker(
                 pretrained=True,
                 device=device
@@ -198,12 +199,17 @@ class SECNeuspellBaseline(Baseline):
         assert all(w is not None for w in whitespaces), f"{whitespaces}\n{a}\n{b}"
         return whitespaces
 
-    def inference(self, sequences: List[str]) -> List[str]:
+    def inference(self, sequences: List[str], **kwargs: Dict[str, Any]) -> List[str]:
         tokenized_sequences, corrected_sequences = self.spell_checker.correct_strings(sequences, return_all=True)
 
+        batch_detections = kwargs.get("detections", [[1] * len(seq.split()) for seq in sequences])
+
         outputs = []
-        for sequence, tokenized, corrected in zip(sequences, tokenized_sequences, corrected_sequences):
+        for sequence, tokenized, corrected, detections in zip(
+                sequences, tokenized_sequences, corrected_sequences, batch_detections
+        ):
             sequence_tokens = sequence.split()
+            assert len(detections) == len(sequence_tokens)
             tokenized_tokens = tokenized.split()
             corrected_tokens = corrected.split()
             assert len(sequence_tokens) <= len(tokenized_tokens) == len(corrected_tokens)
@@ -215,8 +221,11 @@ class SECNeuspellBaseline(Baseline):
             whitespaces = SECNeuspellBaseline.match_tokens_backtracking(sequence_tokens, tokenized_tokens)
 
             output_str = ""
-            for token, whitespace in zip(corrected_tokens, whitespaces):
-                output_str += token + " " * whitespace
+            ws_idx = 0
+            for input_token, corrected_token, whitespace in zip(tokenized_tokens, corrected_tokens, whitespaces):
+                output_str += (corrected_token if detections[ws_idx] else input_token) + " " * whitespace
+                if whitespace:
+                    ws_idx += 1
             outputs.append(output_str)
 
         return outputs
@@ -239,7 +248,7 @@ class SECNorvigBaseline(Baseline):
                 corrections.append(norvig.correction(word.text))
         return utils.de_tokenize_words(corrections, doc)
 
-    def inference(self, sequences: List[str]) -> List[str]:
+    def inference(self, sequences: List[str], **kwargs: Dict[str, Any]) -> List[str]:
         return [self._correct_sequence(sequence) for sequence in sequences]
 
 
@@ -259,7 +268,7 @@ class SECSymSpellBaseline(Baseline):
         suggestions = self.symspell.lookup_compound(sequence, max_edit_distance=2)
         return suggestions[0].term
 
-    def inference(self, sequences: List[str]) -> List[str]:
+    def inference(self, sequences: List[str], **kwargs: Dict[str, Any]) -> List[str]:
         return [self._correct_sequence(sequence) for sequence in sequences]
 
 
@@ -304,5 +313,5 @@ class SECLanguagetoolBaseline(Baseline):
             raise RuntimeError(f"Error making request to language tool server at {self.base_url}:\n{e}")
         return sequence
 
-    def inference(self, sequences: Iterable[str]) -> List[str]:
+    def inference(self, sequences: Iterable[str], **kwargs: Dict[str, Any]) -> List[str]:
         return [self._correct_with_language_tool(seq) for seq in sequences]

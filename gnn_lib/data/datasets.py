@@ -133,7 +133,7 @@ def write_lmdb(files: List[str],
 
             corrupt_samples_ser = utils.serialize_samples(corrupt_samples)
             for corr_sample, corr_sample_ser, seq in zip(corrupt_samples, corrupt_samples_ser, sequences_batch):
-                length = sum(len(t) for t in corr_sample.tokens)
+                length = sum(max(len(t), 1) for t in corr_sample.tokens)
                 if length > max_length:
                     continue
                 assert txn.put(f"{num_sequences}".encode("utf8"), seq.encode("utf8"))
@@ -208,7 +208,7 @@ def preprocess_dataset(lmdb_dir: str,
 
     processes = []
 
-    num_processes = min(int(os.environ.get("GNN_LIB_NUM_PROCESSES", mp.cpu_count())), len(files))
+    num_processes = min(int(os.environ.get("GNN_LIB_NUM_PROCESSES", min(8, len(os.sched_getaffinity(0))))), len(files))
     files_per_process = len(files) / num_processes
     files_per_process_ceil = int(np.ceil(files_per_process))
     files_per_process_floor = int(np.floor(files_per_process))

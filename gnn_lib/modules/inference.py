@@ -1,10 +1,11 @@
+import math
 import queue
 from typing import Callable, Tuple, Dict, List, Any, Union, Optional
 
 import einops
 import torch
 
-from gnn_lib.data import tokenization, index
+from gnn_lib.data import tokenization, index, utils as data_utils
 from gnn_lib.modules import utils
 from gnn_lib.modules.utils import DecoderMixin
 
@@ -83,6 +84,66 @@ def map_score(normalize_by_length: bool = True, alpha: float = 1.0) -> SCORE_FN:
             return s / (len(beam.log_prob) ** alpha)
         else:
             return s
+
+    return score
+
+
+def spell_check_score(
+        normalize_by_length: bool = True,
+        alpha: float = 1.0,
+        # if not None, must be one of [dictionary, dictionary_or_in_input, dictionary_or_eq_input]
+        mode: Optional[str] = None
+) -> SCORE_FN:
+    def score(beam: Beam,
+              bos_token_id: int,
+              eos_token_id: int,
+              input_str: Optional[str] = None,
+              de_tok_fn: Optional[Callable[[List[int]], str]] = None,
+              prefix_index: Optional[index.PrefixIndex] = None) -> float:
+        assert beam.token_ids[0] == bos_token_id
+        token_ids = beam.token_ids[1:]  # strip bos token
+        if beam.is_eos(eos_token_id):  # strip eos token
+            token_ids = token_ids[:-1]
+
+        pred_str = de_tok_fn(token_ids)
+        pred_str_split = pred_str.split()
+
+        if mode is not None and len(pred_str_split) > 0:
+            assert prefix_index is not None
+
+            # get all input words
+            input_words, input_ws = data_utils.tokenize_words_regex(input_str)
+            # split current predicted word (by whitespace) further using regex
+            pred_words, pred_ws = data_utils.tokenize_words_regex(pred_str_split[-1])
+
+            valid_pred = False
+            # check if current predicted word (or its lowercase version)
+            # is a prefix of a dictionary word (in prefix tree)
+            valid_pred |= (
+                    len(prefix_index.retrieve(pred_words[-1])) > 0
+                    or len(prefix_index.retrieve(pred_words[-1].lower())) > 0
+            )
+
+            # check if current predicted word (or its lowercase version)
+            # is a prefix of an input word
+            if mode == "dictionary_or_in_input":
+                valid_pred |= (
+                        any(ipt_w.startswith(pred_words[-1]) for ipt_w in input_words)
+                        or any(ipt_w.startswith(pred_words[-1].lower()) for ipt_w in input_words)
+                )
+
+            # check if current predicted string is prefix of the input string
+            if mode == "dictionary_or_eq_input":
+                valid_pred |= input_str.startswith(pred_str)
+
+            if not valid_pred:
+                return -1_000_000
+
+        s = sum(beam.log_prob)
+        if normalize_by_length:
+            s = s / (len(beam.log_prob) ** alpha)
+
+        return s
 
     return score
 
@@ -234,7 +295,7 @@ def best_first_inference(
 
         search_depth = 1
 
-        while len(finished_beams) < top_k and search_depth < max_length:
+        while len(finished_beams) < top_k and search_depth < max_length and not beam_queue.empty():
             beam: Beam = beam_queue.get()[1]
 
             if beam.is_eos(eos_token_id):
@@ -272,7 +333,10 @@ def best_first_inference(
 
             log_softmax_scores = torch.log_softmax(decoder_output, dim=1)[0].tolist()
 
+            min_log_prob = math.log(1 / len(log_softmax_scores))
             for i, score in enumerate(log_softmax_scores):
+                if score < min_log_prob:
+                    continue
                 new_beam = Beam.from_beam(beam, score, i)
                 beam_queue.put(
                     (
@@ -287,10 +351,9 @@ def best_first_inference(
                         new_beam
                     )
                 )
-
             search_depth = max(search_depth, len(beam.token_ids) + 1)
 
-        while len(finished_beams) < top_k:
+        while len(finished_beams) < top_k and not beam_queue.empty():
             finished_beams.append(beam_queue.get()[1])
 
         all_beams.append(finished_beams)
@@ -337,7 +400,7 @@ def beam_inference(
 
         search_depth = 1
 
-        while beam_queue.qsize() < beam_width and search_depth < max_length:
+        while beam_queue.qsize() < beam_width and search_depth < max_length and len(current_beams) > 0:
             decoder_inputs = torch.tensor(
                 [beam.token_ids for beam in current_beams],
                 dtype=torch.long,
@@ -370,49 +433,33 @@ def beam_inference(
 
             log_softmax_scores = torch.log_softmax(decoder_output, dim=1)
 
-            # get topk for each node
-            top_k_log_probabilities, top_k_indices = torch.topk(log_softmax_scores, beam_width, dim=1)
-            top_k_log_probabilities = top_k_log_probabilities.tolist()
-            top_k_indices = top_k_indices.tolist()
+            min_log_prob = math.log(1 / log_softmax_scores.shape[1])
+            valid_indices = torch.nonzero(log_softmax_scores >= min_log_prob, as_tuple=True)
+            valid_log_prob = log_softmax_scores[valid_indices].tolist()
+            valid_indices = torch.stack(valid_indices, dim=-1).tolist()
 
             beam_candidates = []
-            for i, top_k in enumerate(top_k_indices):
-                for j, token_id in enumerate(top_k):
-                    beam_candidate = Beam.from_beam(
-                        current_beams[i],
-                        log_p=top_k_log_probabilities[i][j],
-                        token_id=token_id
-                    )
-                    beam_candidates.append(beam_candidate)
-
-            sorted_beams = sorted(
-                beam_candidates,
-                key=lambda x: -score_fn(
-                    x,
+            for (beam_idx, token_id), log_p in zip(valid_indices, valid_log_prob):
+                beam_candidate = Beam.from_beam(
+                    current_beams[beam_idx],
+                    log_p=log_p,
+                    token_id=token_id
+                )
+                beam_candidates.append((beam_candidate, -score_fn(
+                    beam_candidate,
                     bos_token_id,
                     eos_token_id,
                     input_strings[b] if input_strings is not None else None,
                     de_tok_fn,
                     prefix_index
-                )
-            )[:2 * beam_width]
+                )))
+
+            beam_candidates = sorted(beam_candidates, key=lambda e: e[1])[:2 * beam_width]
 
             current_beams = []
-            for beam in sorted_beams:
+            for beam, score in beam_candidates:
                 if beam.is_eos(eos_token_id):
-                    beam_queue.put(
-                        (
-                            -score_fn(
-                                beam,
-                                bos_token_id,
-                                eos_token_id,
-                                input_strings[b] if input_strings is not None else None,
-                                de_tok_fn,
-                                prefix_index
-                            ),
-                            beam
-                        )
-                    )
+                    beam_queue.put((score, beam))
                 else:
                     current_beams.append(beam)
 
@@ -421,23 +468,24 @@ def beam_inference(
 
             search_depth += 1
 
-        if beam_queue.qsize() < beam_width:
-            for beam in current_beams:
-                beam_queue.put(
-                    (
-                        -score_fn(
-                            beam,
-                            bos_token_id,
-                            eos_token_id,
-                            input_strings[b] if input_strings is not None else None,
-                            de_tok_fn,
-                            prefix_index
-                        ),
-                        beam
-                    )
-                )
+        if beam_queue.qsize() < beam_width and len(current_beams) > 0:
+            # if we did not find beam_width solutions that end in eos,
+            # add the highest scoring remaining active beams to queue
+            current_beams = [(beam, -score_fn(
+                beam,
+                bos_token_id,
+                eos_token_id,
+                input_strings[b] if input_strings is not None else None,
+                de_tok_fn,
+                prefix_index
+            )) for beam in current_beams]
+            current_beams = sorted(current_beams, key=lambda e: e[1])
+            for beam, score in current_beams:
+                beam_queue.put((score, beam))
+                if beam_queue.qsize() >= beam_width:
+                    break
 
-        output_beams: List[Beam] = [beam_queue.get()[1] for _ in range(beam_width)]
+        output_beams: List[Beam] = [beam_queue.get()[1] for _ in range(min(beam_width, beam_queue.qsize()))]
         all_beams.append(output_beams)
 
     return all_beams

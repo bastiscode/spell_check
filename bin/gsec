@@ -1,0 +1,228 @@
+#!/usr/bin/env python
+
+import argparse
+import logging
+import os
+import sys
+
+import torch
+from torch.backends import cudnn
+
+import gnn_lib
+from gnn_lib import SpellingErrorCorrector, get_available_spelling_error_correction_models
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        "Spelling error correction using Transformers and Graph Neural Networks",
+        description="Correct spelling errors using Transformer and Graph Neural Network models."
+    )
+    parser.add_argument(
+        "-m",
+        "--model",
+        choices=[model.name for model in get_available_spelling_error_correction_models()],
+        default=get_available_spelling_error_correction_models()[0].name,
+        help="Name of the model to use for spelling error detection"
+    )
+    input_group = parser.add_mutually_exclusive_group()
+    input_group.add_argument(
+        "-c",
+        "--correct",
+        type=str,
+        default=None,
+        help="Correct spelling errors in some text"
+    )
+    input_group.add_argument(
+        "-f",
+        "--file",
+        type=str,
+        default=None,
+        help="Path to a text file which will be corrected line by line"
+    )
+    input_group.add_argument(
+        "-i",
+        "--interactive",
+        action="store_true",
+        default=None,
+        help="Start an interactive session where your command line input is corrected"
+    )
+    parser.add_argument(
+        "-o",
+        "--out-path",
+        type=str,
+        default=None,
+        help="Path where corrected file should be saved to"
+    )
+    parser.add_argument(
+        "--cpu",
+        action="store_true",
+        help="Force to run the model on CPU, by default a GPU is used if available"
+    )
+    parser.add_argument(
+        "-b",
+        "--batch-size",
+        type=int,
+        default=16,
+        help="Determines how many inputs will be processed at the same time, larger values should usually result in "
+             "faster repairing but require more memory"
+    )
+    parser.add_argument(
+        "-u",
+        "--unsorted",
+        action="store_true",
+        help="Disable sorting of the inputs before processing (for a large number of inputs or large text files "
+             "sorting the sequences beforehand leads to speed ups because it minimizes the amount of padding needed "
+             "within a batch of sequences)"
+    )
+    parser.add_argument(
+        "--sed-in",
+        action="store_true",
+        help="Whether the input also contains spelling error detections"
+    )
+    parser.add_argument(
+        "-e",
+        "--experiment",
+        type=str,
+        default=None,
+        help="Path to an experiment directory from which the model will be loaded "
+             "(use this when you trained your own model and want to use it)"
+    )
+    parser.add_argument(
+        "-l",
+        "--list",
+        action="store_true",
+        help="List all available models with short descriptions"
+    )
+    parser.add_argument(
+        "-p",
+        "--progress",
+        action="store_true",
+        help="Show a progress bar (this flag is only used when getting input from stdin, "
+             "in interactive mode with -i progress is never shown, "
+             "when repairing a file with -f progress is always shown)"
+    )
+    parser.add_argument(
+        "-v",
+        "--version",
+        action="store_true",
+        help="Print the version of the spell checking library"
+    )
+    parser.add_argument(
+        "--force-download",
+        action="store_true",
+        help="Download the model, data and configs again even if they were already downloaded"
+    )
+    return parser.parse_args()
+
+
+def run(args: argparse.Namespace) -> None:
+    if args.version:
+        print(f"gsec version {gnn_lib.__version__}")
+        return
+    if args.list:
+        model_str = "\n".join(
+            f"- {model.name}: {model.description}"
+            for model in get_available_spelling_error_correction_models()
+        )
+        print(f"Available models:\n{model_str}")
+        return
+
+    torch.backends.cudnn.benchmark = True
+    torch.set_num_threads(len(os.sched_getaffinity(0)))
+    torch.use_deterministic_algorithms(False)
+
+    if args.experiment:
+        corrector = SpellingErrorCorrector.from_experiment(
+            experiment_dir=args.experiment,
+            use_gpu=not args.cpu
+        )
+    else:
+        corrector = SpellingErrorCorrector.from_pretrained(
+            model=args.model,
+            use_gpu=not args.cpu,
+            force_download=args.force_download
+        )
+
+    if args.correct is not None:
+        correction = corrector.correct_text(args.correct)
+        print(correction)
+    elif args.file is not None:
+        corrections = corrector.correct_file(
+            input_file_path=args.file,
+            output_file_path=args.out_path,
+            batch_size=args.batch_size,
+            sort_by_length=not args.unsorted
+        )
+        if args.out_path is None:
+            for correction in corrections:
+                print(correction)
+    elif args.interactive:
+        while True:
+            try:
+                line = input()
+                print(corrector.correct_text(line))
+            except KeyboardInterrupt:
+                return
+    else:
+        if sys.stdin.isatty():
+            return
+        lines = [line.strip() for line in sys.stdin]
+        corrections = corrector.correct_text(
+            inputs=lines,
+            batch_size=args.batch_size,
+            sort_by_length=not args.unsorted,
+            show_progress=args.progress
+        )
+        for correction in corrections:
+            print(correction)
+
+
+if __name__ == "__main__":
+    # disable logging since we do not want that for our command line interface
+    logging.disable(logging.CRITICAL)
+    run(parse_args())
+
+    #     file_size = os.path.getsize(in_file) / 1024
+    #     file_length = io.line_count(in_file)
+    #
+    #     logger.info(f"Running {experiment_name} on {in_file} took {runtime:.2f}s")
+    #     runtimes.append([in_file, runtime, file_length, file_size])
+    #
+    # if len(runtimes) == 0:
+    #     logger.warning("No benchmarks were run")
+    #     return
+    #
+    # runtimes_table = tabulate(runtimes,
+    #                           headers=["Directory", "Runtime in seconds", "Number of samples", "File size in KB"],
+    #                           tablefmt="pipe")
+    #
+    # total_samples = sum([r[2] for r in runtimes])
+    # total_file_size = sum([r[3] for r in runtimes])
+    # total_time = sum([r[1] for r in runtimes])
+    #
+    # aggregated_runtimes = [
+    #     [experiment_name,
+    #      total_time,
+    #      total_samples / total_time,
+    #      total_time / total_file_size]
+    # ]
+    #
+    # runtimes_aggregated_table = tabulate(aggregated_runtimes,
+    #                                      headers=["Model", "Total runtime in seconds", "samples/s", "s/KB"],
+    #                                      tablefmt="pipe")
+    #
+    # logger.info(f"\nModel: {experiment_name}, Batch size: {args.batch_size}, Sorted: {args.sort_by_length}\n"
+    #             f"{runtimes_table}\n\n"
+    #             f"{runtimes_aggregated_table}\n")
+    #
+    # if args.save_markdown_dir is not None:
+    #     os.makedirs(args.save_markdown_dir, exist_ok=True)
+    #
+    #     with open(os.path.join(args.save_markdown_dir,
+    #                            f"{experiment_name}_{args.batch_size}"
+    #                            f"{'_sorted_by_length' if args.sorted_by_length else ''}.md"),
+    #               "w",
+    #               encoding="utf8") as f:
+    #         f.write(runtimes_table)
+    #         f.write("\n\n")
+    #         f.write(runtimes_aggregated_table)

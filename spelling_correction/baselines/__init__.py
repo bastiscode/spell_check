@@ -1,5 +1,5 @@
 import enum
-from typing import Any, Iterable, Optional
+from typing import Any, Iterable, Optional, Dict
 
 
 class Baselines(enum.IntEnum):
@@ -28,7 +28,7 @@ class Baseline:
     def __init__(self, seed: Optional[int] = None):
         self.seed = seed
 
-    def inference(self, sequences: Iterable[str]) -> Any:
+    def inference(self, sequences: Iterable[str], **kwargs: Dict[str, Any]) -> Any:
         raise NotImplementedError
 
     @property
@@ -77,7 +77,7 @@ def get_baseline(baseline: Baselines, seed: int, **kwargs: Any) -> Baseline:
     elif baseline == Baselines.SEC_NEUSPELL_BERT:
         return SECNeuspellBaseline(model_name="bert")
     elif baseline == Baselines.SEC_NEUSPELL_ELMO:
-        return SECNeuspellBaseline(model_name="elmo_scrnn")
+        return SECNeuspellBaseline(model_name="sclstm_elmo")
     elif baseline == Baselines.SEC_LANGUAGETOOL:
         return SECLanguagetoolBaseline(edit_whitespaces=False)
     else:

@@ -9,8 +9,9 @@ from omegaconf import OmegaConf
 from torch.backends import cudnn
 from tqdm import tqdm
 
-import gnn_lib
 import gnn_lib.data.utils
+from gnn_lib import tasks
+from gnn_lib.api.utils import get_string_dataset_and_loader, reorder_data
 from gnn_lib.data import utils
 from gnn_lib.modules.inference import inference_output_to_str
 from gnn_lib.utils import common, config
@@ -48,16 +49,15 @@ def test(args: argparse.Namespace) -> None:
     )
 
     torch.manual_seed(train_cfg.seed)
-    torch.set_num_threads(8)
     torch.backends.cudnn.benchmark = True
     torch.use_deterministic_algorithms(False)
 
-    test_dataset, test_loader = utils.get_string_dataset_and_loader(args.in_file, args.sort_by_length, args.batch_size)
+    test_dataset, test_loader = get_string_dataset_and_loader(args.in_file, args.sort_by_length, args.batch_size)
     logger.info(f"Test dataset/input contains {len(test_dataset)} samples")
 
     device = torch.device("cuda" if torch.cuda.is_available() and not args.cpu else "cpu")
 
-    task = gnn_lib.get_task(
+    task = gnn_lib.tasks.get_task(
         variant_cfg=train_cfg.variant,
         checkpoint_dir=os.path.join(args.experiment, "checkpoints"),
         seed=train_cfg.seed
@@ -102,7 +102,7 @@ def test(args: argparse.Namespace) -> None:
         if args.verbose:
             logger.info(f"Batch {i + 1}: \n{batch} ---> {outputs}\n")
 
-    reordered_outputs = utils.reorder_data(all_outputs, test_dataset.indices)
+    reordered_outputs = reorder_data(all_outputs, test_dataset.indices)
 
     with open(out_file, "w", encoding="utf8") as of:
         for output in reordered_outputs:

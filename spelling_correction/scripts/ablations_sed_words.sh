@@ -17,6 +17,9 @@ export GNN_LIB_DATA_LIMIT=50000000
 export GNN_LIB_LR=0.0001
 export GNN_LIB_WEIGHT_DECAY=0.01
 export GNN_LIB_NUM_NEIGHBORS=3
+export GNN_LIB_MIXED_PRECISION=true
+
+export SYNC_DATASETS="bookcorpus_sed_words_and_sec wikidump_sed_words_and_sec neuspell"
 
 export GNN_LIB_MASTER_PORT=$(python -c "import random; print(random.randrange(10000, 60000))")
 ablations_type=${ABLATIONS_TYPE:-"ABLATIONS_TYPE is not defined"}
@@ -36,19 +39,29 @@ if [[ $ablations_type == "gnn" ]]; then
     )
   declare -a ablations=(
 #    "false attention residual false true false false true null" # default
-#    "true attention residual false true true false true null" # default + message_gating + dep
-    "true attention residual false true false true false data/spell_check_index/ctx_0_ned_string" # default + message_gating + cliques + neighbors
+    "false attention residual false false false false true null" # default - word_features
+#    "false attention residual false true false true false null" # cliques + wfc
+#    "false attention residual false false false true false null" # cliques + wfc - word_features
+#    "true attention residual false true true true false null" # cliques + wfc + dep + message_gating
+#    "false convolution residual false true false false true null" # convolution
+#    "true attention residual false true true false false null" # cliques + message_gating + dep
+#    "true attention residual false true false true false data/spell_check_index/ctx_0_ned_string" # default + message_gating + cliques + neighbors
   )
   declare -a ablation_names=(
 #    "gnn_default"
-#    "gnn_dependency"
-    "gnn_neighbors"
+    "gnn_default_no_features"
+#    "gnn_cliques_wfc"
+#    "gnn_cliques_wfc_no_features"
+#    "gnn_cliques_wfc_dep_gating"
+#    "gnn_convolution"
+#    "gnn_cliques_dependency"
+#    "gnn_neighbors"
   )
 
   for ablation_idx in ${!ablations[@]}; do
     declare -a ablation=(${ablations[$ablation_idx]})
     export GNN_LIB_EXPERIMENT_NAME=${ablation_names[$ablation_idx]}
-    export GNN_LIB_BATCH_MAX_LENGTH=16384
+    export GNN_LIB_BATCH_MAX_LENGTH=32768
 
     config="$config_dir/sed_words.yaml"
     rel_config=$(realpath "$config" --relative-to "$workspace")
@@ -58,12 +71,6 @@ if [[ $ablations_type == "gnn" ]]; then
     for idx in ${!ablation[@]}; do
       env_var=${ablation_env_vars[$idx]}
       val=${ablation[$idx]}
-      # turn off mixed precision with convolutional architecture because its not supported
-      if [[ $env_var == "GNN_LIB_MESSAGE_SCHEME" && $val == "convolution" ]]; then
-        export GNN_LIB_MIXED_PRECISION=false
-      else
-        export GNN_LIB_MIXED_PRECISION=true
-      fi
       echo $env_var=$val
       if [[ $val != "null" ]]; then
         export $env_var=$val
@@ -81,7 +88,6 @@ elif [[ $ablations_type == "transformer" ]]; then
   echo "Starting ablation with config $(realpath "$config" --relative-to "$config_dir")"
   export GNN_LIB_EXPERIMENT_NAME="transformer"
   export GNN_LIB_BATCH_MAX_LENGTH=32768
-  export GNN_LIB_MIXED_PRECISION=true
   export GNN_LIB_CONFIG=$rel_config
   sbatch spelling_correction/scripts/train.sh
 

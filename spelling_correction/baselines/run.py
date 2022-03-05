@@ -7,7 +7,7 @@ from torch.backends import cudnn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-import gnn_lib.data.utils
+from gnn_lib.data import utils
 from gnn_lib.data.utils import StringDataset
 from gnn_lib.modules import inference
 from gnn_lib.utils import common
@@ -25,9 +25,11 @@ def parse_args() -> argparse.Namespace:
                         choices=[baseline.name for baseline in Baselines
                                  if baseline.name.startswith("SEC")] + [""],
                         default="")
+    parser.add_argument("--suffix", type=str, default=None)
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--batch-size", type=int, default=32)
-    parser.add_argument("--sort-by-length", action="store_false")
+    parser.add_argument("--sort-by-length", action="store_true")
+    parser.add_argument("--detections-file", type=str, default=None)
     return parser.parse_args()
 
 
@@ -43,7 +45,6 @@ def run(args: argparse.Namespace) -> None:
     logger = common.get_logger("BASELINE")
 
     torch.manual_seed(args.seed)
-    torch.set_num_threads(8)
     torch.backends.cudnn.benchmark = True
     torch.use_deterministic_algorithms(False)
 
@@ -52,43 +53,40 @@ def run(args: argparse.Namespace) -> None:
         kwargs["sec_baseline"] = Baselines[args.sec_baseline]
     baseline = baselines.get_baseline(Baselines[args.baseline], args.seed, **kwargs)
 
-    out_path = os.path.join(args.out_dir, f"baseline_{baseline.name}.txt")
+    suffix = "" if args.suffix is None else f"_{args.suffix}"
+    out_path = os.path.join(args.out_dir, f"baseline_{baseline.name}{suffix}.txt")
     if os.path.exists(out_path) and not args.overwrite:
         logger.info(f"Out file {out_path} already exists, skipping baseline {baseline.name} "
                     f"({args.baseline})")
         return
 
-    text_data: List[str] = []
-    with open(args.in_file, "r", encoding="utf8") as in_file:  # type: TextIO
-        for line in in_file:
-            line = gnn_lib.data.utils.clean_sequence(line)
-            if line == "":
-                continue
-            text_data.append(line)
+    dataset, loader = utils.get_string_dataset_and_loader(args.in_file, args.sort_by_length, args.batch_size)
 
-    dataset = StringDataset(text_data, sort_by_length=args.sort_by_length)
-    loader = DataLoader(
-        dataset=dataset,
-        batch_size=args.batch_size,
-        collate_fn=dataset.collate_fn,
-        pin_memory=True
-    )
+    detections = []
+    if args.detections_file is not None:
+        with open(args.detections_file, "r") as det_f:
+            for line in det_f:
+                detections.append([int(d) for d in line.strip().split()])
 
     os.makedirs(args.out_dir, exist_ok=True)
     all_outputs = []
-    for batch, _ in tqdm(loader,
-                         total=len(loader),
-                         desc=f"Running baseline {baseline.name} ({args.baseline}) on "
-                              f"{os.path.relpath(args.in_file, BENCHMARK_DIR)}"):
-        outputs = baseline.inference(batch)
+    for batch, info in tqdm(loader,
+                            total=len(loader),
+                            desc=f"Running baseline {baseline.name} ({args.baseline}) on "
+                                 f"{os.path.relpath(args.in_file, BENCHMARK_DIR)}"):
+        inference_kwargs = {}
+        if args.detections_file is not None:
+            inference_kwargs.update({
+                "detections": [detections[idx] for idx in info["indices"]]
+            })
+
+        outputs = baseline.inference(batch, **inference_kwargs)
         all_outputs.extend(outputs)
 
-    unordered_outputs: List[str] = [""] * len(all_outputs)
-    for output, idx in zip(all_outputs, dataset.indices):
-        unordered_outputs[idx] = output
+    reordered_outputs = utils.reorder_data(all_outputs, dataset.indices)
 
     with open(out_path, "w", encoding="utf8") as of:
-        for output in unordered_outputs:
+        for output in reordered_outputs:
             of.write(inference.inference_output_to_str(output) + "\n")
 
 

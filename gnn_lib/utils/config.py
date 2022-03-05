@@ -22,9 +22,7 @@ omegaconf.OmegaConf.register_new_resolver("from_file", _load_from_file)
 
 @dataclass
 class PreprocessConfig:
-    # datasets: List[Datasets] = MISSING
     data: List[str] = MISSING
-    # data_dir: str = MISSING
     output_dir: str = MISSING
     tokenizer: TokenizerConfig = MISSING
     respect_leading_whitespaces: bool = False
@@ -88,13 +86,19 @@ class TestConfig:
     cpu: bool = False
 
 
-def set_gnn_lib_env_vars(env_vars: Dict[str, Any], delete_old: bool = True) -> None:
-    # delete all previous gnn lib env vars
-    if delete_old:
+def set_gnn_lib_env_vars(env_vars: Dict[str, Any], keep_existing_env_vars: bool = False) -> None:
+    existing_env_vars = set()
+    if not keep_existing_env_vars:
+        # delete all previous gnn lib env vars
         for k in os.environ:
             if k.startswith("GNN_LIB_"):
                 del os.environ[k]
+    else:
+        for k in os.environ:
+            if k.startswith("GNN_LIB"):
+                existing_env_vars.add(k)
     # set all new gnn lib env vars
     for k, v in env_vars.items():
-        os.environ[k] = v
+        if k not in existing_env_vars:
+            os.environ[k] = v
 

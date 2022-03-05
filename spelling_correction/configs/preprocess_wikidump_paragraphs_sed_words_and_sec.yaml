@@ -1,0 +1,11 @@
+data:
+  - ${oc.env:GNN_LIB_DATA_DIR}/cleaned/wikidump_paragraphs/train_files.txt
+
+output_dir: ${oc.env:GNN_LIB_DATA_DIR}/processed/wikidump_paragraphs_sed_words_and_sec
+seed: 22
+limit: ${oc.env:GNN_LIB_LIMIT,35000000}
+
+max_length: 512
+tokenizer: ${from_file:tokenizer/bpe_default.yaml}
+spell_check_index_dir: ${oc.env:GNN_LIB_DATA_DIR}/spell_check_index/ctx_0_ned_string
+noise: ${from_file:noise/mixed.yaml}

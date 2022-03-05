@@ -1,62 +1,11 @@
-from typing import List, Union, Any, Optional, Callable
+from typing import List, Union, Any
 
 import dgl
 import torch
 
 from gnn_lib import models
-from gnn_lib.data import index, utils
 from gnn_lib.modules import inference, utils as mod_utils
 from gnn_lib.tasks.multi_node2seq import MultiNode2Seq
-
-
-def beam_score(
-        normalize_by_length: bool = True,
-        alpha: float = 1.0,
-        restrict_to_input_or_prefix: bool = True
-) -> inference.SCORE_FN:
-    def score(beam: inference.Beam,
-              bos_token_id: int,
-              eos_token_id: int,
-              input_str: Optional[str] = None,
-              de_tok_fn: Optional[Callable[[List[int]], str]] = None,
-              prefix_index: Optional[index.PrefixIndex] = None) -> float:
-        # start = time.perf_counter()
-        assert beam.token_ids[0] == bos_token_id
-        token_ids = beam.token_ids[1:]  # strip bos token
-        if beam.is_eos(eos_token_id):
-            token_ids = token_ids[:-1]
-
-        pred_str = de_tok_fn(token_ids)
-        pred_str_split = pred_str.split()
-
-        if restrict_to_input_or_prefix and len(pred_str_split) > 0:
-            input_words, input_ws = utils.tokenize_words_regex(input_str)
-            pred_words, pred_ws = utils.tokenize_words_regex(pred_str_split[-1])
-
-            assert prefix_index is not None
-            for pred_w in pred_words:
-                pred_is_valid_prefix = (
-                        len(prefix_index.retrieve(pred_w)) > 0 or
-                        len(prefix_index.retrieve(pred_w.lower())) > 0
-                )
-                pred_is_prefix_of_input = (
-                        any(ipt_w.startswith(pred_w) for ipt_w in input_words) or
-                        any(ipt_w.lower().startswith(pred_w) for ipt_w in input_words)
-                )
-                if pred_is_valid_prefix or pred_is_prefix_of_input:
-                    continue
-
-                return -1_000_000.
-
-        s = sum(beam.log_prob)
-        if normalize_by_length:
-            s = s / (len(beam.log_prob) ** alpha)
-
-        # end = time.perf_counter()
-        # print(f"scoring beam took {(end - start) * 1e6:.2f}us: {input_words} -> {pred_words} (score={s:.4f})")
-        return s
-
-    return score
 
 
 class SECWordsNMT(MultiNode2Seq):
@@ -144,6 +93,9 @@ class SECWordsNMT(MultiNode2Seq):
             max_length=512,
             decoder_positions=decoder_positions,
             input_strings=input_strings,
+            score_fn=inference.spell_check_score(
+              mode="dictionary_or_eq_input"
+            ),
             **kwargs
         )
 
@@ -163,7 +115,13 @@ class SECWordsNMT(MultiNode2Seq):
             assert len(input_words) == org_num_nodes
 
             batch_result_str = []
-            for i in range(1 if len(batch_word_results) == 0 else len(batch_word_results[0])):
+            if len(batch_word_results) == 0:
+                # greedy or sample inference give exactly one output per word
+                min_num_word_results = 1
+            else:
+                # best first or beam search inference can give more than 1 output per word
+                min_num_word_results = min(len(word_results) for word_results in batch_word_results)
+            for i in range(min_num_word_results):
                 result_words = []
                 result_idx = 0
                 for input_word, detection in zip(input_words, word_detections):

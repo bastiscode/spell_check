@@ -255,7 +255,8 @@ class Task:
                 )
 
                 if common.disable_tqdm():
-                    self.logger.info(f"[{self.step}|{iteration}/{org_train_loader_length}] train_loss={loss_stat.value:.5f}")
+                    self.logger.info(f"[{self.step}|{iteration}/{org_train_loader_length}] "
+                                     f"train_loss={loss_stat.value:.5f}")
                     minutes = (time.perf_counter() - start) / 60
                     self.logger.info(
                         f"[{self.step}|{iteration}/{org_train_loader_length}] "
