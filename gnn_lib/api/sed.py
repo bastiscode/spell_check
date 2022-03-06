@@ -130,7 +130,7 @@ class SpellingErrorDetector:
             batch_size: int = 16,
             sort_by_length: bool = True,
             show_progress: bool = False
-    ) -> List[str]:
+    ) -> List[List[int]]:
         dataset, loader = get_string_dataset_and_loader(
             inputs,
             sort_by_length,
@@ -164,8 +164,7 @@ class SpellingErrorDetector:
             pbar.update(batch_length)
 
         pbar.close()
-        reordered_outputs = reorder_data(all_outputs, dataset.indices)
-        return [inference.inference_output_to_str(output) for output in reordered_outputs]
+        return reorder_data(all_outputs, dataset.indices)
 
     def detect_text(
             self,
@@ -174,7 +173,7 @@ class SpellingErrorDetector:
             batch_size: int = 16,
             sort_by_length: bool = True,
             show_progress: bool = False
-    ) -> StringInputOutput:
+    ) -> Union[List[int], List[List[int]]]:
         input_is_string = isinstance(inputs, str)
         assert (
                 input_is_string
@@ -198,14 +197,14 @@ class SpellingErrorDetector:
             batch_size: int = 16,
             sort_by_length: bool = True,
             show_progress: bool = True
-    ) -> Optional[List[str]]:
+    ) -> Optional[Union[List[int], List[List[int]]]]:
         outputs = self._detect_text_raw(
             input_file_path, threshold, batch_size, sort_by_length, show_progress
         )
         if output_file_path is not None:
             with open(output_file_path, "w", encoding="utf8") as out_file:
                 for output in outputs:
-                    out_file.write(output)
+                    out_file.write(inference.inference_output_to_str(output))
                     out_file.write("\n")
             return None
         else:

@@ -12,6 +12,8 @@ dist
 /local_experiments
 /data
 /third_party
+.cache
+*.zip
 
 /spelling_correction/.transformers_cache
 /spelling_correction/baselines/jamspell

@@ -50,6 +50,8 @@ class SECWordsNMT(MultiNode2Seq):
         assert all(all(d in {0, 1} for d in det) for det in detections)
 
         num_nodes_to_decode = [sum(det) for det in detections]
+        if sum(num_nodes_to_decode) == 0:
+            return inputs
 
         # filter the input words based on detections
         input_strings = []

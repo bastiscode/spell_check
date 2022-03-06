@@ -5,6 +5,7 @@ import logging
 import os
 import re
 import sys
+from typing import List
 
 import torch
 from torch.backends import cudnn
@@ -12,6 +13,7 @@ from torch.backends import cudnn
 import gnn_lib
 from gnn_lib import SpellingErrorDetector, get_available_spelling_error_detection_models
 from gnn_lib.api.utils import load_text_file
+from gnn_lib.modules import inference
 
 
 def parse_args() -> argparse.Namespace:
@@ -106,9 +108,16 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "-p",
+        "--pipe",
+        action="store_true",
+        help="Pass this flag when using gsec in a pipe because input and output is then treated as an iterator "
+             "(note that sorting by length gets disabled with this flag because it is not possible to sort an "
+             "iterator)"
+    )
+    parser.add_argument(
         "--progress",
         action="store_true",
-        help="Show a progress bar (this flag is only used when getting input from stdin, "
+        help="Show a progress bar (this flag is only respected when getting input from stdin, "
              "in interactive mode with -i progress is never shown, "
              "when repairing a file with -f progress is always shown)"
     )
@@ -126,17 +135,18 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def format_output(detection: str, org_input: str, sec_out: bool) -> str:
+def format_output(detection: List[int], org_input: str, sec_out: bool) -> str:
+    detection_str = inference.inference_output_to_str(detection)
     if sec_out:
-        detection_aligned = [" "] * len(org_input)
-        detections = detection.split()
-        matches = [match for match in re.finditer(r"([^\s]+)", org_input)]
-        assert len(matches) == len(detections)
-        for match, det in zip(matches, detections):
-            detection_aligned[match.start(1)] = det
-        return f"{org_input}\n{''.join(detection_aligned)}"
+        return f"{org_input}\t{detection_str}"
+        # detection_aligned = [" "] * len(org_input)
+        # matches = [match for match in re.finditer(r"([^\s]+)", org_input)]
+        # assert len(matches) == len(detection)
+        # for match, det in zip(matches, detection):
+        #     detection_aligned[match.start(1)] = str(det)
+        # return f"{org_input}\t{''.join(detection_aligned)}"
     else:
-        return detection
+        return detection_str
 
 
 def run(args: argparse.Namespace) -> None:
@@ -168,21 +178,25 @@ def run(args: argparse.Namespace) -> None:
         )
 
     if args.detect is not None:
-        detection = detector.detect_text(args.detect, args.threshold)
+        detection = detector.detect_text(args.detect, args.threshold, sort_by_length=False)
         print(format_output(detection, args.detect, args.sec_out))
     elif args.file is not None:
-        detections = detector.detect_file(
-            input_file_path=args.file,
-            output_file_path=args.out_path,
+        inputs = load_text_file(args.file)
+        detections = detector.detect_text(
+            inputs=inputs,
             threshold=args.threshold,
             batch_size=args.batch_size,
-            sort_by_length=not args.unsorted
+            sort_by_length=not args.unsorted,
+            show_progress=True
         )
         if args.out_path is None:
-            input_lines = load_text_file(args.file)
-            assert len(input_lines) == len(detections)
-            for detection, line in zip(detections, input_lines):
+            for detection, line in zip(detections, inputs):
                 print(format_output(detection, line, args.sec_out))
+        else:
+            with open(args.out_path, "w", encoding="utf8") as of:
+                for detection, line in zip(detections, inputs):
+                    of.write(format_output(detection, line, args.sec_out) + "\n")
+
     elif args.interactive:
         while True:
             try:
@@ -194,16 +208,28 @@ def run(args: argparse.Namespace) -> None:
     else:
         if sys.stdin.isatty():
             return
-        lines = [line.strip() for line in sys.stdin]
-        detections = detector.detect_text(
-            inputs=lines,
-            threshold=args.threshold,
-            batch_size=args.batch_size,
-            sort_by_length=not args.unsorted,
-            show_progress=args.progress
-        )
-        for detection, line in zip(detections, lines):
-            print(format_output(detection, line, args.sec_out))
+
+        try:
+            if args.pipe:
+                for line in sys.stdin:
+                    line = line.strip()
+                    detection = detector.detect_text(line, args.threshold, sort_by_length=False)
+                    print(format_output(detection, line, args.sec_out))
+            else:
+                lines = [line.strip() for line in sys.stdin]
+                detections = detector.detect_text(
+                    inputs=lines,
+                    threshold=args.threshold,
+                    batch_size=args.batch_size,
+                    sort_by_length=not args.unsorted,
+                    show_progress=args.progress
+                )
+                for detection, line in zip(detections, lines):
+                    print(format_output(detection, line, args.sec_out))
+        except BrokenPipeError:
+            return
+        except Exception as e:
+            raise e
 
 
 if __name__ == "__main__":

@@ -12,7 +12,7 @@ from gnn_lib.api.utils import (
     download_model,
     load_experiment,
     get_cpu_info,
-    get_gpu_info, get_string_dataset_and_loader, reorder_data
+    get_gpu_info, get_string_dataset_and_loader, reorder_data, load_text_file
 )
 from gnn_lib.data import index
 from gnn_lib.modules import inference
@@ -21,7 +21,7 @@ from gnn_lib.utils import common
 
 __all__ = ["get_available_spelling_error_correction_models", "SpellingErrorCorrector"]
 
-Detections = Union[str, List[int], List[List[int]]]
+Detections = Union[List[int], List[List[int]]]
 
 
 def get_available_spelling_error_correction_models() -> List[ModelInfo]:
@@ -136,7 +136,7 @@ class SpellingErrorCorrector:
     def _correct_text_raw(
             self,
             inputs: Union[str, List[str]],
-            detections: Optional[Detections] = None,
+            detections: Optional[List[List[int]]] = None,
             prefix_index: Optional[str] = None,
             batch_size: int = 16,
             sort_by_length: bool = True,
@@ -213,7 +213,7 @@ class SpellingErrorCorrector:
 
         outputs = self._correct_text_raw(
             [inputs] if input_is_string else inputs,
-            detections,
+            [detections] if input_is_string else detections,
             prefix_index,
             batch_size,
             sort_by_length,
@@ -225,15 +225,20 @@ class SpellingErrorCorrector:
             self,
             input_file_path: str,
             output_file_path: Optional[str] = None,
-            detections: Optional[Detections] = None,
+            detections: Optional[Union[str, List[List[int]]]] = None,
             prefix_index: Optional[str] = None,
             batch_size: int = 16,
             sort_by_length: bool = True,
             show_progress: bool = True
     ) -> Optional[List[str]]:
+        if detections is not None and isinstance(detections, str):
+            detections = load_text_file(detections)
+            detections = [[int(det) for det in detection] for detection in detections]
+
         outputs = self._correct_text_raw(
             input_file_path, detections, prefix_index, batch_size, sort_by_length, show_progress
         )
+
         if output_file_path is not None:
             with open(output_file_path, "w", encoding="utf8") as out_file:
                 for output in outputs:
