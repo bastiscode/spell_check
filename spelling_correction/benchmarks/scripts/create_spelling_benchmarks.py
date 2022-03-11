@@ -6,7 +6,7 @@ import numpy as np
 import omegaconf
 from tqdm import tqdm
 
-from gnn_lib.data import noise
+from gnn_lib.data import preprocessing
 
 from spelling_correction import MISSPELLINGS_DIR
 
@@ -84,7 +84,7 @@ def create(args: argparse.Namespace) -> None:
             "word_misspellings_file": os.path.join(MISSPELLINGS_DIR, f"{args.misspelling_split}_misspellings.json")
         })
 
-    spelling_noise = noise.get_noise_from_config(noise_config, args.seed)
+    spelling_noise = noise.get_preprocessing_from_config(noise_config, args.seed)
     print(f"Using noise config: {noise_config}")
 
     for idx in tqdm(indices[:args.max_sequences],

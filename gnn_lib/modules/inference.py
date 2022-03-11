@@ -1,3 +1,5 @@
+import collections
+import dataclasses
 import math
 import queue
 from typing import Callable, Tuple, Dict, List, Any, Union, Optional
@@ -8,27 +10,6 @@ import torch
 from gnn_lib.data import tokenization, index, utils as data_utils
 from gnn_lib.modules import utils
 from gnn_lib.modules.utils import DecoderMixin
-
-TOKEN_FN = Callable[[torch.Tensor], Tuple[torch.Tensor, torch.Tensor]]
-
-
-def greedy_token_fn() -> TOKEN_FN:
-    def _greedy(decoder_output: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        values, indices = torch.max(torch.log_softmax(decoder_output, dim=1), dim=1)
-        return indices, values
-
-    return _greedy
-
-
-def sample_token_fn(sample_top_k: int) -> TOKEN_FN:
-    def _sample(decoder_output: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        top_k_probabilities, top_k_indices = torch.softmax(decoder_output, dim=1).topk(sample_top_k, dim=1)
-        sampled_indices = torch.multinomial(top_k_probabilities, num_samples=1)
-        indices = top_k_indices.gather(1, sampled_indices).squeeze(1)
-        values = torch.log(top_k_probabilities.gather(1, sampled_indices)).squeeze(1)
-        return indices, values
-
-    return _sample
 
 
 class Beam:
@@ -59,26 +40,40 @@ class Beam:
         return f"Beam(token_ids={self.token_ids}, log_prob={self.log_prob})"
 
 
-SCORE_FN = Callable[
+BeamSelectFn = Callable[[List[Tuple[Beam, float]]], Beam]
+
+
+def greedy_select_fn() -> BeamSelectFn:
+    def _greedy(beams: List[Tuple[Beam, float]]) -> Beam:
+        return beams[0][0]
+
+    return _greedy
+
+
+def sample_select_fn(sample_top_k: int) -> BeamSelectFn:
+    def _greedy(beams: List[Tuple[Beam, float]]) -> Beam:
+        sample_idx = torch.randint(min(len(beams), sample_top_k)).item()
+        return beams[sample_idx][0]
+
+    return _greedy
+
+
+DeTokFn = Callable[[List[int]], str]
+ScoreFn = Callable[
     [
-        Beam,  # beam with token ids and log probs
-        int,  # bos token id
-        int,  # eos token id
-        Optional[str],  # input string
-        Optional[Callable[[List[int]], str]],  # function from token_ids to string (de-tokenization)
-        Optional[index.PrefixIndex]  # prefix index, to check if a word is a prefix of a word in the dictionary
+        # beam with token ids and log probs
+        Beam,
+        # input string
+        Optional[str],
+        # de-tokenization function, must be passed when the predicted string is need for scoring a beam
+        Optional[DeTokFn]
     ],
     float
 ]
 
 
-def map_score(normalize_by_length: bool = True, alpha: float = 1.0) -> SCORE_FN:
-    def score(beam: Beam,
-              bos_token_id: int,
-              eo_token_id: int,
-              _: Optional[str] = None,
-              __: Optional[Callable[[List[int]], str]] = None,
-              ___: Optional[Dict[str, int]] = None) -> float:
+def log_likelihood_score(normalize_by_length: bool = True, alpha: float = 1.0) -> Callable[[Beam], float]:
+    def score(beam: Beam) -> float:
         s = sum(beam.log_prob)
         if normalize_by_length:
             return s / (len(beam.log_prob) ** alpha)
@@ -88,29 +83,35 @@ def map_score(normalize_by_length: bool = True, alpha: float = 1.0) -> SCORE_FN:
     return score
 
 
-def spell_check_score(
+def spelling_correction_score(
+        # if not None, must be one of [log_likelihood, dictionary, dictionary_or_in_input, dictionary_or_eq_input]
+        mode: str = "log_likelihood",
+        # prefix index, to check if a word is a prefix of a word in the dictionary
+        prefix_index: Optional[index.PrefixIndex] = None,
+        # arguments for log likelihood scoring
         normalize_by_length: bool = True,
         alpha: float = 1.0,
-        # if not None, must be one of [dictionary, dictionary_or_in_input, dictionary_or_eq_input]
-        mode: Optional[str] = None
-) -> SCORE_FN:
-    def score(beam: Beam,
-              bos_token_id: int,
-              eos_token_id: int,
-              input_str: Optional[str] = None,
-              de_tok_fn: Optional[Callable[[List[int]], str]] = None,
-              prefix_index: Optional[index.PrefixIndex] = None) -> float:
-        assert beam.token_ids[0] == bos_token_id
-        token_ids = beam.token_ids[1:]  # strip bos token
-        if beam.is_eos(eos_token_id):  # strip eos token
-            token_ids = token_ids[:-1]
+) -> ScoreFn:
+    log_likelihood_score_fn = log_likelihood_score(normalize_by_length, alpha)
 
-        pred_str = de_tok_fn(token_ids)
+    def score(beam: Beam,
+              input_str: Optional[str] = None,
+              de_tok_fn: Optional[DeTokFn] = None) -> float:
+        s = log_likelihood_score_fn(beam)
+        if mode == "log_likelihood":
+            return s
+
+        assert (
+                prefix_index is not None
+                and input_str is not None
+                and de_tok_fn is not None
+        ), f"for all modes other than log_likelihood you need to pass a prefix index, the original input string and " \
+           f"a de-tokenization function"
+
+        pred_str = de_tok_fn(beam.token_ids)
         pred_str_split = pred_str.split()
 
-        if mode is not None and len(pred_str_split) > 0:
-            assert prefix_index is not None
-
+        if len(pred_str_split) > 0:
             # get all input words
             input_words, input_ws = data_utils.tokenize_words_regex(input_str)
             # split current predicted word (by whitespace) further using regex
@@ -137,11 +138,7 @@ def spell_check_score(
                 valid_pred |= input_str.startswith(pred_str)
 
             if not valid_pred:
-                return -1_000_000
-
-        s = sum(beam.log_prob)
-        if normalize_by_length:
-            s = s / (len(beam.log_prob) ** alpha)
+                return s - 1_000_000
 
         return s
 
@@ -166,10 +163,10 @@ def token_inference(
         bos_token_id: int,
         eos_token_id: int,
         max_length: int,
-        token_fn: TOKEN_FN = greedy_token_fn(),
+        select_fn: BeamSelectFn = greedy_select_fn(),
+        score_fn: ScoreFn = spelling_correction_score(),
         input_strings: Optional[List[str]] = None,
-        prefix_index: Optional[index.PrefixIndex] = None,
-        de_tok_fn: Optional[Callable[[List[int]], str]] = None,
+        de_tok_fn: Optional[DeTokFn] = None,
         **kwargs: Any
 ) -> List[List[int]]:
     model.eval()
@@ -207,15 +204,37 @@ def token_inference(
             decoder_positions=decoder_positions
         )
 
-        selected_decoder_outputs = []
+        inferred_token_ids = []
+        inferred_log_prob = []
+        batch_indices = torch.where(indices_to_decode)[0].tolist()
         for i in range(len(decoder_output)):
             length = lengths[indices_to_decode][i]
-            selected_decoder_outputs.append(decoder_output[i, length - 1])
-        selected_decoder_outputs = torch.stack(selected_decoder_outputs)
+            log_softmax_scores = torch.log_softmax(decoder_output[i, length - 1], dim=0)
 
-        inferred_token_ids, inferred_log_prob = token_fn(selected_decoder_outputs)
+            beams_and_scores = []
+            min_log_prob = math.log(1 / len(log_softmax_scores))
+            for token_id, lp in enumerate(log_softmax_scores.tolist()):
+                if lp < min_log_prob:
+                    continue
+                batch_idx = batch_indices[i]
+                beam = Beam()
+                beam.token_ids = token_ids[batch_idx].tolist() + [token_id]
+                beam.log_prob = log_prob[batch_idx].tolist() + [lp]
+                beams_and_scores.append(
+                    (beam, -score_fn(beam, input_strings[batch_idx] if input_strings is not None else None, de_tok_fn))
+                )
+            beams_and_scores = sorted(beams_and_scores, key=lambda e: e[1])
+            selected_beam = select_fn(beams_and_scores)
+            inferred_token_ids.append(selected_beam.token_ids[-1])
+            inferred_log_prob.append(selected_beam.log_prob[-1])
 
+        inferred_token_ids = torch.tensor(
+            inferred_token_ids, dtype=torch.long, device=token_ids.device
+        )
         token_ids[indices_to_decode, lengths[indices_to_decode]] = inferred_token_ids
+        inferred_log_prob = torch.tensor(
+            inferred_log_prob, dtype=torch.float, device=log_prob.device
+        )
         log_prob[indices_to_decode, lengths[indices_to_decode]] = inferred_log_prob
 
         lengths[indices_to_decode] += 1
@@ -251,11 +270,10 @@ def best_first_inference(
         bos_token_id: int,
         eos_token_id: int,
         max_length: int,
-        score_fn: SCORE_FN,
+        score_fn: ScoreFn,
         top_k: int,
         input_strings: Optional[List[str]] = None,
-        prefix_index: Optional[index.PrefixIndex] = None,
-        de_tok_fn: Optional[Callable[[List[int]], str]] = None,
+        de_tok_fn: Optional[DeTokFn] = None,
         **kwargs: Any
 ) -> List[List[Beam]]:
     model.eval()
@@ -283,11 +301,8 @@ def best_first_inference(
             (
                 -score_fn(
                     beam,
-                    bos_token_id,
-                    eos_token_id,
                     input_strings[b] if input_strings is not None else None,
-                    de_tok_fn,
-                    prefix_index
+                    de_tok_fn
                 ),
                 beam
             )
@@ -342,11 +357,8 @@ def best_first_inference(
                     (
                         -score_fn(
                             new_beam,
-                            bos_token_id,
-                            eos_token_id,
                             input_strings[b] if input_strings is not None else None,
-                            de_tok_fn,
-                            prefix_index
+                            de_tok_fn
                         ),
                         new_beam
                     )
@@ -369,11 +381,10 @@ def beam_inference(
         bos_token_id: int,
         eos_token_id: int,
         max_length: int,
-        score_fn: SCORE_FN,
+        score_fn: ScoreFn,
         beam_width: int,
         input_strings: Optional[List[str]] = None,
-        prefix_index: Optional[index.PrefixIndex] = None,
-        de_tok_fn: Optional[Callable[[List[int]], str]] = None,
+        de_tok_fn: Optional[DeTokFn] = None,
         **kwargs: Any
 ) -> List[List[Beam]]:
     model.eval()
@@ -445,14 +456,15 @@ def beam_inference(
                     log_p=log_p,
                     token_id=token_id
                 )
-                beam_candidates.append((beam_candidate, -score_fn(
-                    beam_candidate,
-                    bos_token_id,
-                    eos_token_id,
-                    input_strings[b] if input_strings is not None else None,
-                    de_tok_fn,
-                    prefix_index
-                )))
+                beam_candidates.append(
+                    (
+                        beam_candidate, -score_fn(
+                            beam_candidate,
+                            input_strings[b] if input_strings is not None else None,
+                            de_tok_fn
+                        )
+                    )
+                )
 
             beam_candidates = sorted(beam_candidates, key=lambda e: e[1])[:2 * beam_width]
 
@@ -471,14 +483,16 @@ def beam_inference(
         if beam_queue.qsize() < beam_width and len(current_beams) > 0:
             # if we did not find beam_width solutions that end in eos,
             # add the highest scoring remaining active beams to queue
-            current_beams = [(beam, -score_fn(
-                beam,
-                bos_token_id,
-                eos_token_id,
-                input_strings[b] if input_strings is not None else None,
-                de_tok_fn,
-                prefix_index
-            )) for beam in current_beams]
+            current_beams = [
+                (
+                    beam, -score_fn(
+                        beam,
+                        input_strings[b] if input_strings is not None else None,
+                        de_tok_fn
+                    )
+                )
+                for beam in current_beams
+            ]
             current_beams = sorted(current_beams, key=lambda e: e[1])
             for beam, score in current_beams:
                 beam_queue.put((score, beam))
@@ -491,21 +505,36 @@ def beam_inference(
     return all_beams
 
 
+def _get_de_tok_fn(output_tokenizer: tokenization.Tokenizer, bos_token_id: int, eos_token_id: int) \
+        -> Callable[[List[int]], str]:
+    def de_tokenize(token_ids: List[int]) -> str:
+        if len(token_ids) < 2:
+            return ""
+
+        assert token_ids[0] == bos_token_id
+        token_ids = token_ids[1:]
+        if token_ids[-1] == eos_token_id:
+            token_ids = token_ids[:-1]
+        return output_tokenizer.de_tokenize(token_ids)
+
+    return de_tokenize
+
+
 def run_inference(
         model: DecoderMixin,
         output_tokenizer: tokenization.Tokenizer,
         encoder_outputs: Dict[str, torch.Tensor],
         encoder_lengths: Dict[str, torch.Tensor],
         max_length: int,
+        search_mode: str = "greedy",
+        score_fn: ScoreFn = spelling_correction_score(),
         input_strings: Optional[List[str]] = None,
-        prefix_index: Optional[index.PrefixIndex] = None,
         **kwargs: Any) -> List[List[str]]:
     bos_token_id = output_tokenizer.token_to_id(tokenization.BOS)
     eos_token_id = output_tokenizer.token_to_id(tokenization.EOS)
-    de_tok_fn = output_tokenizer.de_tokenize
+    de_tok_fn = _get_de_tok_fn(output_tokenizer, bos_token_id, eos_token_id)
 
-    inference_mode = kwargs.get("inference_mode", "greedy")
-    if inference_mode == "greedy":
+    if search_mode == "greedy":
         outputs = token_inference(
             model=model,
             encoder_outputs=encoder_outputs,
@@ -513,13 +542,11 @@ def run_inference(
             bos_token_id=bos_token_id,
             eos_token_id=eos_token_id,
             max_length=max_length,
-            token_fn=greedy_token_fn(),
+            select_fn=greedy_select_fn(),
             input_strings=input_strings,
-            prefix_index=prefix_index,
-            de_tok_fn=de_tok_fn,
             **kwargs
         )
-    elif inference_mode == "sample":
+    elif search_mode == "sample":
         sample_top_k = kwargs.pop("sample_top_k", 5)
         outputs = token_inference(
             model=model,
@@ -528,14 +555,12 @@ def run_inference(
             bos_token_id=bos_token_id,
             eos_token_id=eos_token_id,
             max_length=max_length,
-            token_fn=sample_token_fn(sample_top_k),
+            select_fn=sample_select_fn(sample_top_k),
             input_strings=input_strings,
-            prefix_index=prefix_index,
-            de_tok_fn=de_tok_fn,
             **kwargs
         )
-    elif inference_mode == "beam":
-        score_fn = kwargs.pop("score_fn", map_score())
+    elif search_mode == "beam":
+        score_fn = kwargs.pop("score_fn", log_likelihood_score())
         beam_width = kwargs.pop("beam_width", 5)
         outputs = beam_inference(
             model=model,
@@ -547,13 +572,10 @@ def run_inference(
             score_fn=score_fn,
             beam_width=beam_width,
             input_strings=input_strings,
-            prefix_index=prefix_index,
-            de_tok_fn=de_tok_fn,
             **kwargs
         )
-    elif inference_mode == "best_first":
-        score_fn = kwargs.pop("score_fn", map_score())
-        top_k = kwargs.pop("best_first_top_k", 5)
+    elif search_mode == "best_first":
+        top_k = kwargs.pop("best_first_top_k", 1)
         outputs = best_first_inference(
             model=model,
             encoder_outputs=encoder_outputs,
@@ -564,53 +586,24 @@ def run_inference(
             score_fn=score_fn,
             top_k=top_k,
             input_strings=input_strings,
-            prefix_index=prefix_index,
-            de_tok_fn=de_tok_fn,
             **kwargs
         )
     else:
-        raise ValueError(f"Unknown inference mode {inference_mode}")
+        raise ValueError(f"unknown search mode {search_mode}")
 
-    return [
-        inference_result_to_sequence(
-            ir,
-            output_tokenizer,
-            bos_token_id,
-            eos_token_id
-        )
-        for ir in outputs
-    ]
-
-
-def token_ids_to_sequence(
-        token_ids: List[int],
-        output_tokenizer: tokenization.Tokenizer,
-        bos_token_id: int,
-        eos_token_id: int
-) -> str:
-    # strip potential bos and eos tokens
-    if token_ids[0] == bos_token_id:
-        token_ids = token_ids[1:]
-    if token_ids[-1] == eos_token_id:
-        token_ids = token_ids[:-1]
-    return output_tokenizer.de_tokenize(token_ids)
+    return [inference_result_to_sequence(ir, de_tok_fn) for ir in outputs]
 
 
 def inference_result_to_sequence(
         inference_result: Union[List[int], List[Beam]],
-        output_tokenizer: tokenization.Tokenizer,
-        bos_token_id: int,
-        eos_token_id: int
+        de_tok_fn: DeTokFn
 ) -> List[str]:
     if isinstance(inference_result, list) and isinstance(inference_result[0], int):
         # greedy or sample inference
-        return [token_ids_to_sequence(inference_result, output_tokenizer, bos_token_id, eos_token_id)]
+        return [de_tok_fn(inference_result)]
     elif isinstance(inference_result, list) and isinstance(inference_result[0], Beam):
         # beam or best first inference
-        return [
-            token_ids_to_sequence(beam.token_ids, output_tokenizer, bos_token_id, eos_token_id)
-            for beam in inference_result
-        ]
+        return [de_tok_fn(beam.token_ids) for beam in inference_result]
     else:
         raise ValueError(f"expected output decoding inference result to be either a list of token ids"
                          f"or a list of beams, but got {type(inference_result)}")
@@ -619,9 +612,9 @@ def inference_result_to_sequence(
 def inference_output_to_str(output: Union[int, List[int], List[str], str]) -> str:
     if isinstance(output, int):
         return str(output)
-    elif isinstance(output, list) and isinstance(output[0], int):
+    elif isinstance(output, list) and all(isinstance(o, int) for o in output):
         return " ".join(str(o) for o in output)
-    elif isinstance(output, list) and isinstance(output[0], str):
+    elif isinstance(output, list) and all(isinstance(o, str) for o in output):
         return output[0]
     elif isinstance(output, str):
         return output

@@ -327,36 +327,6 @@ def process_multi30k(directory: str, save_to: str, overwrite: bool = False):
         _save_samples_to_jsonl(samples, save_file)
 
 
-def process_neuspell(directory: str, save_to: str, overwrite: bool = False) -> None:
-    out_file = os.path.join(save_to, "train_1blm.jsonl")
-
-    gt_file = os.path.join(directory, "train.1blm")
-    if not _check_paths(gt_file, out_file, overwrite):
-        return
-
-    noise_files = io.glob_safe(os.path.join(directory, "train.1blm.noise*"))
-    # exclude file with random noise
-    noise_files = [f for f in noise_files if not f.endswith("noise.random")]
-
-    samples = []
-    for noise_file in noise_files:
-        with open(gt_file, "r", encoding="utf8") as gtf, \
-                open(noise_file, "r", encoding="utf8") as nf:
-            for correct_line, corrupt_line in tqdm(
-                    zip(gtf, nf), f"Processing {noise_file}", total=io.line_count(gt_file)):
-                correct_line = correct_line.strip()
-                corrupt_line = corrupt_line.strip()
-                if corrupt_line == "" or corrupt_line == "":
-                    continue
-                correct_line, corrupt_line = neuspell.clean_sequences(correct_line, corrupt_line)
-                if not is_valid_sequence(correct_line) or not is_valid_sequence(corrupt_line):
-                    continue
-                sample = {"sequence": correct_line, "corrupt_sequence": corrupt_line}
-                samples.append(sample)
-
-    _save_samples_to_jsonl(samples, out_file)
-
-
 def _generate_train_dev_test_split(files: List[str],
                                    save_to: str,
                                    dev_percentage: float,

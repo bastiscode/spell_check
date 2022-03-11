@@ -1,4 +1,3 @@
-import time
 from typing import Tuple, Any, Dict, List, Optional, Union, Set
 
 import dgl
@@ -9,7 +8,7 @@ from torch.nn import functional as F
 from torch.nn.utils.rnn import PackedSequence
 
 
-class EncoderMixin(nn.Module):
+class GraphEncoderMixin(nn.Module):
     def encode(self, g: dgl.DGLHeteroGraph, **kwargs: Any) -> dgl.DGLHeteroGraph:
         raise NotImplementedError
 
@@ -65,7 +64,14 @@ def split_and_pad(inputs: torch.Tensor, splits: Union[List[int], torch.Tensor]) 
 def split_and_pack(inputs: torch.Tensor, splits: Union[List[int], torch.Tensor]) -> PackedSequence:
     inputs = torch.split(inputs,
                          tensor_to_python(splits, force_list=True) if isinstance(splits, torch.Tensor) else splits)
-    return torch.nn.utils.rnn.pack_sequence(inputs, enforce_sorted=False)
+    return pack(inputs)
+
+
+def pack(inputs: Union[torch.Tensor, List[torch.Tensor]], lengths: Optional[torch.Tensor] = None) -> PackedSequence:
+    if lengths is not None:
+        return torch.nn.utils.rnn.pack_padded_sequence(inputs, lengths, batch_first=True, enforce_sorted=False)
+    else:
+        return torch.nn.utils.rnn.pack_sequence(inputs, enforce_sorted=False)
 
 
 def unpack(packed: PackedSequence) -> Tuple[torch.Tensor, torch.Tensor]:

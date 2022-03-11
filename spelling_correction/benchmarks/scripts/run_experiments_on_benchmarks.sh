@@ -19,10 +19,7 @@ data_dir=$(realpath $base_dir/data)
 config_dir=$(realpath $base_dir/spelling_correction/configs)
 
 # some configuration options
-overwrite=${OVERWRITE:-0}
-sort_by_length=1
-cpu=0
-#inference_kwargs="{inference_mode:beam}"
+overwrite=${OVERWRITE:-false}
 
 declare -A experiment_to_benchmark=(
   ["TOKENIZATION_REPAIR"]="tokenization_repair"
@@ -87,9 +84,6 @@ do
         --out-path $out_dir \
         --batch-size ${BATCH_SIZE:-16} \
         --runtime-file $runtime_file
-#        --sort-by-length $sort_by_length \
-#        --overwrite $overwrite \
-#        --cpu $cpu \
     done
   done
 done

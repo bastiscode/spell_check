@@ -26,7 +26,7 @@ def zip_experiment(args: argparse.Namespace) -> None:
         # best checkpoint
         zip_file.write(
             os.path.join(only_model_checkpoint_path),
-            os.path.relpath(only_model_checkpoint_path, experiment_dir)
+            os.path.relpath(os.path.join(args.experiment, "checkpoints", "checkpoint_best.pt"), experiment_dir)
         )
 
         # config

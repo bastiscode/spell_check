@@ -180,36 +180,23 @@ class HeterogeneousDGLData:
 
 
 def sequence_to_token_graph(
-        sample: utils.SAMPLE,
-        add_word_whitespace_groups: bool = False
+        sample: utils.SAMPLE
 ) -> HeterogeneousDGLData:
     types = {
         ("token", "connects_to", "token")
     }
     data = HeterogeneousDGLData(types=types)
 
-    groups = None
-    tokens = [t for tokens in sample.tokens for t in tokens]
-    if add_word_whitespace_groups:
-        groups = []
-        group_idx = 0
-        for t, word in zip(sample.tokens, sample.doc):
-            groups.extend([group_idx] * len(t))
-            if word.whitespace_ == " ":
-                group_idx += 1
-
-        assert len(groups) == len(tokens), f"need a group for each token, " \
-                                           f"but got {len(groups)} groups and {len(tokens)} tokens"
+    tokens = [t for word_tokens in sample.tokens for t in word_tokens]
 
     for i, token_id in enumerate(tokens):
         for j, _ in enumerate(tokens):
             data.add_edge(i, j, ("token", "connects_to", "token"))
+
         feat_dict = {
             "position": i,
             "token_id": token_id
         }
-        if groups is not None:
-            feat_dict["group"] = groups[i]
 
         data.add_node_data(
             node_type="token",
@@ -230,8 +217,6 @@ def _indices_to_sequence_edge_type(from_idx: int, to_idx: int) -> str:
 def sequence_to_word_graph(
         sample: utils.SAMPLE,
         tokenizer: tokenization.Tokenizer,
-        word_tokenizer: Optional[tokenization.Tokenizer] = None,
-        add_word_whitespace_groups: bool = False,
         add_sentence_level_node: bool = False,
         dictionary: Optional[Dict[str, int]] = None,
         add_word_features: bool = False,
@@ -261,8 +246,6 @@ def sequence_to_word_graph(
         types.add(("word", "contains", "token"))
     if scheme != "word_to_token":
         types.add(("token", "in", "word"))
-    if add_word_whitespace_groups:
-        word_ws_idx = 0
 
     if add_sentence_level_node:
         if scheme == "word_to_token":
@@ -281,8 +264,7 @@ def sequence_to_word_graph(
 
     token_start_indices = [0] + list(np.cumsum([len(tokens) for tokens in sample.tokens[:-1]]))
     dependencies = {}
-    words = [w.text for w in sample.doc]
-    for from_word_idx, (word, tokens) in enumerate(zip(words, sample.tokens)):
+    for from_word_idx, (word, tokens) in enumerate(zip(sample.doc, sample.tokens)):
         token_start_idx = token_start_indices[from_word_idx]
         for from_token_idx, token_id in enumerate(tokens):
             for to_token_idx in range(len(tokens)):
@@ -300,7 +282,7 @@ def sequence_to_word_graph(
 
             if token_fully_connected:
                 # add edges to all other tokens in other words
-                for to_word_idx in range(len(words)):
+                for to_word_idx in range(len(sample.doc)):
                     if from_word_idx == to_word_idx:
                         continue
 
@@ -336,7 +318,7 @@ def sequence_to_word_graph(
 
         # fully connect words
         if word_fully_connected:
-            for to_word_idx in range(len(words)):
+            for to_word_idx in range(len(sample.doc)):
                 if from_word_idx == to_word_idx and not add_self_loops:
                     continue
 
@@ -360,34 +342,22 @@ def sequence_to_word_graph(
             )
 
         feat_dict = {}
-        if word_tokenizer is not None:
-            feat_dict["position"] = from_word_idx
-            feat_dict["word_id"] = word_tokenizer.token_to_id(word)
 
         features = []
         if add_word_features:
-            features += (utils.special_token_flags(sample.doc[from_word_idx]) +
-                         utils.additional_token_flags(sample.doc[from_word_idx]))
-            if word_tokenizer is not None:
-                unk_id = word_tokenizer.token_to_id(tokenization.UNK)
-                features += [word_tokenizer.token_to_id(word) != unk_id,
-                             word_tokenizer.token_to_id(word.lower()) != unk_id]
-            elif dictionary is not None:
-                features += [word in dictionary, word.lower() in dictionary]
+            features += utils.token_flags(word, dictionary)
         if add_ner_features:
-            ner_id = utils.SPACY_NER_MAP.get(sample.doc[from_word_idx].ent_type_, -1)
+            ner_id = utils.SPACY_NER_MAP.get(word.ent_type_, -1)
             features += utils.one_hot_encode(ner_id, utils.SPACY_NUM_NER_TYPES)
         if add_pos_tag_features:
-            pos_tag_id = utils.SPACY_POS_TAG_MAP.get(sample.doc[from_word_idx].pos_, -1)
+            pos_tag_id = utils.SPACY_POS_TAG_MAP.get(word.pos_, -1)
             features += utils.one_hot_encode(pos_tag_id, utils.SPACY_NUM_POS_TAGS)
         if add_dependency_info:
-            dep_tag_id = utils.SPACY_DEP_TAG_MAP.get(sample.doc[from_word_idx].dep_, -1)
-            dependencies[from_word_idx] = (sample.doc[from_word_idx].head.i, dep_tag_id)
-            features += utils.parser_token_flags(sample.doc[from_word_idx])
+            dep_tag_id = utils.SPACY_DEP_TAG_MAP.get(word.dep_, -1)
+            dependencies[from_word_idx] = (word.head.i, dep_tag_id)
+            features += utils.parser_token_flags(word)
         if len(features) > 0:
             feat_dict["features"] = features
-        if add_word_whitespace_groups:
-            feat_dict["group"] = word_ws_idx
 
         if len(feat_dict) > 0:
             data.add_node_data(
@@ -395,9 +365,6 @@ def sequence_to_word_graph(
                 node=from_word_idx,
                 feat_dict=feat_dict
             )
-
-        if add_word_whitespace_groups and sample.doc[from_word_idx].whitespace_ == " ":
-            word_ws_idx += 1
 
     if len(dependencies) > 0:
         for word_idx, (depends_on_idx, tag) in dependencies.items():

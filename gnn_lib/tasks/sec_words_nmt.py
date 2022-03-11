@@ -1,4 +1,4 @@
-from typing import List, Union, Any
+from typing import List, Union, Any, Tuple, Dict
 
 import dgl
 import torch
@@ -15,7 +15,7 @@ class SECWordsNMT(MultiNode2Seq):
     def inference(
             self,
             model: models.ModelForMultiNode2Seq,
-            inputs: Union[List[str], dgl.DGLHeteroGraph],
+            inputs: List[str],
             **kwargs: Any
     ) -> List[List[str]]:
         self._check_model(model)
@@ -25,7 +25,7 @@ class SECWordsNMT(MultiNode2Seq):
         decoder_node_type = model.cfg.decoder_node_types[0]
 
         assert isinstance(inputs, list) and isinstance(inputs[0], str)
-        g = self.variant.prepare_sequences_for_inference(inputs)
+        g, infos = self.variant.prepare_sequences_for_inference(inputs)
 
         model_cfg: models.ModelForMultiNode2SeqConfig = model.cfg
         g = model.encode(g)
@@ -85,6 +85,7 @@ class SECWordsNMT(MultiNode2Seq):
             decoder_positions = torch.zeros(detections_mask.sum(), dtype=torch.long, device=g.device)
 
         output_tokenizer = model.tokenizers[f"{decoder_node_type}_output_tokenizer"]
+
         decoder: mod_utils.DecoderMixin = model.head[decoder_node_type]
 
         results = inference.run_inference(
@@ -95,9 +96,6 @@ class SECWordsNMT(MultiNode2Seq):
             max_length=512,
             decoder_positions=decoder_positions,
             input_strings=input_strings,
-            score_fn=inference.spell_check_score(
-              mode="dictionary_or_eq_input"
-            ),
             **kwargs
         )
 

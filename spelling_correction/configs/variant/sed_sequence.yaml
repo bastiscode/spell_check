@@ -1,6 +1,6 @@
 type: SED_SEQUENCE
 
-noise: ${from_file:noise/mixed_sed_sequence.yaml}
+noise: ${from_file:preprocessing/mixed_sed_sequence.yaml}
 tokenizer: ${from_file:tokenizer/bpe_default.yaml}
 
 add_word_features: ${oc.env:GNN_LIB_ADD_WORD_FEATURES,true}

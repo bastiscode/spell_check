@@ -1,4 +1,4 @@
 type: TOKENIZATION_REPAIR
 
-noise: ${from_file:noise/tokenization_repair.yaml}
+noise: ${from_file:preprocessing/tokenization_repair.yaml}
 encoding_scheme: "chars"

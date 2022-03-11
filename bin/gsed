@@ -3,8 +3,8 @@
 import argparse
 import logging
 import os
-import re
 import sys
+import time
 from typing import List
 
 import torch
@@ -12,21 +12,22 @@ from torch.backends import cudnn
 
 import gnn_lib
 from gnn_lib import SpellingErrorDetector, get_available_spelling_error_detection_models
-from gnn_lib.api.utils import load_text_file
+from gnn_lib.api.utils import load_text_file, generate_report
 from gnn_lib.modules import inference
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         "Spelling error detection using Transformers and Graph Neural Networks",
-        description="Detect spelling error (on sequence or word level) using Transformer or "
+        description="Detect spelling errors (on sequence or word level) using Transformer or "
                     "Graph Neural Network models."
     )
+    default_model = get_available_spelling_error_detection_models()[0]
     parser.add_argument(
         "-m",
         "--model",
-        choices=[model.name for model in get_available_spelling_error_detection_models()],
-        default=get_available_spelling_error_detection_models()[0].name,
+        choices=[f"{model.task}:{model.name}" for model in get_available_spelling_error_detection_models()],
+        default=f"{default_model.task}:{default_model.name}",
         help="Name of the model to use for spelling error detection"
     )
     input_group = parser.add_mutually_exclusive_group()
@@ -90,7 +91,7 @@ def parse_args() -> argparse.Namespace:
         "--sec-out",
         action="store_true",
         help="Whether to format the output suitable for running spelling error correction on it, outputs both "
-             "the original inputs and the spelling error detections"
+             "the original inputs and the spelling error detections (should be used together with gsec --sed-in)"
     )
     parser.add_argument(
         "-e",
@@ -132,6 +133,13 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Download the model, data and configs again even if they were already downloaded"
     )
+    parser.add_argument(
+        "--report",
+        type=str,
+        default=None,
+        help="Save a runtime report (ignoring startup time) formatted as markdown table to a file, append new line "
+             "if file already exists"
+    )
     return parser.parse_args()
 
 
@@ -139,44 +147,41 @@ def format_output(detection: List[int], org_input: str, sec_out: bool) -> str:
     detection_str = inference.inference_output_to_str(detection)
     if sec_out:
         return f"{org_input}\t{detection_str}"
-        # detection_aligned = [" "] * len(org_input)
-        # matches = [match for match in re.finditer(r"([^\s]+)", org_input)]
-        # assert len(matches) == len(detection)
-        # for match, det in zip(matches, detection):
-        #     detection_aligned[match.start(1)] = str(det)
-        # return f"{org_input}\t{''.join(detection_aligned)}"
     else:
         return detection_str
 
 
 def run(args: argparse.Namespace) -> None:
+    torch.backends.cudnn.benchmark = True
+    torch.set_num_threads(len(os.sched_getaffinity(0)))
+    torch.use_deterministic_algorithms(False)
+
     if args.version:
         print(f"gsed version {gnn_lib.__version__}")
         return
     if args.list:
         model_str = "\n".join(
-            f"- {model.name}: {model.description}"
+            f"- [task: {model.task}] {model.name}: {model.description}"
             for model in get_available_spelling_error_detection_models()
         )
         print(f"Available models:\n{model_str}")
         return
 
-    torch.backends.cudnn.benchmark = True
-    torch.set_num_threads(len(os.sched_getaffinity(0)))
-    torch.use_deterministic_algorithms(False)
-
     if args.experiment:
         detector = SpellingErrorDetector.from_experiment(
             experiment_dir=args.experiment,
-            use_gpu=not args.cpu
+            device="cpu" if args.cpu else "cuda"
         )
     else:
+        task, model = args.model.split(":")
         detector = SpellingErrorDetector.from_pretrained(
-            model=args.model,
-            use_gpu=not args.cpu,
+            task=task,
+            model=model,
+            device="cpu" if args.cpu else "cuda",
             force_download=args.force_download
         )
 
+    start = time.perf_counter()
     if args.detect is not None:
         detection = detector.detect_text(args.detect, args.threshold, sort_by_length=False)
         print(format_output(detection, args.detect, args.sec_out))
@@ -196,7 +201,17 @@ def run(args: argparse.Namespace) -> None:
             with open(args.out_path, "w", encoding="utf8") as of:
                 for detection, line in zip(detections, inputs):
                     of.write(format_output(detection, line, args.sec_out) + "\n")
-
+        if args.report:
+            generate_report(
+                detector.task_name,
+                detector.model_name,
+                inputs,
+                time.perf_counter() - start,
+                args.batch_size,
+                not args.unsorted,
+                detector.device,
+                file_path=args.report
+            )
     elif args.interactive:
         while True:
             try:
@@ -226,6 +241,19 @@ def run(args: argparse.Namespace) -> None:
                 )
                 for detection, line in zip(detections, lines):
                     print(format_output(detection, line, args.sec_out))
+
+                if args.report:
+                    generate_report(
+                        detector.task_name,
+                        detector.model_name,
+                        lines,
+                        time.perf_counter() - start,
+                        args.batch_size,
+                        not args.unsorted,
+                        detector.device,
+                        file_path=args.report
+                    )
+
         except BrokenPipeError:
             return
         except Exception as e:
@@ -236,48 +264,3 @@ if __name__ == "__main__":
     # disable logging since we do not want that for our command line interface
     logging.disable(logging.CRITICAL)
     run(parse_args())
-
-    #     file_size = os.path.getsize(in_file) / 1024
-    #     file_length = io.line_count(in_file)
-    #
-    #     logger.info(f"Running {experiment_name} on {in_file} took {runtime:.2f}s")
-    #     runtimes.append([in_file, runtime, file_length, file_size])
-    #
-    # if len(runtimes) == 0:
-    #     logger.warning("No benchmarks were run")
-    #     return
-    #
-    # runtimes_table = tabulate(runtimes,
-    #                           headers=["Directory", "Runtime in seconds", "Number of samples", "File size in KB"],
-    #                           tablefmt="pipe")
-    #
-    # total_samples = sum([r[2] for r in runtimes])
-    # total_file_size = sum([r[3] for r in runtimes])
-    # total_time = sum([r[1] for r in runtimes])
-    #
-    # aggregated_runtimes = [
-    #     [experiment_name,
-    #      total_time,
-    #      total_samples / total_time,
-    #      total_time / total_file_size]
-    # ]
-    #
-    # runtimes_aggregated_table = tabulate(aggregated_runtimes,
-    #                                      headers=["Model", "Total runtime in seconds", "samples/s", "s/KB"],
-    #                                      tablefmt="pipe")
-    #
-    # logger.info(f"\nModel: {experiment_name}, Batch size: {args.batch_size}, Sorted: {args.sort_by_length}\n"
-    #             f"{runtimes_table}\n\n"
-    #             f"{runtimes_aggregated_table}\n")
-    #
-    # if args.save_markdown_dir is not None:
-    #     os.makedirs(args.save_markdown_dir, exist_ok=True)
-    #
-    #     with open(os.path.join(args.save_markdown_dir,
-    #                            f"{experiment_name}_{args.batch_size}"
-    #                            f"{'_sorted_by_length' if args.sorted_by_length else ''}.md"),
-    #               "w",
-    #               encoding="utf8") as f:
-    #         f.write(runtimes_table)
-    #         f.write("\n\n")
-    #         f.write(runtimes_aggregated_table)

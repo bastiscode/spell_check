@@ -16,6 +16,7 @@ from spacy.tokens import Token, Doc
 from torch import distributed as dist
 from torch.utils.data import Sampler, DistributedSampler, Dataset
 
+from gnn_lib.utils import MODEL_INPUTS, DATA_INPUT
 from gnn_lib.utils import common
 from gnn_lib.utils.distributed import DistributedDevice
 
@@ -27,11 +28,14 @@ class NEIGHBORS(collections.namedtuple("NEIGHBORS", ["words", "left_contexts", "
         return "\n".join(l + w + r for l, w, r in zip(self.left_contexts, self.words, self.right_contexts))
 
 
-class SAMPLE(collections.namedtuple("SAMPLE", ["tokens", "doc", "neighbors_list"])):
+class SAMPLE(collections.namedtuple("SAMPLE", ["tokens", "doc", "neighbors_list", "info"])):
     __slots__ = ()
 
     def __str__(self) -> str:
         return str(self.doc)
+
+
+PREPROCESSING_FN = Callable[[List[str], List[Optional[str]], bool], List[Tuple[SAMPLE, str]]]
 
 
 def tokenize_words_regex(sequence: str) -> Tuple[List[str], List[bool]]:
@@ -44,7 +48,8 @@ def tokenize_words_regex(sequence: str) -> Tuple[List[str], List[bool]]:
         if last_end >= 0:
             whitespaces.append(last_end < match.start())
         last_end = match.end()
-    whitespaces.append(False)
+    if len(words) > 0:
+        whitespaces.append(False)
     return words, whitespaces
 
 
@@ -110,7 +115,8 @@ def tokenize_words_batch(
             sequences,
             disable=disable,
             batch_size=batch_size,
-            n_process=num_processes):
+            n_process=num_processes
+    ):
         words = [w.text for w in doc]
         if return_docs:
             outputs.append((words, doc))
@@ -144,6 +150,7 @@ NOISE_FN = Callable[[Union[str, SAMPLE]], Tuple[str, str]]
 
 def prepare_samples(
         sequences: List[str],
+        infos: List[Dict[str, Any]],
         tokenization_fn: TOKENIZATION_FN,
         neighbor_fn: Optional[NEIGHBOR_FN] = None,
         **tokenize_words_kwargs: Any,
@@ -155,9 +162,14 @@ def prepare_samples(
     else:
         neighbors_lists = [None] * len(docs)
     samples = []
-    for doc, neighbors_list in zip(docs, neighbors_lists):
+    for doc, neighbors_list, info in zip(docs, neighbors_lists, infos):
         tokens = tokenization_fn(doc)
-        sample = SAMPLE(tokens=tokens, doc=doc, neighbors_list=None if neighbors_list is None else neighbors_list)
+        sample = SAMPLE(
+            tokens=tokens,
+            doc=doc,
+            neighbors_list=None if neighbors_list is None else neighbors_list,
+            info=info
+        )
         samples.append(sample)
     return samples
 
@@ -248,6 +260,10 @@ def get_word_frequencies_from_file(file: str) -> Counter:
     return dictionary
 
 
+def dictionary_token_flags(token: Token, dictionary: Dict[str, int]) -> List[bool]:
+    return [token.text in dictionary, token.text.lower() in dictionary]
+
+
 def special_token_flags(token: Token) -> List[bool]:
     return [token.is_punct,
             token.is_currency,
@@ -263,6 +279,13 @@ def additional_token_flags(token: Token) -> List[bool]:
             token.is_lower,
             token.is_stop,
             token.is_alpha]
+
+
+def token_flags(token: Token, dictionary: Optional[Dict[str, Any]]) -> List[bool]:
+    features = special_token_flags(token) + additional_token_flags(token)
+    if dictionary is not None:
+        features += dictionary_token_flags(token, dictionary)
+    return features
 
 
 def parser_token_flags(token: Token) -> List[bool]:
@@ -281,6 +304,12 @@ def one_hot_encode(idx: int, num_items: int) -> List[bool]:
     return one_hot
 
 
+def flatten(inputs: Union[List, Any]) -> List:
+    if not isinstance(inputs, list):
+        return [inputs]
+    return [elem for ipt in inputs for elem in flatten(ipt)]
+
+
 def open_lmdb(lmdb_path: str, write: bool = False) -> lmdb.Environment:
     return lmdb.open(
         lmdb_path,
@@ -293,16 +322,19 @@ def open_lmdb(lmdb_path: str, write: bool = False) -> lmdb.Environment:
     )
 
 
-def graph_collate(items: List[Tuple[dgl.DGLHeteroGraph, Dict[str, Any]]]) -> \
-        Tuple[dgl.DGLHeteroGraph, List[Dict[str, Any]]]:
-    graphs = []
-    infos = []
+def collate(items: List[Tuple[DATA_INPUT, Dict[str, Any]]]) -> MODEL_INPUTS:
+    data = []
+    infos = {}
     for item in items:
-        graph, info = item
-        graphs.append(graph)
-        infos.append(info)
-    g = dgl.batch(graphs)
-    return g, infos
+        data.append(item[0])
+        for key, val in item[1].items():
+            if key not in infos:
+                infos[key] = [val]
+            else:
+                infos[key].append(val)
+    if isinstance(data[0], dgl.DGLHeteroGraph):
+        data = dgl.batch(data)
+    return data, infos
 
 
 # modified version of
@@ -451,29 +483,53 @@ class BucketSampler(Sampler):
         return len(self.batches)
 
 
-def group_words(
-        words: List[str],
-        tokenization_fn: Callable[[str], List[int]],
-        labels: Optional[List[int]] = None
-) -> Tuple[List[List[int]], List[int], Optional[List[int]]]:
-    tokens_list = []
-    groups = []
-    for i, word in enumerate(words):
-        # convert spacy trailing whitespace to leading whitespace for our tokenizers
-        tokens = tokenization_fn(" " * (i > 0) + word)
-        # it can sometimes happen that our tokenizer returns an empty token list (e.g. when the input is only an accent
-        # that gets removed by the tokenizers' normalization procedure), in that case we want to remove the
-        # corresponding label from the labels list (if given)
-        if len(tokens) == 0:
-            # set the label to None for now, filter them out afterwards
-            if labels is not None:
-                labels[i] = None
-            continue
-        tokens_list.append(tokens)
-        groups.extend([i] * len(tokens))
-    if labels is not None:
-        labels = [label for label in labels if label is not None]
-    return tokens_list, groups, labels
+def get_word_whitespace_groups(
+        sample: SAMPLE
+) -> List[int]:
+    word_whitespace_groups = []
+    word_ws_group = 0
+    for i, (tokens, word) in enumerate(zip(sample.tokens, sample.doc)):
+        word_whitespace_groups.extend([word_ws_group] * len(tokens))
+        if word.whitespace_ == " ":
+            word_ws_group += 1
+    return word_whitespace_groups
+
+
+def get_word_and_word_whitespace_groups(
+        sample: SAMPLE
+) -> Tuple[List[int], List[int]]:
+    word_groups = []
+    word_whitespace_groups = []
+    word_ws_group = 0
+    for i, (tokens, word) in enumerate(zip(sample.tokens, sample.doc)):
+        word_groups.extend([i] * len(tokens))
+        word_whitespace_groups.append(word_ws_group)
+        if word.whitespace_ == " ":
+            word_ws_group += 1
+    return word_groups, word_whitespace_groups
+
+
+def get_sequence_groups(
+        sample: SAMPLE
+) -> List[int]:
+    return [0] * sum(len(tokens) for tokens in sample.tokens)
+
+
+def get_word_and_sequence_groups(
+        sample: SAMPLE
+) -> Tuple[List[int], List[int]]:
+    word_groups = []
+    for i, tokens in enumerate(sample.tokens):
+        word_groups.extend([i] * len(tokens))
+    sequence_groups = [0] * len(sample.doc)
+    return word_groups, sequence_groups
+
+
+def get_word_features(sample: SAMPLE, dictionary: Optional[Dict[str, int]]) -> List[List[bool]]:
+    features = []
+    for word in sample.doc:
+        features.append(token_flags(word, dictionary))
+    return features
 
 
 def clean_sequence(sequence: str) -> str:

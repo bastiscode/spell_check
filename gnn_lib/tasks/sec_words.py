@@ -55,7 +55,7 @@ class SECWords(MultiNodeClassification):
     def inference(
             self,
             model: models.ModelForMultiNodeClassification,
-            inputs: Union[List[str], dgl.DGLHeteroGraph],
+            inputs: List[str],
             **kwargs: Any
     ) -> List[str]:
         self._check_model(model)
@@ -63,7 +63,7 @@ class SECWords(MultiNodeClassification):
 
         assert isinstance(inputs, list) and isinstance(inputs[0], str)
         self.variant: variants.SECWords
-        g = self.variant.prepare_sequences_for_inference(inputs)
+        g, infos = self.variant.prepare_sequences_for_inference(inputs)
 
         tokenized = utils.tokenize_words_batch(inputs, return_docs=True)
         predictions_dicts = super().inference(model, g, **kwargs)

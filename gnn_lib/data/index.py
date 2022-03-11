@@ -1,17 +1,15 @@
 import json
 import os
 import pickle
-from typing import List, Optional, Tuple, Any, Dict, Callable
+from typing import List, Optional, Tuple, Dict, Callable
 
-import fasttext
 import lz4.frame
 import marisa_trie
-import nmslib
 import numpy as np
 import torch
+from spacy.tokens import Doc
 from torch import nn
 from tqdm import tqdm
-from spacy.tokens import Doc
 
 from gnn_lib.data import utils, tokenization
 from gnn_lib.modules import encoders, embedding, utils as mod_utils
@@ -45,6 +43,7 @@ class Vectorizer:
 class FastTextVectorizer(Vectorizer):
     def __init__(self) -> None:
         super().__init__("", 0)
+        import fasttext
         self.ft = fasttext.load_model("cc.en.300.bin")
 
         total_length = 2 * self.context_length + 1
@@ -242,6 +241,7 @@ def get_vectorizer(name: str, path: Optional[str] = None) -> Vectorizer:
 class NNIndex:
     @staticmethod
     def get_index(space: str):
+        import nmslib
         if space == "leven":
             data_type = nmslib.DataType.OBJECT_AS_STRING
             dist_type = nmslib.DistType.INT

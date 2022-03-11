@@ -24,7 +24,19 @@ def parse_args() -> argparse.Namespace:
         "--model",
         choices=[model.name for model in get_available_spelling_error_correction_models()],
         default=get_available_spelling_error_correction_models()[0].name,
-        help="Name of the model to use for spelling error detection"
+        help="Name of the model to use for spelling error correction"
+    )
+    parser.add_argument(
+        "--search",
+        choices=["greedy", "sample", "beam", "best_first"],
+        default="greedy",
+        help="Set the search method to be used during decoding"
+    )
+    parser.add_argument(
+        "--score",
+        choices=["log_likelihood", "dictionary", "dictionary_or_eq_input", "dictionary_or_in_input"],
+        default="log_likelihood",
+        help="Set the scoring method to score potential solution candidates during decoding"
     )
     input_group = parser.add_mutually_exclusive_group()
     input_group.add_argument(
@@ -79,7 +91,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--sed-in",
         action="store_true",
-        help="Whether the input also contains spelling error detections"
+        help="Whether the input also contains spelling error detections (should be used together with gsed --sec-out)"
     )
     parser.add_argument(
         "-e",
@@ -121,6 +133,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Download the model, data and configs again even if they were already downloaded"
     )
+    parser.add_argument(
+        "--report",
+        action="store_true",
+        help="Print a report on the runtime (ignoring startup time) formatted as markdown table"
+    )
     return parser.parse_args()
 
 
@@ -137,30 +154,30 @@ def process_input(line: str, sed_in: bool) -> Tuple[str, Optional[List[int]]]:
 
 
 def run(args: argparse.Namespace) -> None:
+    torch.backends.cudnn.benchmark = True
+    torch.set_num_threads(len(os.sched_getaffinity(0)))
+    torch.use_deterministic_algorithms(False)
+
     if args.version:
         print(f"gsec version {gnn_lib.__version__}")
         return
     if args.list:
         model_str = "\n".join(
-            f"- {model.name}: {model.description}"
+            f"- [task: {model.task}] {model.name}: {model.description}"
             for model in get_available_spelling_error_correction_models()
         )
         print(f"Available models:\n{model_str}")
         return
 
-    torch.backends.cudnn.benchmark = True
-    torch.set_num_threads(len(os.sched_getaffinity(0)))
-    torch.use_deterministic_algorithms(False)
-
     if args.experiment:
         corrector = SpellingErrorCorrector.from_experiment(
             experiment_dir=args.experiment,
-            use_gpu=not args.cpu
+            device="cpu" if args.cpu else "cuda"
         )
     else:
         corrector = SpellingErrorCorrector.from_pretrained(
             model=args.model,
-            use_gpu=not args.cpu,
+            device="cpu" if args.cpu else "cuda",
             force_download=args.force_download
         )
 
@@ -240,48 +257,3 @@ if __name__ == "__main__":
     # disable logging since we do not want that for our command line interface
     logging.disable(logging.CRITICAL)
     run(parse_args())
-
-    #     file_size = os.path.getsize(in_file) / 1024
-    #     file_length = io.line_count(in_file)
-    #
-    #     logger.info(f"Running {experiment_name} on {in_file} took {runtime:.2f}s")
-    #     runtimes.append([in_file, runtime, file_length, file_size])
-    #
-    # if len(runtimes) == 0:
-    #     logger.warning("No benchmarks were run")
-    #     return
-    #
-    # runtimes_table = tabulate(runtimes,
-    #                           headers=["Directory", "Runtime in seconds", "Number of samples", "File size in KB"],
-    #                           tablefmt="pipe")
-    #
-    # total_samples = sum([r[2] for r in runtimes])
-    # total_file_size = sum([r[3] for r in runtimes])
-    # total_time = sum([r[1] for r in runtimes])
-    #
-    # aggregated_runtimes = [
-    #     [experiment_name,
-    #      total_time,
-    #      total_samples / total_time,
-    #      total_time / total_file_size]
-    # ]
-    #
-    # runtimes_aggregated_table = tabulate(aggregated_runtimes,
-    #                                      headers=["Model", "Total runtime in seconds", "samples/s", "s/KB"],
-    #                                      tablefmt="pipe")
-    #
-    # logger.info(f"\nModel: {experiment_name}, Batch size: {args.batch_size}, Sorted: {args.sort_by_length}\n"
-    #             f"{runtimes_table}\n\n"
-    #             f"{runtimes_aggregated_table}\n")
-    #
-    # if args.save_markdown_dir is not None:
-    #     os.makedirs(args.save_markdown_dir, exist_ok=True)
-    #
-    #     with open(os.path.join(args.save_markdown_dir,
-    #                            f"{experiment_name}_{args.batch_size}"
-    #                            f"{'_sorted_by_length' if args.sorted_by_length else ''}.md"),
-    #               "w",
-    #               encoding="utf8") as f:
-    #         f.write(runtimes_table)
-    #         f.write("\n\n")
-    #         f.write(runtimes_aggregated_table)

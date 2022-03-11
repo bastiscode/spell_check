@@ -1,11 +1,8 @@
 import logging
 import os
-import platform
 import re
-import subprocess
 from typing import Dict, List, Union, Optional, Set
 
-import torch
 from torch import nn
 
 _LOG_FORMATTER = logging.Formatter("%(asctime)s [%(name)s] "
@@ -119,26 +116,6 @@ def get_num_parameters(module: nn.Module, unused_parameters: Optional[Set[str]] 
             "fixed": fixed,
             "unused": unused,
             "total": trainable + fixed}
-
-
-def get_cpu_info() -> str:
-    if platform.system() == "Linux":
-        try:
-            with open("/proc/cpuinfo", "r") as inf:
-                cpu_info = inf.read()
-                cpuinfo = subprocess.check_output("cat /proc/cpuinfo").decode("utf8").strip()
-                for line in cpuinfo.split("\n"):
-                    if "model name" in line:
-                        return re.sub(".*model name.*: ", "", line.strip(), 1)
-        except Exception:
-            return platform.processor()
-    return platform.processor()
-
-
-def get_device_info(device: torch.device) -> str:
-    if device.type == "cpu":
-        return get_cpu_info()
-    return torch.cuda.get_device_name(device)
 
 
 def disable_tqdm() -> bool:

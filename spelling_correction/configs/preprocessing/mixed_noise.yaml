@@ -1,4 +1,6 @@
-type: REALISTIC
+type: MIXED_NOISE
 edit_token_p: 0.2
+artificial_num_edits_p: 0.8
 word_misspellings_file: ${oc.env:GNN_LIB_DATA_DIR}/misspellings/train_misspellings.json
+artificial_p: 0.2
 re_weight_edit_token_p: true

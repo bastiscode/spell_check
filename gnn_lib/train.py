@@ -16,6 +16,7 @@ from torch.utils import tensorboard
 from tqdm import tqdm
 
 import gnn_lib
+from gnn_lib.api.utils import load_experiment_config
 from gnn_lib.data import utils
 from gnn_lib.modules.lr_scheduler import get_lr_scheduler_from_config
 from gnn_lib.modules.optimizer import get_optimizer_from_config
@@ -43,7 +44,7 @@ def train(args: argparse.Namespace, device: DistributedDevice) -> None:
         override_env_vars = {}
         if "GNN_LIB_DATA_DIR" in os.environ:
             override_env_vars["GNN_LIB_DATA_DIR"] = os.environ["GNN_LIB_DATA_DIR"]
-        cfg = gnn_lib.load_experiment_config(args.resume, override_env_vars=override_env_vars)
+        cfg = load_experiment_config(args.resume, override_env_vars=override_env_vars)
         resuming_training = True
 
     logger.info(f"Using distributed device: {device}")
@@ -95,16 +96,16 @@ def train(args: argparse.Namespace, device: DistributedDevice) -> None:
     else:
         experiment_dir = ""
 
-    task = gnn_lib.get_task(
+    task = gnn_lib.tasks.get_task(
         variant_cfg=cfg.variant,
         checkpoint_dir=os.path.join(experiment_dir, "checkpoints"),
         seed=cfg.seed
     )
     # IMPORTANT: the sample graph needs to contain
     # all possible node and edge types
-    sample_g, _ = task.generate_sample_inputs(2)
+    sample_inputs = task.generate_sample_inputs(2)
     model = task.get_model(
-        sample_g=sample_g,
+        sample_inputs=sample_inputs,
         cfg=cfg.model,
         device=device.device,
     )
@@ -178,7 +179,7 @@ def train(args: argparse.Namespace, device: DistributedDevice) -> None:
         train_loader = data.DataLoader(
             dataset=train_dataset,
             batch_sampler=train_batch_sampler,
-            collate_fn=utils.graph_collate,
+            collate_fn=utils.collate,
             num_workers=num_workers
         )
 
@@ -190,7 +191,7 @@ def train(args: argparse.Namespace, device: DistributedDevice) -> None:
         val_loader = data.DataLoader(
             dataset=val_dataset,
             batch_sampler=val_batch_sampler,
-            collate_fn=utils.graph_collate,
+            collate_fn=utils.collate,
             num_workers=num_workers
         )
     else:
@@ -211,7 +212,7 @@ def train(args: argparse.Namespace, device: DistributedDevice) -> None:
         train_loader = data.DataLoader(
             dataset=train_dataset,
             batch_sampler=train_batch_sampler,
-            collate_fn=utils.graph_collate,
+            collate_fn=utils.collate,
             num_workers=num_workers
         )
 
@@ -226,7 +227,7 @@ def train(args: argparse.Namespace, device: DistributedDevice) -> None:
         val_loader = data.DataLoader(
             dataset=val_dataset,
             batch_sampler=val_batch_sampler,
-            collate_fn=utils.graph_collate,
+            collate_fn=utils.collate,
             num_workers=num_workers
         )
 

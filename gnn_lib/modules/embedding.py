@@ -1,13 +1,16 @@
 import math
 from dataclasses import dataclass
-from typing import Dict, List, Tuple, Optional, Callable, Set, Union
+from typing import Dict, List, Tuple, Optional, Callable, Set, Union, Any
 
 import dgl
+import einops
 import omegaconf
 import torch
 from dgl import function as dfn
 from dgl.udf import EdgeBatch, NodeBatch
 from torch import nn
+
+from gnn_lib.utils import DATA_INPUT
 
 
 class TokenEmbedding(nn.Module):
@@ -294,7 +297,7 @@ class EdgeTypeEmbedding(nn.Module):
 
 
 @dataclass
-class EmbeddingConfig:
+class GraphEmbeddingConfig:
     # embedding
     init_embeddings_along_edge_type: Optional[str] = None
 
@@ -307,13 +310,13 @@ class EmbeddingConfig:
     dropout: float = 0.1
 
 
-class Embedding(nn.Module):
+class GraphEmbedding(nn.Module):
     def __init__(self,
                  sample_g: dgl.DGLHeteroGraph,
                  node_hidden_dim: int,
                  hidden_feature: str,
                  num_token_embeddings: Dict[str, int],
-                 cfg: EmbeddingConfig,
+                 cfg: GraphEmbeddingConfig,
                  edge_hidden_dim: Optional[int] = None) -> None:
         super().__init__()
         self.node_hidden_dim = node_hidden_dim
@@ -355,18 +358,70 @@ class Embedding(nn.Module):
         return g
 
 
-def get_embedding_from_config(cfg: Union[EmbeddingConfig, omegaconf.DictConfig],
-                              sample_g: dgl.DGLHeteroGraph,
-                              node_hidden_dim: int,
-                              hidden_feature: str,
-                              num_token_embeddings: Dict[str, int],
-                              edge_hidden_dim: Optional[int] = None) -> Embedding:
-    cfg = omegaconf.OmegaConf.structured(EmbeddingConfig(**cfg))
-    return Embedding(
-        sample_g,
-        node_hidden_dim,
-        hidden_feature,
-        num_token_embeddings,
-        cfg,
-        edge_hidden_dim
-    )
+@dataclass
+class TensorEmbeddingConfig:
+    # positional embedding
+    learned_position_embedding: bool = False
+    embed_positions: bool = True
+
+    dropout: float = 0.1
+
+
+class TensorEmbedding(nn.Module):
+    def __init__(self,
+                 hidden_dim: int,
+                 num_embeddings: int,
+                 cfg: TensorEmbeddingConfig,
+                 padding_idx: Optional[int] = None) -> None:
+        super().__init__()
+        self.hidden_dim = hidden_dim
+        self.num_embeddings = num_embeddings
+        self.cfg = cfg
+
+        self.embedding = TokenEmbedding(
+            hidden_dim,
+            num_embeddings,
+            padding_idx
+        )
+
+        if self.cfg.embed_positions:
+            self.pos_emb = (
+                LearnedPositionalEmbedding(hidden_dim) if self.cfg.learned_position_embedding
+                else SinusoidalPositionalEmbedding(hidden_dim)
+            )
+        else:
+            self.pos_emb = None
+
+        self.norm = nn.LayerNorm(hidden_dim)
+        self.drop = nn.Dropout(cfg.dropout)
+
+    def forward(self, x: torch.Tensor, positions: Optional[torch.Tensor] = None) -> torch.Tensor:
+        assert len(x.shape) == 2
+        emb = self.embedding(x)
+        if self.pos_emb is not None:
+            if positions is None:
+                positions = einops.repeat(
+                    torch.arange(x.shape[1], dtype=torch.long, device=x.device),
+                    "p -> b p",
+                    b=x.shape[0]
+                )
+            emb = emb + self.pos_emb(positions)
+        return self.drop(self.norm(emb))
+
+
+def get_embedding_from_config(cfg: omegaconf.DictConfig,
+                              sample_inputs: DATA_INPUT,
+                              **kwargs: Any) -> Union[GraphEmbedding, TensorEmbedding]:
+    if isinstance(sample_inputs, dgl.DGLHeteroGraph):
+        cfg = omegaconf.OmegaConf.structured(GraphEmbeddingConfig(**cfg))
+        return GraphEmbedding(
+            sample_g=sample_inputs,
+            cfg=cfg,
+            **kwargs
+        )
+    else:
+        cfg = omegaconf.OmegaConf.structured(TensorEmbeddingConfig(**cfg))
+        return TensorEmbedding(
+            cfg=cfg,
+            **kwargs
+        )

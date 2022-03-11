@@ -32,6 +32,7 @@ class Tokenizers(enum.IntEnum):
     WORD = 2
     BPE = 3
     TOKENIZATION_REPAIR = 4
+    BYTE = 5
 
 
 @dataclass
@@ -70,17 +71,19 @@ class Tokenizer:
 
 
 def get_tokenizer_from_config(cfg: Union[TokenizerConfig, omegaconf.DictConfig]) -> Tokenizer:
-    tok_type = cfg.type if isinstance(cfg.type, Tokenizers) else Tokenizers[cfg.type]
-    if tok_type == Tokenizers.CHAR:
+    cfg = omegaconf.OmegaConf.structured(
+        cfg if isinstance(cfg, TokenizerConfig) else TokenizerConfig(**cfg)
+    )
+    if cfg.type == Tokenizers.CHAR:
         return CharTokenizer()
-    elif tok_type == Tokenizers.WORD:
-        cfg = omegaconf.OmegaConf.structured(TokenizerConfig(**cfg))
+    elif cfg.type == Tokenizers.WORD:
         return WordTokenizer(cfg)
-    elif tok_type == Tokenizers.BPE:
-        cfg = omegaconf.OmegaConf.structured(TokenizerConfig(**cfg))
+    elif cfg.type == Tokenizers.BPE:
         return BPETokenizer(cfg)
-    elif tok_type == Tokenizers.TOKENIZATION_REPAIR:
+    elif cfg.type == Tokenizers.TOKENIZATION_REPAIR:
         return TokenizationRepairTokenizer()
+    elif cfg.type == Tokenizers.BYTE:
+        return ByteTokenizer()
     else:
         raise ValueError("Unknown tokenizer type")
 
@@ -101,6 +104,52 @@ def get_tokenization_fn(
         return word_tokens
 
     return tok
+
+
+class ByteTokenizer(Tokenizer):
+    def __init__(self) -> None:
+        self._generate_byte_vocab()
+        self.reverse_vocab = {
+            v: k for k, v in self.vocab.items()
+        }
+        self.bos_id = self.vocab[BOS]
+        self.eos_id = self.vocab[EOS]
+
+    def _generate_byte_vocab(self) -> None:
+        vocab = {chr(i): i for i in range(256)}
+        special_vocab = {
+            st: 256 + i for i, st in
+            enumerate(SPECIAL_TOKENS)
+        }  # unk should be never needed with bytes, but we still add it because some functions using tokenizers
+        # expect every tokenizer to have an unk token
+        # put special tokens at end of vocab such that byte == token_id
+        self.vocab = {**vocab, **special_vocab}
+
+    @property
+    def vocab_size(self) -> int:
+        return len(self.vocab)
+
+    def split(self, sequence: str) -> List[str]:
+        return list(chr(b) for b in sequence.encode("utf8"))
+
+    def token_to_id(self, token: str) -> int:
+        return self.vocab[token]
+
+    def id_to_token(self, token_id: int) -> str:
+        return self.reverse_vocab[token_id]
+
+    def tokenize(self, sequence: str, add_bos_eos: bool = False) -> List[int]:
+        token_ids = [self.token_to_id(c) for c in self.split(sequence)]
+        if add_bos_eos:
+            token_ids = [self.bos_id] + token_ids + [self.eos_id]
+        return token_ids
+
+    def de_tokenize(self, token_ids: List[int], **kwargs: Any) -> str:
+        return bytes(filter(lambda token_id: token_id < 256, token_ids)).decode("utf8")
+
+    @property
+    def name(self) -> str:
+        return "ByteTokenizer"
 
 
 class CharTokenizer(Tokenizer):
@@ -189,7 +238,8 @@ class WordTokenizer(Tokenizer):
             files = files[:num_files]
 
         word_freq = Counter()
-        with ctx.Pool(processes=min(int(os.getenv("GNN_LIB_NUM_PROCESSES", min(os.cpu_count(), 8))), len(files))) as pool:
+        with ctx.Pool(
+                processes=min(int(os.getenv("GNN_LIB_NUM_PROCESSES", min(os.cpu_count(), 8))), len(files))) as pool:
             for i, d in tqdm(enumerate(pool.imap_unordered(utils.get_word_frequencies_from_file, files, chunksize=16)),
                              total=len(files),
                              desc="Calculating word frequencies from files"):

@@ -12,7 +12,9 @@ from gnn_lib.api.utils import (
     download_model,
     load_experiment,
     get_cpu_info,
-    get_gpu_info, get_string_dataset_and_loader, reorder_data
+    get_gpu_info,
+    get_string_dataset_and_loader,
+    reorder_data, get_device_info
 )
 from gnn_lib.modules import inference
 from gnn_lib.tasks import sed_words, sed_sequence
@@ -27,9 +29,27 @@ def get_available_spelling_error_detection_models() -> List[ModelInfo]:
     return [
         ModelInfo(
             task="sed_words",
-            name="gnn_default_sed_words",
+            name="gnn_default",
             description="Graph Neural Network which extends the default Transformer fully connected graph "
                         "with word nodes and word features"
+        ),
+        ModelInfo(
+            task="sed_words",
+            name="gnn_cliques_wfc",
+            description="Graph Neural Network which processes language graphs with fully connected word nodes "
+                        "and fully connected sub-word cliques for each word"
+        ),
+        ModelInfo(
+            task="sed_sequence",
+            name="gnn_default",
+            description="Graph Neural Network which extends the default Transformer fully connected graph "
+                        "with word nodes, word features and a sequence node"
+        ),
+        ModelInfo(
+            task="sed_sequence",
+            name="gnn_cliques_wfc",
+            description="Graph Neural Network which processes language graphs with fully connected word nodes, "
+                        "fully connected sub-word cliques for each word and a sequence node"
         )
     ]
 
@@ -38,25 +58,19 @@ class SpellingErrorDetector:
     def __init__(
             self,
             model_dir: str,
-            use_gpu: bool = True,
+            device: Union[str, int],
             **kwargs: Dict[str, Any]
     ) -> None:
         self.logger = common.get_logger("SPELLING_ERROR_DETECTION")
 
-        if use_gpu:
-            if not torch.cuda.is_available():
-                self.logger.info(f"could not find a GPU, using CPU {get_cpu_info()} as fallback option")
-                device = "cpu"
-            else:
-                self.logger.info(f"running tokenization repair on GPU {get_gpu_info()}")
-                device = "cuda"
-        else:
-            self.logger.info(f"running tokenization repair on CPU {get_cpu_info()}")
+        if device != "cpu" and not torch.cuda.is_available():
+            self.logger.info(f"could not find a GPU, using CPU as fallback option")
             device = "cpu"
 
         self.device = torch.device(device)
+        self.logger.info(f"running spelling error detection on device {get_device_info(self.device)}")
 
-        _, self.task, self.model = load_experiment(
+        self.cfg, self.task, self.model = load_experiment(
             model_dir,
             self.device,
             kwargs.get("override_env_vars"),
@@ -70,21 +84,26 @@ class SpellingErrorDetector:
         for param in self.model.parameters():
             param.requires_grad = False
 
-        self.max_length = (
-            self.model.embedding.node_embedding.pos_emb["token"].max_len
-            if self.model.embedding.node_embedding.pos_emb is not None
-            else float("inf")
-        )
+        self.max_length = self.model.embedding.node_embedding.pos_emb["token"].max_len or float("inf")
+
+    @property
+    def task_name(self) -> str:
+        return "sed_words" if isinstance(self.task, sed_words.SEDWords) else "sed_sequence"
+
+    @property
+    def model_name(self) -> str:
+        return self.cfg.experiment_name
 
     @staticmethod
     def from_pretrained(
-            model: str,
-            use_gpu: bool = True,
+            task: str = "sed_words",
+            model: str = "gnn_default",
+            device: Union[str, int] = "cuda",
             cache_dir: Optional[str] = None,
             force_download: bool = False
     ) -> "SpellingErrorDetector":
-        assert any(model == m.name for m in get_available_spelling_error_detection_models()), \
-            f"model {model} does not match any of the available models:\n" \
+        assert any(model == m.name and task == m.task for m in get_available_spelling_error_detection_models()), \
+            f"task {task} and model {model} do not match any of the available models:\n" \
             f"{pprint.pformat(get_available_spelling_error_detection_models())}"
 
         logger = common.get_logger("DOWNLOAD")
@@ -92,7 +111,7 @@ class SpellingErrorDetector:
         data_dir = download_data(force_download, logger, cache_dir)
         config_dir = download_configs(force_download, logger, cache_dir)
         model_dir = download_model(
-            task="sed_words" if model.endswith("sed_words") else "sed_sequence",
+            task=task,
             name=model,
             cache_dir=cache_dir,
             force_download=force_download,
@@ -100,7 +119,7 @@ class SpellingErrorDetector:
         )
         return SpellingErrorDetector(
             model_dir,
-            use_gpu,
+            device,
             **{
                 "override_env_vars": {
                     "GNN_LIB_DATA_DIR": data_dir,
@@ -112,11 +131,11 @@ class SpellingErrorDetector:
     @staticmethod
     def from_experiment(
             experiment_dir: str,
-            use_gpu: bool = True
+            device: Union[str, int] = "cuda"
     ) -> "SpellingErrorDetector":
         return SpellingErrorDetector(
             experiment_dir,
-            use_gpu,
+            device,
             **{
                 "keep_existing_env_vars": True
             }
@@ -209,3 +228,8 @@ class SpellingErrorDetector:
             return None
         else:
             return outputs
+
+    def to(self, device: Union[str, int]) -> "SpellingErrorDetector":
+        self.device = torch.device(device)
+        self.model.to(self.device)
+        return self

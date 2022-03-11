@@ -8,7 +8,7 @@ from gnn_lib import tasks, models
 from gnn_lib.modules import utils
 from gnn_lib.tasks import utils as task_utils
 from gnn_lib.utils import data_containers
-from gnn_lib.utils.distributed import DistributedDevice, unwrap_ddp
+from gnn_lib.utils.distributed import DistributedDevice
 
 
 class GraphClassification(tasks.Task):
@@ -54,7 +54,7 @@ class GraphClassification(tasks.Task):
     def inference(
             self,
             model: models.ModelForGraphClassification,
-            inputs: Union[List[str], dgl.DGLHeteroGraph],
+            inputs: Union[List[str], Tuple[dgl.DGLHeteroGraph, List[Dict[str, Any]]]],
             **kwargs: Any
     ) -> List:
         self._check_model(model)
@@ -65,11 +65,11 @@ class GraphClassification(tasks.Task):
 
         got_str_input = isinstance(inputs, list) and isinstance(inputs[0], str)
         if got_str_input:
-            g = self.variant.prepare_sequences_for_inference(inputs)
+            g, infos = self.variant.prepare_sequences_for_inference(inputs)
         else:
-            g = inputs
+            g, infos = inputs
 
-        outputs, _ = model(g)
+        outputs, _ = model(g, **infos)
 
         return_logits = kwargs.get("return_logits", False)
         if return_logits:

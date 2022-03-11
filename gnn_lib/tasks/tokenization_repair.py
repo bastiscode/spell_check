@@ -6,6 +6,7 @@ from torch.nn import functional as F
 
 from gnn_lib import models
 from gnn_lib.data import variants, tokenization
+from gnn_lib.models import MODEL_INPUTS
 from gnn_lib.tasks.multi_node_classification import MultiNodeClassification
 from gnn_lib.utils import tokenization_repair, data_containers
 from gnn_lib.tasks import utils as task_utils
@@ -86,14 +87,14 @@ class TokenizationRepair(MultiNodeClassification):
     @torch.inference_mode()
     def inference(self,
                   model: models.ModelForMultiNodeClassification,
-                  inputs: Union[List[str], dgl.DGLHeteroGraph],
+                  inputs: MODEL_INPUTS,
                   **kwargs: Any) -> \
             Union[List[str], List[List[int]]]:
         got_str_input = isinstance(inputs, list) and isinstance(inputs[0], str)
         if got_str_input:
-            g = self.variant.prepare_sequences_for_inference(inputs)
+            g, infos = self.variant.prepare_sequences_for_inference(inputs)
         else:
-            g = inputs
+            g, infos = inputs
 
         repair_tokens_dicts = super().inference(model, g, **kwargs)
 

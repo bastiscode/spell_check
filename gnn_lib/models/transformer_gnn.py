@@ -123,9 +123,9 @@ class TransformerEncoder(models.GNN):
     def forward(self, g: dgl.DGLHeteroGraph) -> dgl.DGLHeteroGraph:
         assert g.is_homogeneous and torch.all(torch.pow(g.batch_num_nodes(), 2) == g.batch_num_edges()), \
             f"{self.name} only works with fully connected homogeneous graphs"
-        enc = self.encoder(
-            inputs=g.ndata[self.hidden_feature],
-            splits=g.batch_num_nodes()
-        )
-        g.ndata[self.hidden_feature] = enc
+        # inputs: N * [L, H]
+        x, lengths = utils.split_and_pad(g.ndata[self.hidden_feature], g.batch_num_nodes())
+        # x: [N, Lmax, H]
+        enc = self.encoder(x, padding_mask=utils.padding_mask(x, lengths))
+        g.ndata[self.hidden_feature] = utils.join(enc, lengths)
         return g

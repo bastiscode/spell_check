@@ -4,7 +4,7 @@ import numpy as np
 import omegaconf
 
 from gnn_lib.data.datasets import (
-    Datasets, ConcatenatedDataset, PreprocessedDataset, PreprocessedSubsetDataset, PreprocessedConcatDataset
+    Datasets, PreprocessedDataset, PreprocessedSubsetDataset, PreprocessedConcatDataset
 )
 from gnn_lib.data.tokenization import TokenizerConfig
 from gnn_lib.data.variants import DatasetVariants, DatasetVariantConfig

@@ -1,3 +1,5 @@
+import dataclasses
+import os
 import pprint
 from typing import List, Optional, Union, Any, Dict
 
@@ -12,7 +14,11 @@ from gnn_lib.api.utils import (
     download_model,
     load_experiment,
     get_cpu_info,
-    get_gpu_info, get_string_dataset_and_loader, reorder_data, load_text_file
+    get_gpu_info,
+    get_string_dataset_and_loader,
+    reorder_data,
+    load_text_file,
+    get_device_info
 )
 from gnn_lib.data import index
 from gnn_lib.modules import inference
@@ -28,42 +34,99 @@ def get_available_spelling_error_correction_models() -> List[ModelInfo]:
     return [
         ModelInfo(
             task="sec",
-            name="transformer_nmt",
-            description="Transformer model that translates a sequence with spelling errors into a "
-                        "sequence without spelling errors"
+            name="transformer_words_nmt",
+            description="Transformer model that corrects sequences by translating each word individually "
+                        "from misspelled to correct"
         ),
         ModelInfo(
             task="sec",
-            name="transformer_words_nmt",
-            description="Transformer model that corrects sequences by correcting each word individually using a shared "
-                        "decoder over all words that translates from misspelled words to correct words"
+            name="transformer_nmt",
+            description="Transformer model that translates a sequence with spelling errors into a "
+                        "sequence without spelling errors"
         )
     ]
+
+
+@dataclasses.dataclass
+class Search:
+    pass
+
+
+class GreedySearch(Search):
+    pass
+
+
+class SampleSearch(Search):
+    top_k: int = 5
+
+
+class BestFirstSearch(Search):
+    pass
+
+
+class BeamSearch(Search):
+    beam_width: int = 5
+
+
+@dataclasses.dataclass
+class SpellingCorrectionScore:
+    normalize_by_length: bool = True
+    alpha: float = 1.0
+    mode: str = "log_likelihood"
+    prefix_index: Optional[index.PrefixIndex] = None
+
+
+def inference_kwargs_from_search_and_score(search: Search, score: SpellingCorrectionScore) -> Dict[str, Any]:
+    inference_kwargs = {}
+    if isinstance(search, GreedySearch):
+        inference_kwargs["search_mode"] = "greedy"
+    elif isinstance(search, SampleSearch):
+        inference_kwargs["search_mode"] = "sample"
+        inference_kwargs["sample_top_k"] = search.top_k
+    elif isinstance(search, BeamSearch):
+        inference_kwargs["search_mode"] = "beam"
+        inference_kwargs["beam_width"] = search.beam_width
+    elif isinstance(search, BestFirstSearch):
+        inference_kwargs["search_mode"] = "best_first"
+    else:
+        raise RuntimeError(f"unknown search specification {search.__class__.__name__}")
+
+    if score.mode != "log_likelihood" and score.prefix_index is None:
+        logger = common.get_logger("DOWNLOAD")
+        logger.info(f"score mode is {score.mode}, but not prefix index is given, downloading data to use "
+                    f"pretrained prefix index")
+        data_dir = download_data(False, logger)
+        score.prefix_index = index.PrefixIndex(
+            os.path.join(data_dir, "prefix_index", "merged_train_100k_prefix_index.pkl")
+        )
+
+    inference_kwargs["score_fn"] = inference.spelling_correction_score(
+        score.mode,
+        score.prefix_index,
+        score.normalize_by_length,
+        score.alpha
+    )
+
+    return inference_kwargs
 
 
 class SpellingErrorCorrector:
     def __init__(
             self,
             model_dir: str,
-            use_gpu: bool = True,
+            device: Union[str, int],
             **kwargs: Dict[str, Any]
     ) -> None:
         self.logger = common.get_logger("SPELLING_ERROR_CORRECTION")
 
-        if use_gpu:
-            if not torch.cuda.is_available():
-                self.logger.info(f"could not find a GPU, using CPU {get_cpu_info()} as fallback option")
-                device = "cpu"
-            else:
-                self.logger.info(f"running tokenization repair on GPU {get_gpu_info()}")
-                device = "cuda"
-        else:
-            self.logger.info(f"running tokenization repair on CPU {get_cpu_info()}")
+        if device != "cpu" and not torch.cuda.is_available():
+            self.logger.info(f"could not find a GPU, using CPU as fallback option")
             device = "cpu"
 
         self.device = torch.device(device)
+        self.logger.info(f"running spelling error correction on device {get_device_info(self.device)}")
 
-        _, self.task, self.model = load_experiment(
+        self.cfg, self.task, self.model = load_experiment(
             model_dir,
             self.device,
             kwargs.get("override_env_vars"),
@@ -77,19 +140,20 @@ class SpellingErrorCorrector:
         for param in self.model.parameters():
             param.requires_grad = False
 
-        self.max_length = (
-            self.model.embedding.node_embedding.pos_emb["token"].max_len
-            if self.model.embedding.node_embedding.pos_emb is not None
-            else float("inf")
-        )
+        self.max_length = self.model.embedding.node_embedding.pos_emb["token"].max_len or float("inf")
 
-        self.prefix_index = None
-        self.loaded_prefix_index = None
+    @property
+    def task_name(self) -> str:
+        return "sec"
+
+    @property
+    def model_name(self) -> str:
+        return self.cfg.experiment_name
 
     @staticmethod
     def from_pretrained(
-            model: str,
-            use_gpu: bool = True,
+            model: str = "transformer_words_nmt",
+            device: Union[str, int] = "cuda",
             cache_dir: Optional[str] = None,
             force_download: bool = False
     ) -> "SpellingErrorCorrector":
@@ -110,7 +174,7 @@ class SpellingErrorCorrector:
         )
         return SpellingErrorCorrector(
             model_dir,
-            use_gpu,
+            device,
             **{
                 "override_env_vars": {
                     "GNN_LIB_DATA_DIR": data_dir,
@@ -122,12 +186,12 @@ class SpellingErrorCorrector:
     @staticmethod
     def from_experiment(
             experiment_dir: str,
-            use_gpu: bool = True
+            device: Union[str, int] = "cuda"
     ) -> "SpellingErrorCorrector":
         return SpellingErrorCorrector(
             experiment_dir,
-            use_gpu,
-            ** {
+            device,
+            **{
                 "keep_existing_env_vars": True
             }
         )
@@ -137,7 +201,8 @@ class SpellingErrorCorrector:
             self,
             inputs: Union[str, List[str]],
             detections: Optional[List[List[int]]] = None,
-            prefix_index: Optional[str] = None,
+            search: Search = GreedySearch(),
+            score: SpellingCorrectionScore = SpellingCorrectionScore(),
             batch_size: int = 16,
             sort_by_length: bool = True,
             show_progress: bool = False
@@ -157,18 +222,7 @@ class SpellingErrorCorrector:
             unit="char"
         )
 
-        inference_kwargs = {
-            "inference_mode": "greedy",
-            "beam_width": 5,
-            "best_first_top_k": 1,
-            "sample_top_k": 5
-        }
-        if prefix_index is not None:
-            # only load a new prefix index if it is a different one than already loaded
-            if prefix_index != self.loaded_prefix_index:
-                self.prefix_index = index.PrefixIndex(prefix_index)
-                self.loaded_prefix_index = prefix_index
-            inference_kwargs["prefix_index"] = self.prefix_index
+        inference_kwargs = inference_kwargs_from_search_and_score(search, score)
 
         all_outputs = []
         for i, (batch, info) in enumerate(pbar):
@@ -200,7 +254,8 @@ class SpellingErrorCorrector:
             self,
             inputs: StringInputOutput,
             detections: Optional[Detections] = None,
-            prefix_index: Optional[str] = None,
+            search: Search = GreedySearch(),
+            score: SpellingCorrectionScore = SpellingCorrectionScore(),
             batch_size: int = 16,
             sort_by_length: bool = True,
             show_progress: bool = False
@@ -213,8 +268,9 @@ class SpellingErrorCorrector:
 
         outputs = self._correct_text_raw(
             [inputs] if input_is_string else inputs,
-            [detections] if input_is_string else detections,
-            prefix_index,
+            [detections] if input_is_string and detections is not None else detections,
+            search,
+            score,
             batch_size,
             sort_by_length,
             show_progress
@@ -226,17 +282,18 @@ class SpellingErrorCorrector:
             input_file_path: str,
             output_file_path: Optional[str] = None,
             detections: Optional[Union[str, List[List[int]]]] = None,
-            prefix_index: Optional[str] = None,
+            search: Search = GreedySearch(),
+            score: SpellingCorrectionScore = SpellingCorrectionScore(),
             batch_size: int = 16,
             sort_by_length: bool = True,
             show_progress: bool = True
     ) -> Optional[List[str]]:
         if detections is not None and isinstance(detections, str):
             detections = load_text_file(detections)
-            detections = [[int(det) for det in detection] for detection in detections]
+            detections = [[int(det) for det in detection.split()] for detection in detections]
 
         outputs = self._correct_text_raw(
-            input_file_path, detections, prefix_index, batch_size, sort_by_length, show_progress
+            input_file_path, detections, search, score, batch_size, sort_by_length, show_progress
         )
 
         if output_file_path is not None:
@@ -247,3 +304,8 @@ class SpellingErrorCorrector:
             return None
         else:
             return outputs
+
+    def to(self, device: Union[str, int]) -> "SpellingErrorCorrector":
+        self.device = torch.device(device)
+        self.model.to(self.device)
+        return self

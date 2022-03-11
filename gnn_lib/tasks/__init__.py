@@ -1,7 +1,7 @@
 import enum
 import os
 import time
-from typing import Any, Type, Dict, Optional, Tuple, List, Set
+from typing import Any, Type, Dict, Optional, Tuple, Set
 
 import dgl
 import omegaconf
@@ -17,7 +17,7 @@ from tqdm import tqdm
 from gnn_lib import models
 from gnn_lib.data import variants, utils as data_utils
 from gnn_lib.data.variants import get_variant_from_config, DatasetVariants
-from gnn_lib.models import Model
+from gnn_lib.models import Model, MODEL_INPUTS
 from gnn_lib.tasks import utils
 from gnn_lib.utils import io, common, data_containers
 from gnn_lib.utils.distributed import DistributedDevice, unwrap_ddp
@@ -50,8 +50,8 @@ class Task:
 
         self.logger = common.get_logger("TASK")
 
-    def generate_sample_inputs(self, num_samples: int) -> Tuple[dgl.DGLHeteroGraph, List[Dict[str, Any]]]:
-        return data_utils.graph_collate([
+    def generate_sample_inputs(self, num_samples: int) -> MODEL_INPUTS:
+        return data_utils.collate([
             self.variant.prepare_sequence(utils.SAMPLE_SEQUENCE) for _ in range(num_samples)
         ])
 
@@ -59,7 +59,7 @@ class Task:
                                   model: DDP,
                                   device: DistributedDevice,
                                   grad_scaler: amp.GradScaler) -> Set[str]:
-        batch = self.generate_sample_inputs(num_samples=2)
+        batch = self.generate_sample_inputs(num_samples=1)
         inputs, _ = self._prepare_inputs_and_labels(batch, device)
 
         with amp.autocast(enabled=grad_scaler.is_enabled()):
@@ -81,11 +81,16 @@ class Task:
                 p.requires_grad = False
 
         if device.is_main_process:
-            sample_g: dgl.DGLHeteroGraph = dgl.unbatch(inputs["g"])[0]
+            sample_g: dgl.DGLHeteroGraph = dgl.unbatch(batch[0])[0]
             self.logger.info(
-                f"Sample graph: {sample_g} "
-                f"({list((n_type, sample_g.node_attr_schemes(n_type)) for n_type in sample_g.ntypes)}, "
+                f"Sample graph: {sample_g}\n"
+                f"node attributes: "
+                f"{list((n_type, sample_g.node_attr_schemes(n_type)) for n_type in sample_g.ntypes)}\n"
+                f"edge attributes: "
                 f"{list((e_type, sample_g.edge_attr_schemes(e_type)) for e_type in sample_g.canonical_etypes)}"
+            )
+            self.logger.info(
+                f"Sample infos: {batch[1]}"
             )
 
             for param in sorted(unused_parameters):
@@ -97,7 +102,7 @@ class Task:
         return {}
 
     def _prepare_inputs_and_labels(self,
-                                   batch: Tuple[dgl.DGLHeteroGraph, List[Dict[str, Any]]],
+                                   batch: MODEL_INPUTS,
                                    device: DistributedDevice) \
             -> Tuple[Dict[str, Any], Any]:
         raise NotImplementedError
@@ -384,10 +389,10 @@ class Task:
         raise NotImplementedError
 
     def get_model(self,
-                  sample_g: dgl.DGLHeteroGraph,
+                  sample_inputs: MODEL_INPUTS,
                   cfg: omegaconf.DictConfig,
                   device: torch.device) -> Model:
-        model = models.get_model_from_config(cfg, sample_g, device).to(device)
+        model = models.get_model_from_config(cfg, sample_inputs, device).to(device)
         self._check_model(model)
         return model
 

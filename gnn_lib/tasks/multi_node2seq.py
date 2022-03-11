@@ -79,7 +79,7 @@ class MultiNode2Seq(tasks.Task):
     def inference(
             self,
             model: models.ModelForMultiNode2Seq,
-            inputs: Union[List[str], dgl.DGLHeteroGraph],
+            inputs: Union[List[str], Tuple[dgl.DGLHeteroGraph, List[Dict[str, Any]]]],
             **kwargs: Any
     ) -> Dict[str, List[List[List[str]]]]:
         self._check_model(model)
@@ -87,9 +87,9 @@ class MultiNode2Seq(tasks.Task):
 
         got_str_input = isinstance(inputs, list) and isinstance(inputs[0], str)
         if got_str_input:
-            g = self.variant.prepare_sequences_for_inference(inputs)
+            g, infos = self.variant.prepare_sequences_for_inference(inputs)
         else:
-            g = inputs
+            g, infos = inputs
 
         model_cfg: models.ModelForMultiNode2SeqConfig = model.cfg
         g = model.encode(g)

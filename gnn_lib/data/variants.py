@@ -7,12 +7,13 @@ from typing import Tuple, List, Union, Optional, Dict, Any
 import dgl
 import numpy as np
 import omegaconf
+import torch
 from omegaconf import MISSING, OmegaConf
 
 from gnn_lib.data import graph, tokenization, utils, index
-from gnn_lib.data.noise import get_noise_from_config
+from gnn_lib.data.preprocessing import get_preprocessing_from_config, PreprocessingConfig, get_preprocessing_fn
 from gnn_lib.data.tokenization import TokenizerConfig, get_tokenizer_from_config
-from gnn_lib.utils import tokenization_repair, io
+from gnn_lib.utils import tokenization_repair, io, MODEL_INPUTS, DATA_INPUT
 
 
 class DatasetVariants(enum.IntEnum):
@@ -28,18 +29,29 @@ class DatasetVariants(enum.IntEnum):
 class DatasetVariantConfig:
     type: DatasetVariants  # = MISSING
 
+    preprocessing = PreprocessingConfig = MISSING
+
 
 class DatasetVariant:
-    def __init__(self,
-                 cfg: DatasetVariantConfig,
-                 seed: int):
+    def __init__(
+            self,
+            cfg: DatasetVariantConfig,
+            seed: int,
+            tokenization_fn: utils.TOKENIZATION_FN,
+            neighbor_fn: Optional[utils.NEIGHBOR_FN] = None,
+            **preprocessing_kwargs: Dict[str, Any]
+    ):
         self.cfg = cfg
         self.seed = seed
         self.rand = np.random.default_rng(seed)
 
-        self.tok_fn: utils.TOKENIZATION_FN = None
-        self.neighbor_fn: Optional[utils.NEIGHBOR_FN] = None
-        self.noise_fn: utils.NOISE_FN = None
+        preprocessing = get_preprocessing_from_config(self.cfg.preprocessing, self.seed)
+        self.preprocessing_fn: utils.PREPROCESSING_FN = get_preprocessing_fn(
+            preprocessing,
+            tokenization_fn,
+            neighbor_fn,
+            **preprocessing_kwargs
+        )
 
     @property
     def name(self) -> str:
@@ -50,51 +62,37 @@ class DatasetVariant:
         cfg_yaml = OmegaConf.to_yaml(self.cfg, resolve=True, sort_keys=True)
         return str(hashlib.sha1(f"{cfg_yaml}_{self.seed}".encode("utf8")).hexdigest())
 
-    def _get_sample(self,
-                    sequence: Union[str, utils.SAMPLE],
-                    corrupt_sequence: Optional[Union[str, utils.SAMPLE]] = None,
-                    is_inference: bool = False,
-                    **kwargs: Any) -> Tuple[utils.SAMPLE, Optional[str]]:
-        if corrupt_sequence is not None:
-            if isinstance(corrupt_sequence, str):
-                return utils.prepare_samples([corrupt_sequence], self.tok_fn, self.neighbor_fn, **kwargs)[0], \
-                       str(sequence)
-            else:
-                return corrupt_sequence, str(sequence)
-        elif not is_inference:
-            sequence, corrupt_sequence = self.noise_fn(sequence)
-            return utils.prepare_samples(
-                [corrupt_sequence],
-                self.tok_fn,
-                self.neighbor_fn,
-                **kwargs
-            )[0], str(sequence)
+    def _get_inputs(
+            self,
+            sequence: Union[str, utils.SAMPLE],
+            target_sequence: Optional[str] = None,
+            is_inference: bool = False
+    ) -> Tuple[utils.SAMPLE, Optional[str]]:
+        if is_inference:
+            return (
+                (sequence, target_sequence) if isinstance(sequence, utils.SAMPLE)
+                else (self.preprocessing_fn([sequence], [target_sequence], is_inference)[0][0], None)
+            )
         else:
-            if isinstance(sequence, str):
-                return utils.prepare_samples([sequence], self.tok_fn, self.neighbor_fn, **kwargs)[0], None
+            if isinstance(sequence, utils.SAMPLE) and target_sequence is not None:
+                return sequence, target_sequence
             else:
-                return sequence, None
+                return self.preprocessing_fn([sequence], [target_sequence], is_inference)[0]
 
     def prepare_sequence(
             self,
             sequence: Union[str, utils.SAMPLE],
-            corrupt_sequence: Optional[Union[str, utils.SAMPLE]] = None,
-            is_inference: bool = False,
-            return_data: bool = False) \
-            -> Tuple[
-                Union[dgl.DGLHeteroGraph, graph.HeterogeneousDGLData],
-                Dict[str, Any]
-            ]:
+            target_sequence: Optional[str] = None,
+            is_inference: bool = False
+    ) -> Tuple[DATA_INPUT, Dict[str, Any]]:
         raise NotImplementedError
 
     def prepare_sequences_for_inference(
             self,
             sequences: List[str]
-    ) -> dgl.DGLHeteroGraph:
-        return dgl.batch([
-            self.prepare_sequence(s, is_inference=True)[0]
-            for s in sequences
-        ])
+    ) -> MODEL_INPUTS:
+        items = [self.prepare_sequence(s, is_inference=True) for s in sequences]
+        return utils.collate(items)
 
 
 @dataclass
@@ -114,7 +112,6 @@ class SEDSequenceConfig(DatasetVariantConfig):
 
 class SEDSequence(DatasetVariant):
     def __init__(self, cfg: DatasetVariantConfig, seed: int):
-        super().__init__(cfg, seed)
         self.cfg: SEDSequenceConfig
         self.tokenizer = get_tokenizer_from_config(self.cfg.tokenizer)
         if self.cfg.word_tokenizer is not None:
@@ -135,10 +132,9 @@ class SEDSequence(DatasetVariant):
             self.neighbor_fn = None
             self.num_neighbors = None
 
-        self.noise = get_noise_from_config(self.cfg.noise, self.seed)
-        self.noise_fn = self.noise.apply
-
         self.tok_fn = tokenization.get_tokenization_fn(self.tokenizer)
+
+        super().__init__(cfg, seed, self.tok_fn, self.neighbor_fn)
 
     def construct_graph(self, sample: utils.SAMPLE) -> graph.HeterogeneousDGLData:
         self.cfg: SEDSequenceConfig
@@ -184,16 +180,15 @@ class SEDSequence(DatasetVariant):
     def prepare_sequence(
             self,
             sequence: Union[str, utils.SAMPLE],
-            corrupt_sequence: Optional[Union[str, utils.SAMPLE]] = None,
-            is_inference: bool = False,
-            return_data: bool = False) \
-            -> Tuple[
-                Union[dgl.DGLHeteroGraph, graph.HeterogeneousDGLData],
-                Dict[str, Any]
-            ]:
+            target_sequence: Optional[Union[str, utils.SAMPLE]] = None,
+            is_inference: bool = False
+    ) -> Tuple[
+        Union[dgl.DGLHeteroGraph, graph.HeterogeneousDGLData],
+        Dict[str, Any]
+    ]:
         self.cfg: SEDSequenceConfig
 
-        input_sample, target_sequence = self._get_sample(sequence, corrupt_sequence, is_inference)
+        input_sample, target_sequence = self._get_inputs(sequence, target_sequence, is_inference)
         input_sample = utils.sanitize_sample(input_sample, unk_token_id=self.tokenizer.token_to_id(tokenization.UNK))
         if not is_inference:
             assert target_sequence is not None
@@ -203,21 +198,23 @@ class SEDSequence(DatasetVariant):
 
         data = self.construct_graph(input_sample)
 
-        return data if return_data else data.to_heterograph(), {"label": label}
+        return data.to_heterograph(), {"label": label}
 
 
 @dataclass
 class SEDWordsConfig(DatasetVariantConfig):
     type: DatasetVariants = DatasetVariants.SED_WORDS
     tokenizer: TokenizerConfig = MISSING
-    word_tokenizer: Optional[TokenizerConfig] = None
     noise: Any = MISSING
+
+    encoding_scheme: str = "whitespace_words"
     dictionary_file: Optional[str] = None
     add_word_features: bool = True
+
+    # special args for encoding scheme whitespace_words
     add_dependency_info: bool = True
     token_fully_connected: bool = False
     word_fully_connected: bool = True
-    encoding_scheme: str = "whitespace_words"
     index: Optional[str] = None
 
 
@@ -227,10 +224,6 @@ class SEDWords(DatasetVariant):
         self.cfg: SEDWordsConfig
 
         self.tokenizer = get_tokenizer_from_config(self.cfg.tokenizer)
-        if self.cfg.word_tokenizer is not None:
-            self.word_tokenizer = get_tokenizer_from_config(self.cfg.word_tokenizer)
-        else:
-            self.word_tokenizer = None
 
         if self.cfg.dictionary_file is not None:
             self.dictionary = io.dictionary_from_file(self.cfg.dictionary_file)
@@ -245,7 +238,7 @@ class SEDWords(DatasetVariant):
             self.neighbor_fn = None
             self.num_neighbors = None
 
-        self.noise = get_noise_from_config(self.cfg.noise, seed)
+        self.noise = get_preprocessing_from_config(self.cfg.noise, seed)
         self.noise_fn = self.noise.apply
 
         self.tok_fn = tokenization.get_tokenization_fn(self.tokenizer)
@@ -260,8 +253,6 @@ class SEDWords(DatasetVariant):
             data = graph.sequence_to_word_graph(
                 sample=sample,
                 tokenizer=self.tokenizer,
-                word_tokenizer=self.word_tokenizer,
-                add_word_whitespace_groups=True,
                 dictionary=self.dictionary,
                 add_word_features=self.cfg.add_word_features,
                 # add_ner_features=True,
@@ -274,8 +265,7 @@ class SEDWords(DatasetVariant):
             )
         elif self.cfg.encoding_scheme == "tokens":
             data = graph.sequence_to_token_graph(
-                sample=sample,
-                add_word_whitespace_groups=True
+                sample=sample
             )
         else:
             raise ValueError(f"Unknown encoding scheme {self.cfg.encoding_scheme}")
@@ -284,16 +274,15 @@ class SEDWords(DatasetVariant):
     def prepare_sequence(
             self,
             sequence: Union[str, utils.SAMPLE],
-            corrupt_sequence: Optional[Union[str, utils.SAMPLE]] = None,
-            is_inference: bool = False,
-            return_data: bool = False) \
-            -> Tuple[
-                Union[dgl.DGLHeteroGraph, graph.HeterogeneousDGLData],
-                Dict[str, Any]
-            ]:
+            target_sequence: Optional[Union[str, utils.SAMPLE]] = None,
+            is_inference: bool = False
+    ) -> Tuple[
+        Union[dgl.DGLHeteroGraph, graph.HeterogeneousDGLData],
+        Dict[str, Any]
+    ]:
         self.cfg: SEDWordsConfig
 
-        input_sample, target_sequence = self._get_sample(sequence, corrupt_sequence, is_inference, **self.sample_kwargs)
+        input_sample, target_sequence = self._get_inputs(sequence, target_sequence, is_inference, **self.sample_kwargs)
         input_sample = utils.sanitize_sample(input_sample, unk_token_id=self.tokenizer.token_to_id(tokenization.UNK))
         if not is_inference:
             assert target_sequence is not None
@@ -308,13 +297,56 @@ class SEDWords(DatasetVariant):
         data = self.construct_graph(input_sample)
 
         info = {}
-        if not is_inference:
-            if self.cfg.encoding_scheme == "tokens":
-                info["label"] = {"token": label}
-            else:
+        if self.cfg.encoding_scheme == "whitespace_words":
+            info["groups"] = {
+                "word": [
+                    {
+                        "stage": "word_to_word_ws",
+                        "groups": utils.get_word_and_word_whitespace_groups(input_sample)[1]
+                    }
+                ]
+            }
+            if not is_inference:
                 info["label"] = {"word": label}
 
-        return data if return_data else data.to_heterograph(), info
+        elif self.cfg.encoding_scheme == "tokens":
+
+            if self.cfg.add_word_features:
+                # if we add word features, we first aggregate from tokens to words
+                # and then from word to whitespace_words
+                # we need to do this because the features are on the word level and not on the whitespace word level
+                word_groups, word_whitespace_groups = utils.get_word_and_word_whitespace_groups(input_sample)
+                stages = [
+                    {
+                        "stage": "token_to_word",
+                        "groups": word_groups,
+                    },
+                    {
+                        "stage": "word_to_word_ws",
+                        "groups": word_whitespace_groups,
+                        "features": utils.get_word_features(input_sample, self.dictionary)
+                    }
+                ]
+                info["groups"] = {
+                    "word": stages
+                }
+
+            else:
+                stages = [
+                    {
+                        "stage": "token_to_word_ws",
+                        "groups": utils.get_word_whitespace_groups(input_sample)
+                    }
+                ]
+
+                info["groups"] = {
+                    "token": stages
+                }
+
+            if not is_inference:
+                info["label"] = {"token": label}
+
+        return data.to_heterograph(), info
 
 
 @dataclass
@@ -330,7 +362,7 @@ class TokenizationRepair(DatasetVariant):
         self.cfg: TokenizationRepairConfig
         self.char_tokenizer = tokenization.CharTokenizer()
 
-        self.noise = get_noise_from_config(self.cfg.noise, seed)
+        self.noise = get_preprocessing_from_config(self.cfg.noise, seed)
         self.noise_fn = self.noise.apply
 
         self.tok_fn = tokenization.get_tokenization_fn(self.char_tokenizer, True)
@@ -348,15 +380,15 @@ class TokenizationRepair(DatasetVariant):
     def prepare_sequence(
             self,
             sequence: Union[str, utils.SAMPLE],
-            corrupt_sequence: Union[str, utils.SAMPLE] = None,
-            is_inference: bool = False,
-            return_data: bool = False) -> Tuple[
+            target_sequence: Union[str, utils.SAMPLE] = None,
+            is_inference: bool = False
+    ) -> Tuple[
         Union[dgl.DGLHeteroGraph, graph.HeterogeneousDGLData],
         Dict[str, Any]
     ]:
         self.cfg: TokenizationRepairConfig
 
-        input_sample, target_sequence = self._get_sample(sequence, corrupt_sequence, is_inference)
+        input_sample, target_sequence = self._get_inputs(sequence, target_sequence, is_inference)
         input_sample = utils.sanitize_sample(input_sample,
                                              unk_token_id=self.char_tokenizer.token_to_id(tokenization.UNK))
         if not is_inference:
@@ -382,7 +414,7 @@ class TokenizationRepair(DatasetVariant):
             else:
                 raise RuntimeError("should not happen")
 
-        return data if return_data else data.to_heterograph(), {}
+        return data.to_heterograph(), {}
 
 
 @dataclass
@@ -402,7 +434,7 @@ class TokenizationRepairNMT(DatasetVariant):
         self.eos_token_id = self.tok_tokenizer.token_to_id(tokenization.EOS)
         self.pad_token_id = self.tok_tokenizer.token_to_id(tokenization.PAD)
 
-        self.noise = get_noise_from_config(self.cfg.noise, seed)
+        self.noise = get_preprocessing_from_config(self.cfg.noise, seed)
         self.noise_fn = self.noise.apply
 
         self.tok_fn = tokenization.get_tokenization_fn(self.char_tokenizer, True)
@@ -420,14 +452,13 @@ class TokenizationRepairNMT(DatasetVariant):
     def prepare_sequence(
             self,
             sequence: str,
-            corrupt_sequence: Optional[str] = None,
-            is_inference: bool = False,
-            return_data: bool = False) \
-            -> Tuple[
-                Union[dgl.DGLHeteroGraph, graph.HeterogeneousDGLData],
-                Dict[str, Any]
-            ]:
-        input_sample, target_sequence = self._get_sample(sequence, corrupt_sequence, is_inference)
+            target_sequence: Optional[str] = None,
+            is_inference: bool = False
+    ) -> Tuple[
+        Union[dgl.DGLHeteroGraph, graph.HeterogeneousDGLData],
+        Dict[str, Any]
+    ]:
+        input_sample, target_sequence = self._get_inputs(sequence, target_sequence, is_inference)
         input_sample = utils.sanitize_sample(input_sample,
                                              unk_token_id=self.char_tokenizer.token_to_id(tokenization.UNK))
         if not is_inference:
@@ -442,7 +473,7 @@ class TokenizationRepairNMT(DatasetVariant):
 
         data = self.construct_graph(input_sample)
 
-        return data if return_data else data.to_heterograph(), {
+        return data.to_heterograph(), {
             "label": label,
             "pad_token_id": self.pad_token_id
         }
@@ -490,7 +521,7 @@ class SECWordsNMT(DatasetVariant):
             self.neighbor_fn = None
             self.num_neighbors = None
 
-        self.noise = get_noise_from_config(self.cfg.noise, seed)
+        self.noise = get_preprocessing_from_config(self.cfg.noise, seed)
         self.noise_fn = self.noise.apply
 
         self.tok_fn = tokenization.get_tokenization_fn(self.input_tokenizer)
@@ -503,15 +534,13 @@ class SECWordsNMT(DatasetVariant):
         self.cfg: SECWordsNMTConfig
         if self.cfg.encoding_scheme == "tokens":
             data = graph.sequence_to_token_graph(
-                sample=sample,
-                add_word_whitespace_groups=True
+                sample=sample
             )
         elif self.cfg.encoding_scheme == "whitespace_words":
             data = graph.sequence_to_word_graph(
                 sample=sample,
                 tokenizer=self.input_tokenizer,
                 word_tokenizer=self.word_tokenizer,
-                add_word_whitespace_groups=True,
                 dictionary=self.dictionary,
                 add_word_features=self.cfg.add_word_features,
                 # add_ner_features=True,
@@ -529,16 +558,16 @@ class SECWordsNMT(DatasetVariant):
     def prepare_sequence(
             self,
             sequence: str,
-            corrupt_sequence: Optional[str] = None,
-            is_inference: bool = False,
-            return_data: bool = False) \
-            -> Tuple[
-                Union[dgl.DGLHeteroGraph, graph.HeterogeneousDGLData],
-                Dict[str, Any]
-            ]:
+            target_sequence: Optional[str] = None,
+            is_inference: bool = False
+    ) -> Tuple[
+        Union[dgl.DGLHeteroGraph, graph.HeterogeneousDGLData],
+        Dict[str, Any]
+    ]:
         self.cfg: SECWordsNMTConfig
 
-        input_sample, target_sequence = self._get_sample(sequence, corrupt_sequence, is_inference, **self.sample_kwargs)
+        input_sample, target_sequence = self._get_inputs(sequence, target_sequence, is_inference,
+                                                         **self.sample_kwargs)
         input_sample = utils.sanitize_sample(input_sample,
                                              unk_token_id=self.input_tokenizer.token_to_id(tokenization.UNK))
         if not is_inference:
@@ -566,122 +595,114 @@ class SECWordsNMT(DatasetVariant):
                 "pad_token_id": {"token": self.pad_token_id}
             }
 
-        return data if return_data else data.to_heterograph(), info
+        return data.to_heterograph(), info
 
 
 @dataclass
 class SECNMTConfig(DatasetVariantConfig):
     type: DatasetVariants = DatasetVariants.SEC_NMT
-    tokenizers: Dict[str, TokenizerConfig] = MISSING
-    noise: Any = MISSING
+
+    input_tokenizer: TokenizerConfig = MISSING
+    output_tokenizer: TokenizerConfig = MISSING
+
+    data_scheme: str = "tensor"  # one of {token_graph, word_graph, tensor}
+
     dictionary_file: Optional[str] = None
     add_word_features: bool = True
-    add_dependency_info: bool = True
+
+    # specific stuff for data_scheme word_graph
+    add_dependency_info: bool = False
     token_fully_connected: bool = False
     word_fully_connected: bool = True
-    self_loops: bool = False
-    encoding_scheme: str = "words"
     graph_scheme: str = "token_to_word"
-    gnn_decoding: bool = False
     index: Optional[str] = None
+    index_num_neighbors: int = 5
 
 
 class SECNMT(DatasetVariant):
     def __init__(self,
                  cfg: DatasetVariantConfig,
                  seed: int):
-        super().__init__(cfg, seed)
         self.cfg: SECNMTConfig
-        self.input_tokenizer = get_tokenizer_from_config(self.cfg.tokenizers["input_tokenizer"])
-        self.output_tokenizer = get_tokenizer_from_config(self.cfg.tokenizers["output_tokenizer"])
-        if "word_tokenizer" in self.cfg.tokenizers:
-            self.word_tokenizer = get_tokenizer_from_config(self.cfg.tokenizers["word_tokenizer"])
-        else:
-            self.word_tokenizer = None
+        self.input_tokenizer = get_tokenizer_from_config(self.cfg.input_tokenizer)
+        self.output_tokenizer = get_tokenizer_from_config(self.cfg.output_tokenizer)
 
-        self.bos_token_id = self.output_tokenizer.token_to_id(tokenization.BOS)
-        self.pad_token_id = self.output_tokenizer.token_to_id(tokenization.PAD)
+        self.input_unk_token_id = self.input_tokenizer.token_to_id(tokenization.UNK)
+        self.output_pad_token_id = self.output_tokenizer.token_to_id(tokenization.PAD)
+
         if self.cfg.dictionary_file is not None:
             self.dictionary = io.dictionary_from_file(self.cfg.dictionary_file)
         else:
             self.dictionary = None
 
+        tok_fn = tokenization.get_tokenization_fn(self.input_tokenizer)
         if self.cfg.index is not None:
-            self.index = index.NNIndex(self.cfg.index)
-            self.num_neighbors = int(os.getenv("GNN_LIB_NUM_NEIGHBORS", 5))
-            self.neighbor_fn = index.get_neighbor_fn(self.index, self.num_neighbors)
+            neighbor_index = index.NNIndex(self.cfg.index)
+            neighbor_fn = index.get_neighbor_fn(neighbor_index, self.cfg.index_num_neighbors)
         else:
-            self.neighbor_fn = None
-            self.num_neighbors = None
+            neighbor_fn = None
+        preprocessing_sample_kwargs = {}
+        if self.cfg.data_scheme == "word_graph":
+            preprocessing_sample_kwargs["with_dep_parser"] = self.cfg.add_dependency_info
 
-        self.noise = get_noise_from_config(self.cfg.noise, seed)
-        self.noise_fn = self.noise.apply
+        super().__init__(cfg, seed, tok_fn, neighbor_fn, **preprocessing_sample_kwargs)
 
-        self.tok_fn = tokenization.get_tokenization_fn(self.input_tokenizer)
-
-        self.sample_kwargs = {}
-        if self.cfg.encoding_scheme != "tokens":
-            self.sample_kwargs["with_dep_parser"] = self.cfg.add_dependency_info
-
-    def construct_graph(self, sample: utils.SAMPLE, label: Optional[List[int]] = None) -> graph.HeterogeneousDGLData:
+    def construct_input(
+            self,
+            sample: utils.SAMPLE
+    ) -> Union[torch.Tensor, dgl.DGLHeteroGraph]:
         self.cfg: SECNMTConfig
-        if self.cfg.encoding_scheme == "tokens":
-            data = graph.sequence_to_token_graph(
+        if self.cfg.data_scheme == "tokens":
+            return graph.sequence_to_token_graph(
                 sample=sample
-            )
-        elif self.cfg.encoding_scheme == "words":
-            data = graph.sequence_to_word_graph(
+            ).to_heterograph()
+        elif self.cfg.data_scheme == "words":
+            return graph.sequence_to_word_graph(
                 sample=sample,
                 tokenizer=self.input_tokenizer,
-                word_tokenizer=self.word_tokenizer,
                 dictionary=self.dictionary,
                 add_word_features=self.cfg.add_word_features,
-                # add_ner_features=True,
-                # add_pos_tag_features=True,
                 add_dependency_info=self.cfg.add_dependency_info,
-                add_num_neighbors=self.num_neighbors,
+                add_num_neighbors=self.cfg.index_num_neighbors if self.cfg.index is not None else None,
                 token_fully_connected=self.cfg.token_fully_connected,
                 word_fully_connected=self.cfg.word_fully_connected,
                 scheme=self.cfg.graph_scheme
-            )
-            # if self.cfg.gnn_decoding:
-            #     # decoding is done with a gnn, so add the decoding component of the graph
-            #     data = graph.add_graph2seq_decoder_nodes_to_word_graph(
-            #         word_graph_data=data,
-            #         scheme=self.cfg.graph_scheme,
-            #         decoder_input_ids=[self.bos_token_id] if label is None else label[:-1],
-            #         decoder_target_ids=None if label is None else label[1:]
-            #     )
+            ).to_heterograph()
+        elif self.cfg.data_scheme == "tensor":
+            return torch.tensor(utils.flatten(sample.tokens), dtype=torch.long)
         else:
-            raise ValueError(f"unknown encoding scheme {self.cfg.encoding_scheme}")
-        return data
+            raise ValueError(f"unknown data scheme {self.cfg.data_scheme}")
 
     def prepare_sequence(
             self,
             sequence: str,
-            corrupt_sequence: Optional[str] = None,
-            is_inference: bool = False,
-            return_data: bool = False) \
-            -> Tuple[
-                Union[dgl.DGLHeteroGraph, graph.HeterogeneousDGLData],
-                Dict[str, Any]
-            ]:
+            target_sequence: Optional[str] = None,
+            is_inference: bool = False
+    ) -> Tuple[
+        Union[dgl.DGLHeteroGraph, graph.HeterogeneousDGLData],
+        Dict[str, Any]
+    ]:
         self.cfg: SECNMTConfig
 
-        input_sample, target_sequence = self._get_sample(sequence, corrupt_sequence, is_inference, **self.sample_kwargs)
-        input_sample = utils.sanitize_sample(input_sample,
-                                             unk_token_id=self.input_tokenizer.token_to_id(tokenization.UNK))
+        input_sample, target_sequence = self._get_inputs(
+            sequence,
+            target_sequence,
+            is_inference
+        )
+        input_sample = utils.sanitize_sample(
+            input_sample,
+            unk_token_id=self.input_unk_token_id
+        )
+
         if not is_inference:
             assert target_sequence is not None
             label = self.output_tokenizer.tokenize(target_sequence, add_bos_eos=True)
         else:
             label = None
 
-        data = self.construct_graph(input_sample)
-
-        return data if return_data else data.to_heterograph(), {
+        return self.construct_input(input_sample), {
             "label": label,
-            "pad_token_id": self.pad_token_id
+            "pad_token_id": self.output_pad_token_id
         }
 
 

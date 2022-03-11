@@ -27,7 +27,7 @@ def txt_file_to_jsonl(args: Tuple[str, str, bool]) -> None:
     samples = []
     if use_paragraphs:
         for line in raw.splitlines():
-            if not is_valid_sequence(line):
+            if not is_valid_sequence(line, min_length=1):
                 num_invalid += 1
                 continue
             line = ftfy.fix_text(clean_sequence(line))
@@ -38,7 +38,7 @@ def txt_file_to_jsonl(args: Tuple[str, str, bool]) -> None:
         for doc in docs:
             for s in doc.sents:
                 sequence = str(s)
-                if not is_valid_sequence(sequence):
+                if not is_valid_sequence(sequence, min_length=1):
                     num_invalid += 1
                     continue
                 samples.append({"sequence": sequence})

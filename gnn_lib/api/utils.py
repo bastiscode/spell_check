@@ -12,6 +12,7 @@ from typing import Optional, Union, List, Tuple, Dict
 import requests
 import torch
 from omegaconf import OmegaConf
+from tabulate import tabulate
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
@@ -129,8 +130,8 @@ def download_model(
     :param logger: instance of a logger to log some useful information
     :return: path of the model directory
     """
-
-    model_dir = os.path.join(cache_dir or get_cache_dir(), task, name)
+    cache_dir = cache_dir or get_cache_dir()
+    model_dir = os.path.join(cache_dir, task, name)
     model_does_not_exist = not os.path.exists(model_dir)
     if model_does_not_exist or force_download:
         if task not in _TASK_AND_NAME_TO_URL or name not in _TASK_AND_NAME_TO_URL[task]:
@@ -170,11 +171,15 @@ def get_cpu_info() -> str:
     return platform.processor()
 
 
-def get_gpu_info() -> str:
-    device_props = torch.cuda.get_device_properties("cuda")
+def get_gpu_info(device: Union[torch.device, str, int]) -> str:
+    device_props = torch.cuda.get_device_properties(device)
     return f"{device_props.name} ({device_props.total_memory // 1024 // 1024:,}MiB memory, " \
            f"{device_props.major}.{device_props.minor} compute capability, " \
            f"{device_props.multi_processor_count} multiprocessors)"
+
+
+def get_device_info(device: torch.device) -> str:
+    return get_gpu_info(device) if device.type == "cuda" else get_cpu_info()
 
 
 def get_cache_dir() -> str:
@@ -212,9 +217,9 @@ def load_experiment(
         variant_cfg=cfg.variant,
         seed=cfg.seed
     )
-    sample_g, _ = task.generate_sample_inputs(2)
+    sample_inputs = task.generate_sample_inputs(2)
     model = task.get_model(
-        sample_g=sample_g,
+        sample_inputs=sample_inputs,
         cfg=cfg.model,
         device=device
     )
@@ -288,3 +293,49 @@ def reorder_data(items: List, original_indices: List[int]) -> List:
     for item, idx in zip(items, original_indices):
         reordered_items[idx] = item
     return reordered_items
+
+
+def generate_report(
+        task: str,
+        model: str,
+        inputs: List[str],
+        runtime: float,
+        batch_size: int,
+        sort_by_length: bool,
+        device: torch.device,
+        file_path: Optional[str] = None
+) -> Optional[str]:
+    input_size = len(inputs)
+    input_size_chars = sum(len(ipt) for ipt in inputs)
+    report = tabulate(
+        [
+            [
+                task,
+                model,
+                f"{input_size:,} sequences, {input_size_chars:,} chars",
+                runtime,
+                input_size / runtime,
+                input_size_chars / runtime,
+                batch_size,
+                "yes" if sort_by_length else "no",
+                f"{torch.cuda.get_device_name(device)}, {get_cpu_info()}" if device.type == "cuda" else get_cpu_info()
+            ]
+        ],
+        headers=[
+            "Task", "Model", "Input size", "Runtime in seconds", "Seq/s", "Char/s", "Batch size", "Sorted", "Device"
+        ],
+        floatfmt=[None, None, None, ".3f", ".2f", ".2f", None, None, None, None],
+        tablefmt="pipe"
+    )
+    if file_path is not None:
+        if os.path.dirname(file_path):
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        exists = os.path.exists(file_path)
+        with open(file_path, "a" if exists else "w", encoding="utf8") as of:
+            if exists:
+                of.write(report.splitlines()[-1] + "\n")
+            else:
+                of.write(report + "\n")
+        return None
+    else:
+        return report

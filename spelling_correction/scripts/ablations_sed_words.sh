@@ -13,13 +13,13 @@ export GNN_LIB_EDGE_HIDDEN_DIM=256
 export GNN_LIB_NUM_LAYERS=6
 export GNN_LIB_LOG_PER_EPOCH=200
 export GNN_LIB_EVAL_PER_EPOCH=20
-export GNN_LIB_DATA_LIMIT=50000000
+export GNN_LIB_DATA_LIMIT=35000000
 export GNN_LIB_LR=0.0001
 export GNN_LIB_WEIGHT_DECAY=0.01
 export GNN_LIB_NUM_NEIGHBORS=3
 export GNN_LIB_MIXED_PRECISION=true
 
-export SYNC_DATASETS="bookcorpus_sed_words_and_sec wikidump_sed_words_and_sec neuspell"
+#export SYNC_DATASETS="bookcorpus_sed_words_and_sec wikidump_sed_words_and_sec neuspell"
 
 export GNN_LIB_MASTER_PORT=$(python -c "import random; print(random.randrange(10000, 60000))")
 ablations_type=${ABLATIONS_TYPE:-"ABLATIONS_TYPE is not defined"}
@@ -39,8 +39,9 @@ if [[ $ablations_type == "gnn" ]]; then
     )
   declare -a ablations=(
 #    "false attention residual false true false false true null" # default
-    "false attention residual false false false false true null" # default - word_features
-#    "false attention residual false true false true false null" # cliques + wfc
+#    "false attention residual false false false false true null" # default - word_features
+#    "false attention residual false true false true false null" # cliques + wfc - dictionary
+    "false attention residual false true false true false null" # cliques + wfc
 #    "false attention residual false false false true false null" # cliques + wfc - word_features
 #    "true attention residual false true true true false null" # cliques + wfc + dep + message_gating
 #    "false convolution residual false true false false true null" # convolution
@@ -49,8 +50,9 @@ if [[ $ablations_type == "gnn" ]]; then
   )
   declare -a ablation_names=(
 #    "gnn_default"
-    "gnn_default_no_features"
-#    "gnn_cliques_wfc"
+#    "gnn_default_no_features"
+#    "gnn_cliques_wfc_no_dict"
+    "gnn_cliques_wfc"
 #    "gnn_cliques_wfc_no_features"
 #    "gnn_cliques_wfc_dep_gating"
 #    "gnn_convolution"

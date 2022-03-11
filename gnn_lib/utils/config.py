@@ -17,18 +17,26 @@ def _load_from_file(file_path: str) -> omegaconf.DictConfig:
     return cfg
 
 
-omegaconf.OmegaConf.register_new_resolver("from_file", _load_from_file)
+omegaconf.OmegaConf.register_new_resolver("from_file", _load_from_file, replace=True)
 
 
 @dataclass
 class PreprocessConfig:
     data: List[str] = MISSING
     output_dir: str = MISSING
+    preprocessing: Any = MISSING
+
+    # options for tokenization and neighbor index
     tokenizer: TokenizerConfig = MISSING
     respect_leading_whitespaces: bool = False
-    spell_check_index_dir: Optional[str] = None
-    spell_check_index_num_neighbors: int = 20
-    noise: Any = MISSING
+    index: Optional[str] = None
+    index_num_neighbors: int = 20
+
+    # options for creating space docs
+    with_pos_tags: bool = False
+    with_ner: bool = False
+    with_dep_parser: bool = False
+    batch_size: Optional[int] = None
 
     max_length: int = 512
     seed: int = 22

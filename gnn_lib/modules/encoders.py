@@ -27,7 +27,7 @@ class Encoder(nn.Module):
         self.dropout = dropout
         self.num_layers = num_layers
 
-    def forward(self, feat: torch.Tensor, splits: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def forward(self, feat: torch.Tensor, **kwargs: Any) -> torch.Tensor:
         raise NotImplementedError
 
 
@@ -51,7 +51,7 @@ class MLP(Encoder):
                 in_features = feed_forward_dim
         self.norm = nn.LayerNorm(hidden_dim)
 
-    def forward(self, inputs: torch.Tensor, splits: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def forward(self, inputs: torch.Tensor, **kwargs: Any) -> torch.Tensor:
         x = inputs
         for layer in self.layers:
             x = layer(x)
@@ -79,16 +79,13 @@ class CNN(nn.Module):
                 in_channels = hidden_dim
         self.norm = nn.LayerNorm(hidden_dim)
 
-    def forward(self, inputs: torch.Tensor, splits: Optional[torch.Tensor] = None) -> torch.Tensor:
-        # inputs: N * [L, H]
-        x, lengths = utils.split_and_pad(inputs, splits)
+    def forward(self, inputs: torch.Tensor, **kwargs: Any) -> torch.Tensor:
         # x: [N, Lmax, H]
-        x = einops.rearrange(x, "n l h -> n h l")
+        x = einops.rearrange(inputs, "n l h -> n h l")
         for layer in self.layers:
             x = layer(x)
         x = einops.rearrange(x, "n h l -> n l h")
-        x = self.norm(x)
-        return utils.join(x, lengths)
+        return self.norm(x)
 
 
 class BiGRU(nn.Module):
@@ -106,16 +103,15 @@ class BiGRU(nn.Module):
                           num_layers=num_layers)
         self.norm = nn.LayerNorm(hidden_dim)
 
-    def forward(self, inputs: torch.Tensor, splits: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def forward(self, inputs: torch.Tensor, lengths: Optional[torch.Tensor] = None, **kwargs: Any) -> torch.Tensor:
         # inputs: N * [L, H]
-        x = utils.split_and_pack(inputs, splits)
+        x = utils.pack(inputs, lengths)
         # x: [N, Lmax, H]
         x = self.gru(x)[0]
-        x, lengths = utils.unpack(x)
+        x, _ = utils.unpack(x)
         # sum the two directions
         x = einops.reduce(x, "n l (d h) -> n l h", d=2, reduction="sum")
-        x = self.norm(x)
-        return utils.join(x, lengths)
+        return self.norm(x)
 
 
 class Transformer(nn.Module):
@@ -143,19 +139,16 @@ class Transformer(nn.Module):
         self.encoder = nn.TransformerEncoder(encoder_layer, num_layers)
         self.norm = nn.LayerNorm(hidden_dim)
 
-    def forward(self, inputs: torch.Tensor, splits: Optional[torch.Tensor] = None) -> torch.Tensor:
-        # inputs: N * [L, H]
-        x, lengths = utils.split_and_pad(inputs, splits)
-        # x: [N, Lmax, H]
-        x = self.proj(x)
-        mask = utils.padding_mask(x, lengths)
-        x = self.encoder(x, src_key_padding_mask=mask)
-        x = self.norm(x)
-        return utils.join(x, lengths)
+    def forward(self, inputs: torch.Tensor, padding_mask: Optional[torch.Tensor] = None, **kwargs: Any) -> torch.Tensor:
+        x = self.proj(inputs)
+        x = self.encoder(x, src_key_padding_mask=padding_mask)
+        return self.norm(x)
 
 
-def get_feature_encoder(encoder: Encoders,
-                        **kwargs: Any) -> nn.Module:
+def get_feature_encoder(
+        encoder: Encoders,
+        **kwargs: Any
+) -> nn.Module:
     if encoder == Encoders.MLP:
         encoder = MLP(**kwargs)
     elif encoder == Encoders.CNN:

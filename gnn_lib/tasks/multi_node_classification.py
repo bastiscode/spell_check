@@ -6,6 +6,7 @@ import torch
 from torch.nn import functional as F
 
 from gnn_lib import tasks, models
+from gnn_lib.models import MODEL_INPUTS
 from gnn_lib.modules import utils
 from gnn_lib.tasks import utils as task_utils
 from gnn_lib.utils import data_containers
@@ -28,26 +29,19 @@ class MultiNodeClassification(tasks.Task):
         return stats
 
     def _prepare_inputs_and_labels(self,
-                                   batch: Tuple[dgl.DGLHeteroGraph, List[Dict[str, Any]]],
+                                   batch: MODEL_INPUTS,
                                    device: DistributedDevice) -> Tuple[Dict[str, Any], Any]:
         g, info = batch
         g: dgl.DGLHeteroGraph = g.to(device.device)
 
-        # check if labels are given in the graph, if not we expect the labels to be in the info
-        if "label" in g.ndata and len(g.ndata["label"]):
-            node_labels = g.ndata["label"]
-            if isinstance(node_labels, torch.Tensor):
-                labels = {g.ntypes[0]: node_labels.to(torch.long)}
-            else:
-                labels = {node_type: labels.to(torch.long) for node_type, labels in node_labels.items()}
-        else:
-            labels = collections.defaultdict(list)
-            for i in info:
-                for node_type, label in i["label"].items():
-                    labels[node_type].extend(label)
-            labels = {k: torch.tensor(v, device=device.device, dtype=torch.long) for k, v in labels.items()}
+        # extract labels from info dict
+        label_dict = collections.defaultdict(list)
+        for labels in info.pop("label"):
+            for node_type, label in labels.items():
+                label_dict[node_type].extend(label)
+        label_dict = {k: torch.tensor(v, device=device.device, dtype=torch.long) for k, v in label_dict.items()}
 
-        return {"g": g}, labels
+        return {"g": g, **info}, label_dict
 
     def _calc_loss(self,
                    labels: Dict[str, torch.Tensor],
@@ -75,7 +69,7 @@ class MultiNodeClassification(tasks.Task):
     def inference(
             self,
             model: models.ModelForMultiNodeClassification,
-            inputs: Union[List[str], dgl.DGLHeteroGraph],
+            inputs: Union[List[str], Tuple[dgl.DGLHeteroGraph, List[Dict[str, Any]]]],
             **kwargs: Any
     ) -> List[Dict[str, List]]:
         self._check_model(model)
@@ -83,20 +77,19 @@ class MultiNodeClassification(tasks.Task):
 
         got_str_input = isinstance(inputs, list) and isinstance(inputs[0], str)
         if got_str_input:
-            g = self.variant.prepare_sequences_for_inference(inputs)
+            g, infos = self.variant.prepare_sequences_for_inference(inputs)
         else:
-            g = inputs
+            g, infos = inputs
 
-        outputs, _ = model(g)
+        outputs, _ = model(g, **infos)
 
         return_logits = kwargs.get("return_logits", False)
 
         batch_predictions_dict = {}
         for node_type in model.cfg.num_classes:
             num_nodes = g.batch_num_nodes(node_type)
-            if model.cfg.group_nodes is not None and node_type in model.cfg.group_nodes:
-                indices = torch.cumsum(num_nodes, dim=0) - 1
-                num_nodes = g.nodes[node_type].data["group"][indices] + 1
+            if "groups" in infos and node_type in infos["groups"][0]:
+                num_nodes = [group[node_type][-1]["groups"][-1] + 1 for group in infos["groups"]]
 
             if return_logits:
                 predictions = utils.tensor_to_python(outputs[node_type], force_list=True)

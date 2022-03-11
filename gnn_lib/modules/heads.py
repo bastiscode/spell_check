@@ -1,7 +1,8 @@
-from typing import Dict, Any, Optional, List, Set
+from typing import Dict, Any, Optional, List
 
 import dgl
 import einops
+import numpy as np
 import torch
 from torch import nn
 from torch.nn import functional as F
@@ -9,12 +10,12 @@ from torch.nn import functional as F
 from gnn_lib.modules import utils, embedding
 
 
-class Head(nn.Module):
+class GraphHead(nn.Module):
     def forward(self, g: dgl.DGLHeteroGraph, **kwargs: Any) -> Any:
         raise NotImplementedError
 
 
-class GraphClassificationHead(Head):
+class GraphClassificationHead(GraphHead):
     def __init__(self,
                  feat: str,
                  num_features: int,
@@ -52,14 +53,13 @@ class GraphClassificationHead(Head):
         return self.clf(torch.flatten(h, 1))
 
 
-class MultiNodeClassificationGroupHead(Head):
+class MultiNodeClassificationGroupHead(GraphHead):
     def __init__(self,
                  feat: str,
                  num_features: int,
                  num_classes: Dict[str, int],
-                 group_nodes: Optional[Set[str]] = None,
-                 group_feature: str = "group",
-                 group_aggregation: str = "mean"):
+                 num_additional_features: Dict[str, Dict[str, int]],
+                 aggregation: Dict[str, Dict[str, str]]):
         super().__init__()
         self.feat = feat
         self.num_classes = num_classes
@@ -77,68 +77,99 @@ class MultiNodeClassificationGroupHead(Head):
             }
         )
 
-        self.group_nodes = set() if group_nodes is None else group_nodes
-        self.group_feature = group_feature
-        self.group_aggregation = group_aggregation
+        self.additional_features = nn.ModuleDict(
+            {
+                node_type: nn.ModuleDict({
+                    stage: nn.Sequential(
+                        nn.Linear(in_features=num_features + additional_features,
+                                  out_features=num_features),
+                        nn.GELU(),
+                        nn.Linear(in_features=num_features,
+                                  out_features=num_features)
+                    )
+                    for stage, additional_features in num_additional_features[node_type].items()
+                })
+                for node_type in num_additional_features
+            }
+        )
 
-    def forward(self, g: dgl.DGLHeteroGraph, **kwargs: Any) \
-            -> Dict[str, torch.Tensor]:
+        self.aggregation = aggregation
+
+    def forward(
+            self,
+            g: dgl.DGLHeteroGraph,
+            groups: Optional[List[Dict[str, List[Dict[str, Any]]]]] = None,
+            **kwargs: Any
+    ) -> Dict[str, torch.Tensor]:
         h = {g.ntypes[0]: g.ndata[self.feat]} if g.is_homogeneous else g.ndata[self.feat]
 
         outputs = {}
         for node_type in self.num_classes:
             if node_type not in h:
                 continue
-            if node_type not in self.group_nodes:
-                outputs[node_type] = self.clf[node_type](h[node_type])
-            else:
-                h_grouped = []
-                batch_num_nodes = utils.tensor_to_python(g.batch_num_nodes(node_type), force_list=True)
-                batch_groups = torch.split(g.nodes[node_type].data[self.group_feature], batch_num_nodes)
-                batch_feats = torch.split(h[node_type], batch_num_nodes)
-                for groups, feats in zip(batch_groups, batch_feats):
-                    _, group_lengths = torch.unique(groups, sorted=True, return_counts=True)
-                    group_feats = torch.split(feats, utils.tensor_to_python(group_lengths, force_list=True))
 
-                    for group_feat in group_feats:
-                        if self.group_aggregation == "mean":
+            # when there is no need to group, just run the classifier on the node features
+            if groups is None or len(groups) == 0 or node_type not in groups[0]:
+                outputs[node_type] = self.clf[node_type](h[node_type])
+                continue
+
+            batch_num_nodes = utils.tensor_to_python(g.batch_num_nodes(node_type), force_list=True)
+            assert len(groups) == len(batch_num_nodes)
+            grouped_feats = h[node_type]
+
+            # iterate through stages
+            for i in range(len(groups[0][node_type])):
+                stage_name = groups[0][node_type][i]["stage"]
+                aggregation = self.aggregation[node_type][stage_name]
+
+                has_additional_features = (
+                        node_type in self.additional_features and stage_name in self.additional_features[node_type]
+                )
+                batch_groups = []
+                stage_features = []
+                for group in groups:
+                    batch_groups.append(group[node_type][i]["groups"])
+                    if has_additional_features:
+                        stage_features.extend(group[node_type][i]["features"])
+
+                if has_additional_features:
+                    stage_features = torch.tensor(stage_features, dtype=torch.float, device=g.device)
+                    grouped_feats = self.additional_features[node_type][stage_name](
+                        torch.cat([grouped_feats, stage_features], dim=1)
+                    )
+
+                batch_grouped_feats = torch.split(grouped_feats, [len(batch_group) for batch_group in batch_groups])
+                grouped_feats = []
+                for batch_group, batch_grouped_feat in zip(batch_groups, batch_grouped_feats):
+                    _, batch_group_lengths = np.unique(batch_group, return_counts=True)
+
+                    for group_feat in torch.split(batch_grouped_feat, list(batch_group_lengths)):
+                        if aggregation == "mean":
                             group_feat = torch.mean(group_feat, dim=0, keepdim=True)
+                        elif aggregation == "max":
+                            group_feat = torch.max(group_feat, dim=0, keepdim=True).values
+                        elif aggregation == "sum":
+                            group_feat = torch.sum(group_feat, dim=0, keepdim=True)
                         else:
                             raise ValueError(f"Unknown group aggregation {self.group_aggregation}")
-                        h_grouped.append(group_feat)
+                        grouped_feats.append(group_feat)
 
-                    # grouped = [[] for _ in range(groups[-1] + 1)]
-                    # for group, feat in zip(groups, feats):
-                    #     grouped[group].append(feat)
-                    # for i, group_feats in enumerate(grouped):
-                    #     group_feats = torch.stack(group_feats)
-                    #     if self.group_aggregation == "mean":
-                    #         group_feats = torch.mean(group_feats, dim=0)
-                    #     else:
-                    #         raise ValueError(f"Unknown group aggregation {self.group_aggregation}")
-                    #     h_grouped.append(group_feats)
+                grouped_feats = torch.cat(grouped_feats, dim=0)
 
-                outputs[node_type] = self.clf[node_type](torch.cat(h_grouped, dim=0))
+            outputs[node_type] = self.clf[node_type](grouped_feats)
         return outputs
 
 
-class SequenceDecoderHead(Head, utils.DecoderMixin):
+class SequenceDecoderHead(utils.DecoderMixin):
     def __init__(self,
-                 hidden_feature: str,
                  hidden_dim: int,
-                 bos_token_id: int,
-                 eos_token_id: int,
                  max_length: int) -> None:
         super().__init__()
-        self.hidden_feature = hidden_feature
         self.hidden_dim = hidden_dim
-        self.bos_token_id = bos_token_id
-        self.eos_token_id = eos_token_id
         self.max_length = max_length
 
     def forward(self,
-                _: dgl.DGLHeteroGraph,
-                decoder_inputs: Optional[torch.Tensor] = None,
+                decoder_inputs: torch.Tensor,
                 decoder_lengths: Optional[torch.Tensor] = None,
                 encoder_outputs: Optional[Dict[str, torch.Tensor]] = None,
                 encoder_lengths: Optional[Dict[str, torch.Tensor]] = None,
@@ -156,10 +187,10 @@ class SequenceDecoderHead(Head, utils.DecoderMixin):
         )
 
 
-# modified version of standard pytorch nn.TransformerDecoderLayer for cross attention to multiple memories
+# modified version of standard pytorch nn.TransformerDecoderLayer for cross attention to multiple memories/contexts
 class MultiNodeTransformerDecoderLayer(nn.Module):
     def __init__(self,
-                 context_node_types: List[str],
+                 contexts: List[str],
                  hidden_dim: int,
                  num_heads: int,
                  feed_forward_dim: int,
@@ -168,12 +199,12 @@ class MultiNodeTransformerDecoderLayer(nn.Module):
         super().__init__()
         self.num_heads = num_heads
         self.hidden_dim = hidden_dim
-        self.context_node_types = context_node_types
+        self.contexts = contexts
         self.self_attn = nn.MultiheadAttention(hidden_dim, num_heads, dropout=dropout, batch_first=batch_first)
 
         self.multihead_attns = nn.ModuleDict({
-            node_type: nn.MultiheadAttention(hidden_dim, num_heads, dropout=dropout, batch_first=batch_first)
-            for node_type in context_node_types
+            ctx_name: nn.MultiheadAttention(hidden_dim, num_heads, dropout=dropout, batch_first=batch_first)
+            for ctx_name in contexts
         })
 
         self.linear1 = nn.Linear(hidden_dim, feed_forward_dim)
@@ -182,13 +213,13 @@ class MultiNodeTransformerDecoderLayer(nn.Module):
 
         self.norm1 = nn.LayerNorm(hidden_dim)
         self.norms = nn.ModuleDict({
-            node_type: nn.LayerNorm(hidden_dim) for node_type in context_node_types
+            node_type: nn.LayerNorm(hidden_dim) for node_type in contexts
         })
         self.norm3 = nn.LayerNorm(hidden_dim)
 
         self.dropout1 = nn.Dropout(dropout)
         self.dropouts = nn.ModuleDict({
-            node_type: nn.LayerNorm(hidden_dim) for node_type in context_node_types
+            node_type: nn.LayerNorm(hidden_dim) for node_type in contexts
         })
         self.dropout3 = nn.Dropout(dropout)
 
@@ -205,24 +236,24 @@ class MultiNodeTransformerDecoderLayer(nn.Module):
             tgt_mask = einops.repeat(tgt_mask, "b l s -> (b nh) l s", nh=self.num_heads)
 
         x = self.norm1(x + self._sa_block(x, tgt_mask, tgt_key_padding_mask))
-        for node_type in self.context_node_types:
-            if node_type not in memory:
+        for ctx_name in self.contexts:
+            if ctx_name not in memory:
                 continue
 
-            memory_mask = memory_masks.get(node_type, None) if memory_masks is not None else None
+            memory_mask = memory_masks.get(ctx_name, None) if memory_masks is not None else None
             if (
                     memory_mask is not None and memory_mask.ndim > 2
-                    and len(memory_mask) != len(memory[node_type]) * self.num_heads
+                    and len(memory_mask) != len(memory[ctx_name]) * self.num_heads
             ):
                 memory_mask = einops.repeat(memory_mask, "b l s -> (b nh) l s", nh=self.num_heads)
 
-            x = self.norms[node_type](
+            x = self.norms[ctx_name](
                 x + self._mha_block(
-                    node_type,
+                    ctx_name,
                     x,
-                    memory[node_type],
+                    memory[ctx_name],
                     memory_mask,
-                    memory_key_padding_masks.get(node_type, None) if memory_key_padding_masks is not None else None
+                    memory_key_padding_masks.get(ctx_name, None) if memory_key_padding_masks is not None else None
                 )
             )
         x = self.norm3(x + self._ff_block(x))
@@ -261,37 +292,38 @@ class MultiNodeTransformerDecoderLayer(nn.Module):
 
 class TransformerDecoderHead(SequenceDecoderHead):
     def __init__(self,
-                 context_node_types: List[str],
-                 bos_token_id: int,
-                 eos_token_id: int,
+                 contexts: List[str],
                  pad_token_id: int,
                  max_length: int,
-                 hidden_feature: str,
                  hidden_dim: int,
                  num_outputs: int,
                  dropout: float,
                  num_layers: int = 1,
                  share_parameters: bool = False,
                  feed_forward_dim: Optional[int] = None,
-                 num_heads: Optional[int] = None) -> None:
+                 num_heads: Optional[int] = None,
+                 share_input_output_embeddings: bool = True) -> None:
         super().__init__(
-            hidden_feature, hidden_dim, bos_token_id, eos_token_id, max_length
+            hidden_dim, max_length
         )
-        self.context_node_types = context_node_types
+        self.contexts = contexts
         self.num_outputs = num_outputs
         self.num_layers = num_layers
         self.share_parameters = share_parameters
 
-        self.decoder_token_emb = embedding.TokenEmbedding(self.hidden_dim, num_outputs, padding_idx=pad_token_id)
-        self.decoder_pos_emb = embedding.SinusoidalPositionalEmbedding(self.hidden_dim)
-        self.norm_emb = nn.LayerNorm(self.hidden_dim)
+        self.emb = embedding.TensorEmbedding(
+            hidden_dim=self.hidden_dim,
+            num_embeddings=num_outputs,
+            cfg=embedding.TensorEmbeddingConfig(dropout=dropout),
+            padding_idx=pad_token_id
+        )
 
         feed_forward_dim = feed_forward_dim if feed_forward_dim is not None else hidden_dim * 2
         num_heads = num_heads if num_heads is not None else max(1, hidden_dim // 64)
 
         self.decoder_layers = nn.ModuleList(
             MultiNodeTransformerDecoderLayer(
-                context_node_types=context_node_types,
+                contexts=contexts,
                 hidden_dim=hidden_dim,
                 feed_forward_dim=feed_forward_dim,
                 num_heads=num_heads,
@@ -304,6 +336,9 @@ class TransformerDecoderHead(SequenceDecoderHead):
         self.clf = nn.Linear(in_features=hidden_dim,
                              out_features=num_outputs)
 
+        if share_input_output_embeddings:
+            self.cfg.weight = self.emb.embedding.emb.weight
+
     def decode(self,
                decoder_inputs: torch.Tensor,
                decoder_lengths: Optional[torch.Tensor] = None,
@@ -315,14 +350,8 @@ class TransformerDecoderHead(SequenceDecoderHead):
                encoder_padding_masks: Optional[Dict[str, torch.Tensor]] = None,
                decoder_positions: Optional[torch.Tensor] = None) -> torch.Tensor:
         # decoder_inputs: shape [B, L]
-        _, L = decoder_inputs.shape
-        if decoder_positions is None:
-            decoder_positions = torch.arange(
-                L, device=decoder_inputs.device, dtype=torch.long
-            ).unsqueeze(0)
-
+        dec = self.emb(decoder_inputs, positions=decoder_positions)
         # dec: shape [B, L, H]
-        dec = self.norm_emb(self.decoder_token_emb(decoder_inputs) + self.decoder_pos_emb(decoder_positions))
 
         # mask the encoder padding if encoder lengths are given and encoder padding masks are not given
         if encoder_lengths is not None and encoder_padding_masks is None:
@@ -337,7 +366,7 @@ class TransformerDecoderHead(SequenceDecoderHead):
 
         # by default mask all tokens in the future
         if decoder_mask is None:
-            decoder_mask = utils.square_causal_mask(L, dec.device)
+            decoder_mask = utils.square_causal_mask(dec.shape[1], dec.device)
 
         for i in range(self.num_layers):
             i = 0 if self.share_parameters else i

@@ -6,21 +6,8 @@ from torch.nn import functional as F
 
 from gnn_lib import models
 from gnn_lib.data import variants
-from gnn_lib.modules import inference
 from gnn_lib.tasks.graph2seq import Graph2Seq
 from gnn_lib.utils import tokenization_repair
-
-
-def _tok_rep_nmt_score_fn(bos_token_id: int, eos_token_id: int) -> inference.SCORE_FN:
-    map_score = inference.map_score()
-
-    def score(beam: inference.Beam) -> float:
-        assert beam.token_ids[0] == bos_token_id
-        if beam.is_eos(eos_token_id) and len(beam.token_ids):
-            return map_score(beam)
-        return float("-inf")
-
-    return score
 
 
 class TokenizationRepairNMT(Graph2Seq):
