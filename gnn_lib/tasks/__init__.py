@@ -17,9 +17,9 @@ from tqdm import tqdm
 from gnn_lib import models
 from gnn_lib.data import variants, utils as data_utils
 from gnn_lib.data.variants import get_variant_from_config, DatasetVariants
-from gnn_lib.models import Model, MODEL_INPUTS
+from gnn_lib.models import Model
 from gnn_lib.tasks import utils
-from gnn_lib.utils import io, common, data_containers
+from gnn_lib.utils import io, common, data_containers, BATCH
 from gnn_lib.utils.distributed import DistributedDevice, unwrap_ddp
 
 
@@ -50,7 +50,7 @@ class Task:
 
         self.logger = common.get_logger("TASK")
 
-    def generate_sample_inputs(self, num_samples: int) -> MODEL_INPUTS:
+    def generate_sample_inputs(self, num_samples: int) -> BATCH:
         return data_utils.collate([
             self.variant.prepare_sequence(utils.SAMPLE_SEQUENCE) for _ in range(num_samples)
         ])
@@ -67,10 +67,12 @@ class Task:
 
             if isinstance(outputs, dict):
                 loss = sum(v.sum() for v in outputs.values())
+            elif isinstance(outputs, list):
+                loss = sum(v.sum() for v in outputs)
             elif isinstance(outputs, torch.Tensor):
                 loss = outputs.sum()
             else:
-                raise ValueError(f"Expected model output to be either dictionary of tensors or tensor")
+                raise ValueError(f"Expected model output to be either dictionary of tensors, list of tensors or tensor")
 
         grad_scaler.scale(loss).backward()
 
@@ -81,16 +83,23 @@ class Task:
                 p.requires_grad = False
 
         if device.is_main_process:
-            sample_g: dgl.DGLHeteroGraph = dgl.unbatch(batch[0])[0]
+            sample_data = batch.data
+            if isinstance(sample_data, dgl.DGLHeteroGraph):
+                sample_g = dgl.unbatch(sample_data)[0]
+                self.logger.info(
+                    f"Sample graph: {sample_g}\n"
+                    f"node attributes: "
+                    f"{list((n_type, sample_g.node_attr_schemes(n_type)) for n_type in sample_g.ntypes)}\n"
+                    f"edge attributes: "
+                    f"{list((e_type, sample_g.edge_attr_schemes(e_type)) for e_type in sample_g.canonical_etypes)}"
+                )
+            else:
+                self.logger.info(
+                    f"Sample tensor: {sample_data[0]}"
+                )
+            sample_info = {k: v[0] for k, v in batch.info.items()}
             self.logger.info(
-                f"Sample graph: {sample_g}\n"
-                f"node attributes: "
-                f"{list((n_type, sample_g.node_attr_schemes(n_type)) for n_type in sample_g.ntypes)}\n"
-                f"edge attributes: "
-                f"{list((e_type, sample_g.edge_attr_schemes(e_type)) for e_type in sample_g.canonical_etypes)}"
-            )
-            self.logger.info(
-                f"Sample infos: {batch[1]}"
+                f"Sample infos: {sample_info}"
             )
 
             for param in sorted(unused_parameters):
@@ -102,7 +111,7 @@ class Task:
         return {}
 
     def _prepare_inputs_and_labels(self,
-                                   batch: MODEL_INPUTS,
+                                   batch: BATCH,
                                    device: DistributedDevice) \
             -> Tuple[Dict[str, Any], Any]:
         raise NotImplementedError
@@ -181,12 +190,6 @@ class Task:
             self.step += 1
             inputs, labels = self._prepare_inputs_and_labels(batch, device)
 
-            input_g: dgl.DGLHeteroGraph = inputs["g"]
-            if (any(input_g.num_edges(e_type) == 0 for e_type in input_g.canonical_etypes) or
-                    any(input_g.num_nodes(n_type) == 0 for n_type in input_g.ntypes)):
-                self.logger.warning(f"Input graph does not contain all node or edge types: \n{input_g}")
-                continue
-
             with amp.autocast(enabled=grad_scaler.is_enabled()):
                 start_forward_pass = time.perf_counter()
 
@@ -224,7 +227,8 @@ class Task:
             loss_stat.add(loss.item())
             # this is an approximation, since we only record batch statistics on the main process, but
             # want to log the overall batch size in tensorboard, we multiply by the world size here
-            batch_size_stat.add(input_g.batch_size * device.world_size)
+            batch_size = utils.get_batch_size_from_data(batch.data)
+            batch_size_stat.add(batch_size * device.world_size)
             forward_pass_perf_stat.add((end_forward_pass - start_forward_pass) * 1000)
             backward_and_update_perf_stat.add((end_backward_and_update - start_backward_and_update) * 1000)
             # we time the iteration here because we do not want to count logging and evaluation, which is
@@ -235,8 +239,8 @@ class Task:
             if self.step % log_every == 0:
                 max_mem_usage = 0
                 for device_id in range(device.local_world_size):
-                    mem_total = torch.cuda.get_device_properties(device_id).total_memory / 1024**3
-                    mem_alloc = torch.cuda.max_memory_reserved(device_id) / 1024**3
+                    mem_total = torch.cuda.get_device_properties(device_id).total_memory / 1024 ** 3
+                    mem_alloc = torch.cuda.max_memory_reserved(device_id) / 1024 ** 3
                     mem_usage = mem_alloc / mem_total
                     if mem_usage > max_mem_usage:
                         max_mem_usage = mem_usage
@@ -389,7 +393,7 @@ class Task:
         raise NotImplementedError
 
     def get_model(self,
-                  sample_inputs: MODEL_INPUTS,
+                  sample_inputs: BATCH,
                   cfg: omegaconf.DictConfig,
                   device: torch.device) -> Model:
         model = models.get_model_from_config(cfg, sample_inputs, device).to(device)
@@ -463,10 +467,7 @@ class Task:
 
     def _check_model(self, model: nn.Module) -> None:
         if not isinstance(model, self.expected_model):
-            raise ValueError(
-                f"expected a model of type "
-                f"{self.expected_model.__name__}, but got {type(model)}"
-            )
+            raise ValueError(f"expected a model of type {self.expected_model.__name__}, but got {type(model)}")
 
 
 def get_task(
@@ -476,26 +477,42 @@ def get_task(
 ) -> Task:
     from gnn_lib.tasks.tokenization_repair import TokenizationRepair
     from gnn_lib.tasks.tokenization_repair_nmt import TokenizationRepairNMT
+    from gnn_lib.tasks.graph_sed_sequence import GraphSEDSequence
     from gnn_lib.tasks.sed_sequence import SEDSequence
+    from gnn_lib.tasks.graph_sec_nmt import GraphSECNMT
     from gnn_lib.tasks.sec_nmt import SECNMT
+    from gnn_lib.tasks.graph_sec_words_nmt import GraphSECWordsNMT
     from gnn_lib.tasks.sec_words_nmt import SECWordsNMT
+    from gnn_lib.tasks.graph_sed_words import GraphSEDWords
     from gnn_lib.tasks.sed_words import SEDWords
 
     variant_type = DatasetVariants[variant_cfg.type]
     if variant_type == DatasetVariants.SED_SEQUENCE:
-        return SEDSequence(variant_cfg, checkpoint_dir, seed)
+        if variant_cfg.data_scheme == "tensor":
+            return SEDSequence(variant_cfg, checkpoint_dir, seed)
+        else:
+            return GraphSEDSequence(variant_cfg, checkpoint_dir, seed)
 
     elif variant_type == DatasetVariants.SED_WORDS:
-        return SEDWords(variant_cfg, checkpoint_dir, seed)
+        if variant_cfg.data_scheme == "tensor":
+            return SEDWords(variant_cfg, checkpoint_dir, seed)
+        else:
+            return GraphSEDWords(variant_cfg, checkpoint_dir, seed)
 
     elif variant_type == DatasetVariants.TOKENIZATION_REPAIR:
         return TokenizationRepair(variant_cfg, checkpoint_dir, seed)
 
     elif variant_type == DatasetVariants.SEC_NMT:
-        return SECNMT(variant_cfg, checkpoint_dir, seed)
+        if variant_cfg.data_scheme == "tensor":
+            return SECNMT(variant_cfg, checkpoint_dir, seed)
+        else:
+            return GraphSECNMT(variant_cfg, checkpoint_dir, seed)
 
     elif variant_type == DatasetVariants.SEC_WORDS_NMT:
-        return SECWordsNMT(variant_cfg, checkpoint_dir, seed)
+        if variant_cfg.data_scheme == "tensor":
+            return SECWordsNMT(variant_cfg, checkpoint_dir, seed)
+        else:
+            return GraphSECWordsNMT(variant_cfg, checkpoint_dir, seed)
 
     elif variant_type == DatasetVariants.TOKENIZATION_REPAIR_NMT:
         return TokenizationRepairNMT(variant_cfg, checkpoint_dir, seed)

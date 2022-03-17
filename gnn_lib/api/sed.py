@@ -17,7 +17,7 @@ from gnn_lib.api.utils import (
     reorder_data, get_device_info
 )
 from gnn_lib.modules import inference
-from gnn_lib.tasks import sed_words, sed_sequence
+from gnn_lib.tasks import graph_sed_words, graph_sed_sequence
 from gnn_lib.utils import common
 
 __all__ = ["get_available_spelling_error_detection_models", "SpellingErrorDetector"]
@@ -77,7 +77,7 @@ class SpellingErrorDetector:
             kwargs.get("keep_existing_env_vars", False)
         )
 
-        assert isinstance(self.task, sed_words.SEDWords) or isinstance(self.task, sed_sequence.SEDSequence), \
+        assert isinstance(self.task, sed_words.GraphSEDWords) or isinstance(self.task, sed_sequence.GraphSEDSequence), \
             f"expected experiment to be of type SEDWords or SEDSequence, but got {type(self.task)}"
 
         self.model.eval()
@@ -88,7 +88,7 @@ class SpellingErrorDetector:
 
     @property
     def task_name(self) -> str:
-        return "sed_words" if isinstance(self.task, sed_words.SEDWords) else "sed_sequence"
+        return "sed_words" if isinstance(self.task, sed_words.GraphSEDWords) else "sed_sequence"
 
     @property
     def model_name(self) -> str:

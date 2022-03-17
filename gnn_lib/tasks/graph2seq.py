@@ -7,9 +7,9 @@ from torch.nn import functional as F
 from gnn_lib import models, tasks
 from gnn_lib.data import tokenization
 from gnn_lib.modules import inference, utils
-from gnn_lib.utils import data_containers
 from gnn_lib.tasks import utils as task_utils
-from gnn_lib.utils.distributed import DistributedDevice, unwrap_ddp
+from gnn_lib.utils import data_containers
+from gnn_lib.utils.distributed import DistributedDevice
 
 
 class Graph2Seq(tasks.Task):
@@ -23,9 +23,11 @@ class Graph2Seq(tasks.Task):
             )
         }
 
-    def _prepare_inputs_and_labels(self,
-                                   batch: Tuple[dgl.DGLHeteroGraph, List[Dict[str, Any]]],
-                                   device: DistributedDevice) -> Tuple[Dict[str, Any], Any]:
+    def _prepare_inputs_and_labels(
+            self,
+            batch: Tuple[dgl.DGLHeteroGraph, List[Dict[str, Any]]],
+            device: DistributedDevice
+    ) -> Tuple[Dict[str, Any], Any]:
         g, info = batch
         g = g.to(device.device)
 
@@ -121,8 +123,6 @@ class Graph2Seq(tasks.Task):
         else:
             g, infos = inputs
 
-        output_tokenizer = model.tokenizers["output_tokenizer"]
-
         g = model.encode(g)
         encoder_outputs, encoder_lengths = utils.graph2seq_encoder_outputs_from_graph(
             g, cfg.context_node_types, cfg.hidden_feature
@@ -130,7 +130,7 @@ class Graph2Seq(tasks.Task):
 
         return inference.run_inference(
             model=model,
-            output_tokenizer=output_tokenizer,
+            output_tokenizer=model.output_tokenizer,
             encoder_outputs=encoder_outputs,
             encoder_lengths=encoder_lengths,
             max_length=512,

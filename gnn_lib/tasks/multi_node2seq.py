@@ -12,7 +12,7 @@ from gnn_lib.utils.distributed import DistributedDevice
 
 
 class MultiNode2Seq(tasks.Task):
-    expected_model = models.ModelForMultiNode2Seq  # type: ignore
+    expected_models = models.ModelForMultiNode2Seq  # type: ignore
 
     def _prepare_inputs_and_labels(self,
                                    batch: Tuple[dgl.DGLHeteroGraph, List[Dict[str, Any]]],

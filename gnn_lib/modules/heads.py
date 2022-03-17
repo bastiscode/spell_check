@@ -2,12 +2,10 @@ from typing import Dict, Any, Optional, List
 
 import dgl
 import einops
-import numpy as np
 import torch
+from gnn_lib.modules import utils, embedding
 from torch import nn
 from torch.nn import functional as F
-
-from gnn_lib.modules import utils, embedding
 
 
 class GraphHead(nn.Module):
@@ -16,13 +14,14 @@ class GraphHead(nn.Module):
 
 
 class GraphClassificationHead(GraphHead):
-    def __init__(self,
-                 feat: str,
-                 num_features: int,
-                 num_classes: int,
-                 node_type: str,
-                 pooling_type: str = "mean"
-                 ):
+    def __init__(
+            self,
+            feat: str,
+            num_features: int,
+            num_classes: int,
+            node_type: str,
+            pooling_type: str = "mean"
+    ):
         super().__init__()
         self.feat = feat
         self.pooling_type = pooling_type
@@ -44,10 +43,6 @@ class GraphClassificationHead(GraphHead):
             h = dgl.sum_nodes(g, self.feat, ntype=self.node_type)
         elif self.pooling_type == "max":
             h = dgl.max_nodes(g, self.feat, ntype=self.node_type)
-        elif self.pooling_type == "first_node":
-            indices = g.batch_num_nodes(self.node_type)
-            indices = torch.cat([torch.zeros(1, dtype=indices.dtype, device=indices.device), indices[:-1]])
-            h = torch.index_select(g.nodes[self.node_type].data[self.feat], 0, indices)
         else:
             raise ValueError(f"Unknown pooling type {self.pooling_type}")
         return self.clf(torch.flatten(h, 1))
@@ -77,21 +72,19 @@ class MultiNodeClassificationGroupHead(GraphHead):
             }
         )
 
-        self.additional_features = nn.ModuleDict(
-            {
-                node_type: nn.ModuleDict({
-                    stage: nn.Sequential(
-                        nn.Linear(in_features=num_features + additional_features,
-                                  out_features=num_features),
-                        nn.GELU(),
-                        nn.Linear(in_features=num_features,
-                                  out_features=num_features)
-                    )
-                    for stage, additional_features in num_additional_features[node_type].items()
-                })
-                for node_type in num_additional_features
-            }
-        )
+        self.additional_features = nn.ModuleDict({
+            node_type: nn.ModuleDict({
+                stage: nn.Sequential(
+                    nn.Linear(in_features=num_features + additional_features,
+                              out_features=num_features),
+                    nn.GELU(),
+                    nn.Linear(in_features=num_features,
+                              out_features=num_features)
+                )
+                for stage, additional_features in num_additional_features[node_type].items()
+            })
+            for node_type in num_additional_features
+        })
 
         self.aggregation = aggregation
 
@@ -109,55 +102,74 @@ class MultiNodeClassificationGroupHead(GraphHead):
                 continue
 
             # when there is no need to group, just run the classifier on the node features
-            if groups is None or len(groups) == 0 or node_type not in groups[0]:
+            if groups is None or node_type not in groups[0]:
                 outputs[node_type] = self.clf[node_type](h[node_type])
                 continue
 
-            batch_num_nodes = utils.tensor_to_python(g.batch_num_nodes(node_type), force_list=True)
-            assert len(groups) == len(batch_num_nodes)
-            grouped_feats = h[node_type]
+            node_type_groups = [group[node_type] for group in groups]
+            grouped_feats = utils.group_features(
+                grouped_feats=torch.split(
+                    h[node_type],
+                    utils.tensor_to_python(g.batch_num_nodes(node_type), force_list=True)
+                ),
+                groups=node_type_groups,
+                additional_feature_encoders=self.additional_features[node_type],
+                aggregations=self.aggregation[node_type],
+                device=g.device
+            )
+            outputs[node_type] = self.clf[node_type](torch.cat(grouped_feats, dim=0))
 
-            # iterate through stages
-            for i in range(len(groups[0][node_type])):
-                stage_name = groups[0][node_type][i]["stage"]
-                aggregation = self.aggregation[node_type][stage_name]
-
-                has_additional_features = (
-                        node_type in self.additional_features and stage_name in self.additional_features[node_type]
-                )
-                batch_groups = []
-                stage_features = []
-                for group in groups:
-                    batch_groups.append(group[node_type][i]["groups"])
-                    if has_additional_features:
-                        stage_features.extend(group[node_type][i]["features"])
-
-                if has_additional_features:
-                    stage_features = torch.tensor(stage_features, dtype=torch.float, device=g.device)
-                    grouped_feats = self.additional_features[node_type][stage_name](
-                        torch.cat([grouped_feats, stage_features], dim=1)
-                    )
-
-                batch_grouped_feats = torch.split(grouped_feats, [len(batch_group) for batch_group in batch_groups])
-                grouped_feats = []
-                for batch_group, batch_grouped_feat in zip(batch_groups, batch_grouped_feats):
-                    _, batch_group_lengths = np.unique(batch_group, return_counts=True)
-
-                    for group_feat in torch.split(batch_grouped_feat, list(batch_group_lengths)):
-                        if aggregation == "mean":
-                            group_feat = torch.mean(group_feat, dim=0, keepdim=True)
-                        elif aggregation == "max":
-                            group_feat = torch.max(group_feat, dim=0, keepdim=True).values
-                        elif aggregation == "sum":
-                            group_feat = torch.sum(group_feat, dim=0, keepdim=True)
-                        else:
-                            raise ValueError(f"Unknown group aggregation {self.group_aggregation}")
-                        grouped_feats.append(group_feat)
-
-                grouped_feats = torch.cat(grouped_feats, dim=0)
-
-            outputs[node_type] = self.clf[node_type](grouped_feats)
         return outputs
+
+
+class TensorGroupHead(nn.Module):
+    def __init__(
+            self,
+            hidden_dim: int,
+            num_classes: int,
+            num_additional_features: Dict[str, int],
+            aggregation: Dict[str, str]
+    ) -> None:
+        super().__init__()
+        self.clf = nn.Sequential(
+            nn.Linear(in_features=hidden_dim,
+                      out_features=hidden_dim),
+            nn.GELU(),
+            nn.Linear(in_features=hidden_dim,
+                      out_features=num_classes)
+        )
+
+        self.additional_features = nn.ModuleDict(
+            {
+                stage: nn.Sequential(
+                    nn.Linear(in_features=hidden_dim + additional_features,
+                              out_features=hidden_dim),
+                    nn.GELU(),
+                    nn.Linear(in_features=hidden_dim,
+                              out_features=hidden_dim)
+                )
+                for stage, additional_features in num_additional_features.items()
+            }
+        )
+
+        self.aggregation = aggregation
+
+    def forward(
+            self,
+            x: List[torch.Tensor],
+            groups: Optional[List[List[Dict[str, Any]]]] = None,
+            **kwargs: Any
+    ) -> List[torch.Tensor]:
+        if groups is not None:
+            assert len(groups) == len(x)
+            x = utils.group_features(
+                grouped_feats=x,
+                groups=groups,
+                additional_feature_encoders=self.additional_features,
+                aggregations=self.aggregation,
+                device=next(self.parameters()).device
+            )
+        return list(torch.split(self.clf(torch.cat(x, dim=0)), [len(t) for t in x]))
 
 
 class SequenceDecoderHead(utils.DecoderMixin):
@@ -202,7 +214,7 @@ class MultiNodeTransformerDecoderLayer(nn.Module):
         self.contexts = contexts
         self.self_attn = nn.MultiheadAttention(hidden_dim, num_heads, dropout=dropout, batch_first=batch_first)
 
-        self.multihead_attns = nn.ModuleDict({
+        self.context_attn = nn.ModuleDict({
             ctx_name: nn.MultiheadAttention(hidden_dim, num_heads, dropout=dropout, batch_first=batch_first)
             for ctx_name in contexts
         })
@@ -267,23 +279,23 @@ class MultiNodeTransformerDecoderLayer(nn.Module):
             x, x, x,
             attn_mask=attn_mask,
             key_padding_mask=key_padding_mask,
-            need_weights=False
+            need_weights=True
         )[0]
         return self.dropout1(x)
 
     def _mha_block(self,
-                   node_type: str,
+                   ctx_name: str,
                    x: torch.Tensor,
                    mem: torch.Tensor,
                    attn_mask: Optional[torch.Tensor] = None,
                    key_padding_mask: Optional[torch.Tensor] = None) -> torch.Tensor:
-        x = self.multihead_attns[node_type](
+        x = self.context_attn[ctx_name](
             x, mem, mem,
             attn_mask=attn_mask,
             key_padding_mask=key_padding_mask,
-            need_weights=False
+            need_weights=True
         )[0]
-        return self.dropouts[node_type](x)
+        return self.dropouts[ctx_name](x)
 
     def _ff_block(self, x: torch.Tensor) -> torch.Tensor:
         x = self.linear2(self.dropout(F.gelu(self.linear1(x))))
@@ -337,7 +349,7 @@ class TransformerDecoderHead(SequenceDecoderHead):
                              out_features=num_outputs)
 
         if share_input_output_embeddings:
-            self.cfg.weight = self.emb.embedding.emb.weight
+            self.clf.weight = self.emb.embedding.emb.weight
 
     def decode(self,
                decoder_inputs: torch.Tensor,

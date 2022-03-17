@@ -1,8 +1,7 @@
 type: SEC_NMT
 
-noise: ${from_file:preprocessing/mixed.yaml}
-tokenizers:
-  input_tokenizer: ${from_file:tokenizer/bpe_default.yaml}
-  output_tokenizer: ${from_file:tokenizer/bpe_default.yaml}
+preprocessing: ${from_file:preprocessing/mixed_noise.yaml}
+input_tokenizer: ${from_file:tokenizer/bpe_default.yaml}
+output_tokenizer: ${from_file:tokenizer/bpe_default.yaml}
 
-encoding_scheme: "tokens"
+data_scheme: "tensor"

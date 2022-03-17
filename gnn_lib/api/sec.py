@@ -22,7 +22,7 @@ from gnn_lib.api.utils import (
 )
 from gnn_lib.data import index
 from gnn_lib.modules import inference
-from gnn_lib.tasks import sec_nmt, sec_words_nmt
+from gnn_lib.tasks import graph_sec_nmt, graph_sec_words_nmt
 from gnn_lib.utils import common
 
 __all__ = ["get_available_spelling_error_correction_models", "SpellingErrorCorrector"]
@@ -133,7 +133,7 @@ class SpellingErrorCorrector:
             kwargs.get("keep_existing_env_vars", False)
         )
 
-        assert isinstance(self.task, sec_nmt.SECNMT) or isinstance(self.task, sec_words_nmt.SECWordsNMT), \
+        assert isinstance(self.task, sec_nmt.GraphSECNMT) or isinstance(self.task, sec_words_nmt.SECWordsNMT), \
             f"expected experiment to be of type SECNMT or SECWordsNMT, but got {type(self.task)}"
 
         self.model.eval()

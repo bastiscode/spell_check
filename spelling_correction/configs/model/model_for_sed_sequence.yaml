@@ -8,7 +8,7 @@ edge_hidden_dim: ${oc.env:GNN_LIB_EDGE_HIDDEN_DIM,256}
 hidden_feature: "h"
 
 num_classes: 2
-node_type: "sentence"
+node_type: "sequence"
 pooling_type: "mean"
 
 tokenizers:

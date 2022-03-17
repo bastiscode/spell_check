@@ -1,68 +1,62 @@
-import collections
 from typing import Dict, List, Union, Any, Tuple
 
-import dgl
 import torch
 from torch.nn import functional as F
 
 from gnn_lib import tasks, models
-from gnn_lib.models import BATCH
+from gnn_lib.data.utils import flatten
 from gnn_lib.modules import utils
 from gnn_lib.tasks import utils as task_utils
-from gnn_lib.utils import data_containers, to
+from gnn_lib.utils import data_containers, BATCH
 from gnn_lib.utils.distributed import DistributedDevice
 
 
-class MultiNodeClassification(tasks.Task):
-    expected_models = models.ModelForMultiNodeClassification
+class TokenClassification(tasks.Task):
+    expected_models = models.ModelForTokenClassification
 
-    def _get_additional_stats(self, model: models.ModelForMultiNodeClassification) \
+    def _get_additional_stats(self, model: models.ModelForTokenClassification) \
             -> Dict[str, data_containers.DataContainer]:
-        stats = {}
-        # for multi node classification, by default record accuracy and 1 vs all precision, recall and f1 scores
-        for node_type, num_classes in model.cfg.num_classes.items():
-            stats[f"{node_type}_accuracy"] = data_containers.AverageScalarContainer(name=f"{node_type}_accuracy")
+        stats = {
+            "accuracy": data_containers.AverageScalarContainer(name="accuracy"),
+            "seq_length": data_containers.HistogramContainer(
+                name="input_sequence_length"
+            )
+        }
         return stats
 
     def _prepare_inputs_and_labels(self,
                                    batch: BATCH,
                                    device: DistributedDevice) -> Tuple[Dict[str, Any], Any]:
         # extract labels from info dict
-        label_dict = collections.defaultdict(list)
-        for labels in batch.info.pop("label"):
-            for node_type, label in labels.items():
-                label_dict[node_type].append(label)
-        label_dict = {k: to(torch.cat(v, dim=0), device.device) for k, v in label_dict.items()}
+        labels = torch.cat(batch.info.pop("label")).to(device.device, non_blocking=True)
 
-        return {"g": batch.data, **batch.info}, label_dict
+        return {"x": batch.data, **batch.info}, labels
 
     def _calc_loss(self,
-                   labels: Dict[str, torch.Tensor],
-                   model_output: Dict[str, torch.Tensor],
+                   labels: torch.Tensor,
+                   model_output: List[torch.Tensor],
                    additional_losses: Dict[str, torch.Tensor]) -> torch.Tensor:
-        return sum(
-            F.cross_entropy(pred, labels[node_type])
-            for node_type, pred in model_output.items()
-        ) + sum(additional_losses.values())
+        return F.cross_entropy(torch.cat(model_output, dim=0), labels) + sum(additional_losses.values())
 
     def _update_stats(self,
                       model: models.ModelForMultiNodeClassification,
                       inputs: Dict[str, Any],
-                      labels: Dict[str, torch.Tensor],
-                      model_output: Dict[str, torch.Tensor],
+                      labels: torch.Tensor,
+                      model_output: List[torch.Tensor],
                       stats: Dict[str, data_containers.DataContainer],
                       step: int,
                       total_steps: int) -> None:
-        for node_type, pred in model_output.items():
-            predictions = torch.argmax(pred, dim=1)
-            stats[f"{node_type}_accuracy"].add((labels[node_type] == predictions).cpu())
-            stats[f"{node_type}_f1_prec_rec"].add((labels[node_type].cpu(), predictions.cpu()))
+        sequence_length_container = stats["seq_length"]
+        sequence_length_container.add([len(t) for t in inputs["x"]])
+
+        predictions = torch.argmax(torch.cat(model_output, dim=0), dim=1)
+        stats["accuracy"].add((labels == predictions).cpu())
 
     @torch.inference_mode()
     def inference(
             self,
-            model: models.ModelForMultiNodeClassification,
-            inputs: Union[List[str], Tuple[dgl.DGLHeteroGraph, List[Dict[str, Any]]]],
+            model: models.ModelForTokenClassification,
+            inputs: Union[List[str], BATCH],
             **kwargs: Any
     ) -> List[Dict[str, List]]:
         self._check_model(model)

@@ -5,8 +5,9 @@ import pickle
 import time
 from typing import Optional
 
-import torch
 from omegaconf import OmegaConf
+import torch
+from torch import multiprocessing as mp
 from torch import distributed as dist
 from torch.backends import cudnn
 from torch.cuda import amp
@@ -157,8 +158,7 @@ def train(args: argparse.Namespace, device: DistributedDevice) -> None:
     )
 
     available_cpu_cores = len(os.sched_getaffinity(0))
-    num_workers = cfg.num_workers if cfg.num_workers is not None \
-        else max((available_cpu_cores - device.local_world_size) // device.local_world_size, 2)
+    num_workers = cfg.num_workers or max((available_cpu_cores - device.local_world_size) // device.local_world_size, 2)
     if device.is_main_process:
         logger.info(f"Using {num_workers} dataloader workers per GPU process")
 
@@ -180,7 +180,8 @@ def train(args: argparse.Namespace, device: DistributedDevice) -> None:
             dataset=train_dataset,
             batch_sampler=train_batch_sampler,
             collate_fn=utils.collate,
-            num_workers=num_workers
+            num_workers=num_workers,
+            pin_memory=True
         )
 
         val_batch_sampler = data.BatchSampler(
@@ -192,7 +193,8 @@ def train(args: argparse.Namespace, device: DistributedDevice) -> None:
             dataset=val_dataset,
             batch_sampler=val_batch_sampler,
             collate_fn=utils.collate,
-            num_workers=num_workers
+            num_workers=num_workers,
+            pin_memory=True
         )
     else:
         train_batch_sampler = utils.DistributedDynamicSampler(
@@ -213,7 +215,8 @@ def train(args: argparse.Namespace, device: DistributedDevice) -> None:
             dataset=train_dataset,
             batch_sampler=train_batch_sampler,
             collate_fn=utils.collate,
-            num_workers=num_workers
+            num_workers=num_workers,
+            pin_memory=True
         )
 
         val_batch_sampler = utils.BucketSampler(
@@ -228,7 +231,8 @@ def train(args: argparse.Namespace, device: DistributedDevice) -> None:
             dataset=val_dataset,
             batch_sampler=val_batch_sampler,
             collate_fn=utils.collate,
-            num_workers=num_workers
+            num_workers=num_workers,
+            pin_memory=True
         )
 
     ema: Optional[task_utils.EMA] = None
@@ -237,7 +241,7 @@ def train(args: argparse.Namespace, device: DistributedDevice) -> None:
         logger.info(f"Using config:\n{OmegaConf.to_yaml(cfg)}")
         logger.info(f"Model:\n{unwrap_ddp(model)}")
         num_gpus = torch.cuda.device_count()
-        logger.info(f"Found {num_gpus} GPUs in environment, torch threads set to {torch.get_num_threads()}")
+        logger.info(f"Found {num_gpus} GPUs in environment, torch threads is set to {torch.get_num_threads()}")
         for gpu in range(num_gpus):
             device_props = torch.cuda.get_device_properties(gpu)
             logger.info(f"[GPU:{gpu}] {device_props.name}, {device_props.total_memory // 1024 // 1024:.0f}MiB "
@@ -323,7 +327,6 @@ def train(args: argparse.Namespace, device: DistributedDevice) -> None:
             "experiment": cfg.experiment_name,
             "variant": cfg.variant.type,
             "data": ", ".join(os.path.basename(dataset) for dataset in cfg.datasets),
-            "gnn": cfg.model.gnn.type,
             "optimizer": cfg.optimizer.type,
             "lr": cfg.optimizer.lr,
             "epochs": cfg.epochs,
@@ -369,7 +372,7 @@ def initialize() -> DistributedDevice:
     master_port = os.environ["MASTER_PORT"]
     world_size = int(os.environ["WORLD_SIZE"])
 
-    if "SLURM_PROCID" in os.environ:
+    if "SLURM_PROCID" in os.environ and os.environ.get("GNN_LIB_FORCE_LOCAL", "false") != "true":
         rank = int(os.environ["SLURM_PROCID"])
         local_rank = int(rank % torch.cuda.device_count())
         local_world_size = torch.cuda.device_count()
@@ -412,5 +415,6 @@ def de_initialize() -> None:
 
 
 if __name__ == "__main__":
+    mp.set_sharing_strategy("file_system")
     train(parse_args(), initialize())
     de_initialize()

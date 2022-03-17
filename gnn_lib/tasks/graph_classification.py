@@ -7,12 +7,12 @@ from torch.nn import functional as F
 from gnn_lib import tasks, models
 from gnn_lib.modules import utils
 from gnn_lib.tasks import utils as task_utils
-from gnn_lib.utils import data_containers
+from gnn_lib.utils import data_containers, BATCH
 from gnn_lib.utils.distributed import DistributedDevice
 
 
 class GraphClassification(tasks.Task):
-    expected_model = models.ModelForGraphClassification
+    expected_models = models.ModelForGraphClassification
 
     def _get_additional_stats(self, model: models.ModelForGraphClassification) -> \
             Dict[str, data_containers.DataContainer]:
@@ -20,16 +20,16 @@ class GraphClassification(tasks.Task):
             "accuracy": data_containers.AverageScalarContainer(name="accuracy"),
             "f1_prec_rec": data_containers.F1PrecRecContainer(
                 name="fpr",
-                class_names={i: str(i) for i in range(1, model.cfg.num_classes)}
+                class_names={i: str(i) for i in range(model.cfg.num_classes)}
             )
         }
         return stats
 
     def _prepare_inputs_and_labels(self,
-                                   batch: Tuple[dgl.DGLHeteroGraph, List[Dict[str, Any]]],
+                                   batch: BATCH,
                                    device: DistributedDevice) -> Tuple[Dict[str, Any], Any]:
         g, info = batch
-        labels = torch.tensor([i["label"] for i in info], device=device.device, dtype=torch.long)
+        labels = torch.tensor(info["label"], device=device.device, dtype=torch.long)
         return {"g": g.to(device.device)}, labels
 
     def _calc_loss(self,

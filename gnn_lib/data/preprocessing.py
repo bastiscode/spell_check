@@ -154,6 +154,7 @@ class Preprocessings(enum.IntEnum):
     CHAINED = 5
     SWITCH = 6
     NONE = 7
+    SUBSTRING = 8
 
 
 @dataclass
@@ -420,14 +421,44 @@ class Switch(Preprocessing):
 
 
 @dataclass
+class SubstringConfig(PreprocessingConfig):
+    type: Preprocessings = Preprocessings.SUBSTRING
+    max_length: int = 512
+
+
+class Substring(Preprocessing):
+    def apply(
+            self,
+            sequences: List[str],
+            target_sequences: List[str],
+            infos: List[Dict[str, Any]],
+            is_inference: bool = False
+    ) -> Tuple[List[str], List[str], List[Dict[str, Any]]]:
+        self.cfg: SubstringConfig
+
+        substring_sequences = []
+        substring_target_sequences = []
+        for sequence, target_sequence in zip(sequences, target_sequences):
+            assert len(sequence) == len(target_sequence), \
+                f"substring preprocessing should only be used for sequences that have the same length"
+            if is_inference:
+                sequence = sequence[:self.cfg.max_length]
+                target_sequence = target_sequence[:self.cfg.max_length]
+            else:
+                start_idx = self.rand.integers(0, max(1, len(sequence) - self.cfg.max_length + 1))
+                sequence = sequence[start_idx:start_idx + self.cfg.max_length]
+                target_sequence = target_sequence[start_idx:start_idx + self.cfg.max_length]
+            substring_sequences.append(sequence)
+            substring_target_sequences.append(target_sequence)
+        return substring_sequences, substring_target_sequences, infos
+
+
+@dataclass
 class NoneConfig(PreprocessingConfig):
     type: Preprocessings = Preprocessings.NONE
 
 
-class NoneNoise(Preprocessing):
-    def __init__(self, cfg: PreprocessingConfig, seed: int) -> None:
-        super().__init__(cfg, seed)
-
+class NoPreprocessing(Preprocessing):
     def apply(
             self,
             sequences: List[str],
@@ -439,28 +470,31 @@ class NoneNoise(Preprocessing):
 
 
 def get_preprocessing_from_config(cfg: Union[PreprocessingConfig, omegaconf.DictConfig], seed: int) -> Preprocessing:
-    noise_type = cfg.type if isinstance(cfg, PreprocessingConfig) else Preprocessings[cfg.type]
-    if noise_type == Preprocessings.ARTIFICIAL_NOISE:
+    preprocessing_type = cfg.type if isinstance(cfg, PreprocessingConfig) else Preprocessings[cfg.type]
+    if preprocessing_type == Preprocessings.ARTIFICIAL_NOISE:
         cfg = OmegaConf.structured(ArtificialNoiseConfig(**cfg))
         return ArtificialNoise(cfg, seed)
-    elif noise_type == Preprocessings.REALISTIC_NOISE:
+    elif preprocessing_type == Preprocessings.REALISTIC_NOISE:
         cfg = OmegaConf.structured(RealisticNoiseConfig(**cfg))
         return RealisticNoise(cfg, seed)
-    elif noise_type == Preprocessings.MIXED_NOISE:
+    elif preprocessing_type == Preprocessings.MIXED_NOISE:
         cfg = OmegaConf.structured(MixedNoiseConfig(**cfg))
         return MixedNoise(cfg, seed)
-    elif noise_type == Preprocessings.WHITESPACE_NOISE:
+    elif preprocessing_type == Preprocessings.WHITESPACE_NOISE:
         cfg = OmegaConf.structured(WhitespaceNoiseConfig(**cfg))
         return Whitespace(cfg, seed)
-    elif noise_type == Preprocessings.CHAINED:
+    elif preprocessing_type == Preprocessings.CHAINED:
         cfg = OmegaConf.structured(ChainedConfig(**cfg))
         return Chained(cfg, seed)
-    elif noise_type == Preprocessings.SWITCH:
+    elif preprocessing_type == Preprocessings.SWITCH:
         cfg = OmegaConf.structured(SwitchConfig(**cfg))
         return Switch(cfg, seed)
-    elif noise_type == Preprocessings.NONE:
+    elif preprocessing_type == Preprocessings.NONE:
         cfg = OmegaConf.structured(NoneConfig(**cfg))
-        return NoneNoise(cfg, seed)
+        return NoPreprocessing(cfg, seed)
+    elif preprocessing_type == Preprocessings.SUBSTRING:
+        cfg = OmegaConf.structured(SubstringConfig(**cfg))
+        return Substring(cfg, seed)
     else:
         raise ValueError(f"Unknown noise {cfg.type.name}")
 

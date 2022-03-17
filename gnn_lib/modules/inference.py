@@ -4,6 +4,7 @@ import math
 import queue
 from typing import Callable, Tuple, Dict, List, Any, Union, Optional
 
+import Levenshtein
 import einops
 import torch
 
@@ -64,9 +65,7 @@ ScoreFn = Callable[
         # beam with token ids and log probs
         Beam,
         # input string
-        Optional[str],
-        # de-tokenization function, must be passed when the predicted string is need for scoring a beam
-        Optional[DeTokFn]
+        Optional[str]
     ],
     float
 ]
@@ -84,19 +83,22 @@ def log_likelihood_score(normalize_by_length: bool = True, alpha: float = 1.0) -
 
 
 def spelling_correction_score(
-        # if not None, must be one of [log_likelihood, dictionary, dictionary_or_in_input, dictionary_or_eq_input]
+        # if not None, must be one of
+        # {log_likelihood, dictionary, dictionary_or_in_input, dictionary_or_eq_input, dictionary_or_close_input}
         mode: str = "log_likelihood",
         # prefix index, to check if a word is a prefix of a word in the dictionary
         prefix_index: Optional[index.PrefixIndex] = None,
+        # de tokenization function, to get the predicted string from the predicted tokens
+        de_tok_fn: Optional[DeTokFn] = None,
         # arguments for log likelihood scoring
         normalize_by_length: bool = True,
         alpha: float = 1.0,
+        **kwargs: Any
 ) -> ScoreFn:
     log_likelihood_score_fn = log_likelihood_score(normalize_by_length, alpha)
 
     def score(beam: Beam,
-              input_str: Optional[str] = None,
-              de_tok_fn: Optional[DeTokFn] = None) -> float:
+              input_str: Optional[str] = None) -> float:
         s = log_likelihood_score_fn(beam)
         if mode == "log_likelihood":
             return s
@@ -113,9 +115,9 @@ def spelling_correction_score(
 
         if len(pred_str_split) > 0:
             # get all input words
-            input_words, input_ws = data_utils.tokenize_words_regex(input_str)
+            input_words, _ = data_utils.tokenize_words_regex(input_str)
             # split current predicted word (by whitespace) further using regex
-            pred_words, pred_ws = data_utils.tokenize_words_regex(pred_str_split[-1])
+            pred_words, _ = data_utils.tokenize_words_regex(pred_str_split[-1])
 
             valid_pred = False
             # check if current predicted word (or its lowercase version)
@@ -134,8 +136,20 @@ def spelling_correction_score(
                 )
 
             # check if current predicted string is prefix of the input string
-            if mode == "dictionary_or_eq_input":
+            elif mode == "dictionary_or_eq_input":
                 valid_pred |= input_str.startswith(pred_str)
+
+            # check if current predicted string has a smaller prefix edit distance to input string than a
+            # given threshold
+            elif mode == "dictionary_or_close_input":
+                valid_pred |= (
+                        Levenshtein.distance(pred_str, input_str[:len(pred_str)])
+                        <
+                        kwargs.get("max_prefix_edit_distance", 5)
+                )
+
+            else:
+                raise RuntimeError(f"unknown spell check score mode {mode}")
 
             if not valid_pred:
                 return s - 1_000_000
@@ -166,7 +180,7 @@ def token_inference(
         select_fn: BeamSelectFn = greedy_select_fn(),
         score_fn: ScoreFn = spelling_correction_score(),
         input_strings: Optional[List[str]] = None,
-        de_tok_fn: Optional[DeTokFn] = None,
+        decoder_positions: Optional[torch.Tensor] = None,
         **kwargs: Any
 ) -> List[List[int]]:
     model.eval()
@@ -179,10 +193,10 @@ def token_inference(
     token_ids = torch.full((batch_size, max_length), fill_value=-1.0, dtype=torch.long, device=device)
     token_ids[:, 0] = bos_token_id
     lengths = torch.ones(batch_size, dtype=torch.long, device=device)
-    if "decoder_positions" in kwargs:
+    if decoder_positions is not None:
         positions = torch.stack([
             torch.arange(pos, pos + max_length, device=device)
-            for pos in kwargs["decoder_positions"]
+            for pos in decoder_positions
         ])
     else:
         positions = einops.repeat(torch.arange(max_length, device=device), "l -> b l", b=batch_size)
@@ -211,17 +225,19 @@ def token_inference(
             length = lengths[indices_to_decode][i]
             log_softmax_scores = torch.log_softmax(decoder_output[i, length - 1], dim=0)
 
+            batch_idx = batch_indices[i]
             beams_and_scores = []
             min_log_prob = math.log(1 / len(log_softmax_scores))
+            current_token_ids = token_ids[batch_idx, :length].tolist()
+            current_log_prob = log_prob[batch_idx, :length].tolist()
             for token_id, lp in enumerate(log_softmax_scores.tolist()):
                 if lp < min_log_prob:
                     continue
-                batch_idx = batch_indices[i]
                 beam = Beam()
-                beam.token_ids = token_ids[batch_idx].tolist() + [token_id]
-                beam.log_prob = log_prob[batch_idx].tolist() + [lp]
+                beam.token_ids = current_token_ids + [token_id]
+                beam.log_prob = current_log_prob + [lp]
                 beams_and_scores.append(
-                    (beam, -score_fn(beam, input_strings[batch_idx] if input_strings is not None else None, de_tok_fn))
+                    (beam, -score_fn(beam, input_strings[batch_idx] if input_strings is not None else None))
                 )
             beams_and_scores = sorted(beams_and_scores, key=lambda e: e[1])
             selected_beam = select_fn(beams_and_scores)
@@ -273,7 +289,7 @@ def best_first_inference(
         score_fn: ScoreFn,
         top_k: int,
         input_strings: Optional[List[str]] = None,
-        de_tok_fn: Optional[DeTokFn] = None,
+        decoder_positions: Optional[torch.Tensor] = None,
         **kwargs: Any
 ) -> List[List[Beam]]:
     model.eval()
@@ -283,7 +299,7 @@ def best_first_inference(
 
     batch_size = len(next(iter(encoder_outputs.values())))
 
-    positions = kwargs.get("decoder_positions", torch.zeros(batch_size, dtype=torch.long))
+    positions = decoder_positions or torch.zeros(batch_size, dtype=torch.long)
 
     for b in range(batch_size):
         # encoder_outputs_b: shape [L, H]
@@ -301,8 +317,7 @@ def best_first_inference(
             (
                 -score_fn(
                     beam,
-                    input_strings[b] if input_strings is not None else None,
-                    de_tok_fn
+                    input_strings[b] if input_strings is not None else None
                 ),
                 beam
             )
@@ -357,8 +372,7 @@ def best_first_inference(
                     (
                         -score_fn(
                             new_beam,
-                            input_strings[b] if input_strings is not None else None,
-                            de_tok_fn
+                            input_strings[b] if input_strings is not None else None
                         ),
                         new_beam
                     )
@@ -384,7 +398,7 @@ def beam_inference(
         score_fn: ScoreFn,
         beam_width: int,
         input_strings: Optional[List[str]] = None,
-        de_tok_fn: Optional[DeTokFn] = None,
+        decoder_positions: Optional[torch.Tensor] = None,
         **kwargs: Any
 ) -> List[List[Beam]]:
     model.eval()
@@ -394,7 +408,7 @@ def beam_inference(
 
     batch_size = len(next(iter(encoder_outputs.values())))
 
-    positions = kwargs.get("decoder_positions", torch.zeros(batch_size, dtype=torch.long))
+    positions = decoder_positions or torch.zeros(batch_size, dtype=torch.long)
 
     for b in range(batch_size):
         # encoder_outputs_b: shape [L, H]
@@ -460,8 +474,7 @@ def beam_inference(
                     (
                         beam_candidate, -score_fn(
                             beam_candidate,
-                            input_strings[b] if input_strings is not None else None,
-                            de_tok_fn
+                            input_strings[b] if input_strings is not None else None
                         )
                     )
                 )
@@ -487,8 +500,7 @@ def beam_inference(
                 (
                     beam, -score_fn(
                         beam,
-                        input_strings[b] if input_strings is not None else None,
-                        de_tok_fn
+                        input_strings[b] if input_strings is not None else None
                     )
                 )
                 for beam in current_beams

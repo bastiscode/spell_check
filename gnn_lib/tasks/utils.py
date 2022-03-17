@@ -6,6 +6,7 @@ import torch
 from torch import nn
 
 from gnn_lib.modules.utils import tensor_to_python, split
+from gnn_lib.utils import DATA_INPUT
 
 SAMPLE_SEQUENCE = \
     "But I must explain to you how all this mistaken idea of denouncing pleasure and praising pain was " \
@@ -81,3 +82,10 @@ def get_token_ids_from_graphs(graph: dgl.DGLHeteroGraph) -> List[List[int]]:
         tensor_to_python(graph.nodes["token"].data["token_id"], force_list=True),
         tensor_to_python(graph.batch_num_nodes("token"), force_list=True)
     )
+
+
+def get_batch_size_from_data(data: DATA_INPUT) -> int:
+    if isinstance(data, dgl.DGLHeteroGraph):
+        return data.batch_size
+    else:
+        return len(data)

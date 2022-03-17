@@ -16,7 +16,7 @@ from spacy.tokens import Token, Doc
 from torch import distributed as dist
 from torch.utils.data import Sampler, DistributedSampler, Dataset
 
-from gnn_lib.utils import MODEL_INPUTS, DATA_INPUT
+from gnn_lib.utils import DATA_INPUT, BATCH
 from gnn_lib.utils import common
 from gnn_lib.utils.distributed import DistributedDevice
 
@@ -187,7 +187,7 @@ def serialize_samples(
         doc_bin.add(sample.doc)
         outputs.append(
             lz4.frame.compress(
-                pickle.dumps((sample.tokens, doc_bin.to_bytes(), sample.neighbors_list)),
+                pickle.dumps((sample.tokens, doc_bin.to_bytes(), sample.neighbors_list, sample.info)),
                 compression_level=lz4.frame.COMPRESSIONLEVEL_MAX)
         )
     return outputs
@@ -200,11 +200,11 @@ def deserialize_samples(inputs: List[bytes]) -> List[SAMPLE]:
 
     outputs = []
     for ipt in inputs:
-        tokens, doc_bin_bytes, neighbors_list = pickle.loads(lz4.frame.decompress(ipt))
+        tokens, doc_bin_bytes, neighbors_list, info = pickle.loads(lz4.frame.decompress(ipt))
         doc_bin = DocBin().from_bytes(doc_bin_bytes)
         docs = list(doc_bin.get_docs(SPACY_TOKENIZER_REGEX.vocab))
         assert len(docs) == 1
-        outputs.append(SAMPLE(tokens=tokens, doc=docs[0], neighbors_list=neighbors_list))
+        outputs.append(SAMPLE(tokens=tokens, doc=docs[0], neighbors_list=neighbors_list, info=info))
     return outputs
 
 
@@ -317,24 +317,23 @@ def open_lmdb(lmdb_path: str, write: bool = False) -> lmdb.Environment:
         subdir=False,
         readonly=not write,
         readahead=False,
-        lock=False,
-        max_readers=1
+        lock=False
     )
 
 
-def collate(items: List[Tuple[DATA_INPUT, Dict[str, Any]]]) -> MODEL_INPUTS:
+def collate(items: List[Tuple[DATA_INPUT, Dict[str, Any]]]) -> BATCH:
     data = []
-    infos = {}
+    info = {}
     for item in items:
         data.append(item[0])
         for key, val in item[1].items():
-            if key not in infos:
-                infos[key] = [val]
+            if key not in info:
+                info[key] = [val]
             else:
-                infos[key].append(val)
-    if isinstance(data[0], dgl.DGLHeteroGraph):
+                info[key].append(val)
+    if len(data) > 0 and isinstance(data[0], dgl.DGLHeteroGraph):
         data = dgl.batch(data)
-    return data, infos
+    return BATCH(data, info)
 
 
 # modified version of
@@ -512,7 +511,7 @@ def get_word_and_word_whitespace_groups(
 def get_sequence_groups(
         sample: SAMPLE
 ) -> List[int]:
-    return [0] * sum(len(tokens) for tokens in sample.tokens)
+    return [0] * len(flatten(sample.tokens))
 
 
 def get_word_and_sequence_groups(

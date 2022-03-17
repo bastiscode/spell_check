@@ -13,6 +13,11 @@ class GraphEncoderMixin(nn.Module):
         raise NotImplementedError
 
 
+class TensorEncoderMixin(nn.Module):
+    def encode(self, x: torch.Tensor, **kwargs: Any) -> torch.Tensor:
+        raise NotImplementedError
+
+
 class DecoderMixin(nn.Module):
     def decode(self,
                decoder_inputs: torch.Tensor,
@@ -101,19 +106,7 @@ def square_causal_mask(length: int, device: torch.device) -> torch.Tensor:
     return torch.triu(torch.ones(length, length, dtype=torch.bool, device=device), diagonal=1) * _MASK_VALUE
 
 
-# def square_causal_block_mask(length: int, lengths: torch.Tensor, device: torch.device) -> torch.Tensor:
-#     triangular_mask = square_causal_mask(length, device)
-#
-#     block_mask = torch.ones(length, length, dtype=torch.bool, device=device)
-#     cum_lengths = torch.cumsum(lengths, dim=0)
-#     assert cum_lengths[-1] <= length, f"{cum_lengths[-1]} > {length}"
-#     for i in range(len(lengths)):
-#         block_mask[:cum_lengths[i], cum_lengths[i] - lengths[i]:] = 0
-#
-#     return torch.logical_or(triangular_mask, block_mask) * _MASK_VALUE
-
-
-def square_causal_block_mask(length: int, lengths: torch.Tensor, device: torch.device) -> torch.Tensor:
+def square_causal_block_mask(length: int, lengths: List[int], device: torch.device) -> torch.Tensor:
     triangular_mask = np.triu(np.ones((length, length), dtype=bool), 1)
 
     block_mask = np.ones((length, length), dtype=bool)
@@ -127,34 +120,15 @@ def square_causal_block_mask(length: int, lengths: torch.Tensor, device: torch.d
     return torch.from_numpy(mask.astype(np.float32)).to(device)
 
 
-# def rectangular_block_mask(
-#         target_length: int,
-#         source_length: int,
-#         target_lengths: torch.Tensor,
-#         source_lengths: torch.Tensor,
-#         device: torch.device) -> torch.Tensor:
-#     block_mask = torch.ones(target_length, source_length, dtype=torch.bool, device=device)
-#     target_cum_lengths = torch.cumsum(target_lengths, 0)
-#     source_cum_lengths = torch.cumsum(source_lengths, 0)
-#     assert len(target_lengths) == len(source_lengths)
-#     assert target_cum_lengths[-1] <= target_length, f"{target_cum_lengths[-1]} > {target_length}"
-#     assert source_cum_lengths[-1] <= source_length, f"{source_cum_lengths[-1]} > {source_length}"
-#     for i in range(len(source_lengths)):
-#         tl = target_cum_lengths[i] - target_lengths[i]
-#         tu = target_cum_lengths[i]
-#         sl = source_cum_lengths[i] - source_lengths[i]
-#         su = source_cum_lengths[i]
-#         block_mask[tl:tu, sl:su] = 0
-#     return block_mask * _MASK_VALUE
-
-
 def rectangular_block_mask(
         target_length: int,
         source_length: int,
-        target_lengths: np.ndarray,
-        source_lengths: np.ndarray,
+        target_lengths: List[int],
+        source_lengths: List[int],
         device: torch.device) -> torch.Tensor:
     block_mask = np.ones((target_length, source_length), dtype=np.float32)
+    target_lengths = np.array(target_lengths)
+    source_lengths = np.array(source_lengths)
     target_cum_lengths = np.cumsum(target_lengths, 0)
     source_cum_lengths = np.cumsum(source_lengths, 0)
     assert len(target_lengths) == len(source_lengths)
@@ -532,3 +506,56 @@ def edge_type_subgraph(g: dgl.DGLHeteroGraph, edge_types: Set[Tuple[str, str, st
 def transfer_features(from_g: dgl.DGLHeteroGraph, to_g: dgl.DGLHeteroGraph, feat: str) -> dgl.DGLHeteroGraph:
     to_g.ndata[feat] = from_g.ndata[feat]
     return to_g
+
+
+def group_features(
+        grouped_feats: List[torch.Tensor],
+        groups: List[List[Dict[str, Any]]],
+        additional_feature_encoders: nn.ModuleDict,
+        aggregations: Dict[str, str],
+        device: torch.device
+) -> List[torch.Tensor]:
+    stage_names = [stage["stage"] for stage in groups[0]]
+
+    # iterate through stages
+    for i, stage_name in enumerate(stage_names):
+        aggregation = aggregations[stage_name]
+
+        has_additional_features = stage_name in additional_feature_encoders
+        batch_groups = []
+        batch_group_lengths = []
+        stage_features = []
+        for group in groups:
+            batch_groups.append(group[i]["groups"])
+            batch_group_lengths.append(len(group[i]["groups"]))
+            if has_additional_features:
+                stage_features.append(group[i]["features"])
+
+        if has_additional_features:
+            grouped_feats = torch.split(
+                additional_feature_encoders[stage_name](
+                    torch.cat([torch.cat(grouped_feats, dim=0), torch.cat(stage_features, dim=0)], dim=1)
+                ),
+                batch_group_lengths
+            )
+
+        assert all(
+            len(group_feat) == group_length for group_feat, group_length in zip(grouped_feats, batch_group_lengths)
+        )
+        new_grouped_feats = []
+        for batch_group, batch_grouped_feat in zip(batch_groups, grouped_feats):
+            _, batch_group_splits = np.unique(batch_group, return_counts=True)
+            new_batch_grouped_feat = []
+            for group_feat in torch.split(batch_grouped_feat, list(batch_group_splits)):
+                if aggregation == "mean":
+                    group_feat = torch.mean(group_feat, dim=0, keepdim=True)
+                elif aggregation == "max":
+                    group_feat = torch.max(group_feat, dim=0, keepdim=True).values
+                elif aggregation == "sum":
+                    group_feat = torch.sum(group_feat, dim=0, keepdim=True)
+                else:
+                    raise ValueError(f"unknown group aggregation {aggregation}")
+                new_batch_grouped_feat.append(group_feat)
+            new_grouped_feats.append(torch.cat(new_batch_grouped_feat, dim=0))
+        grouped_feats = new_grouped_feats
+    return grouped_feats

@@ -6,17 +6,14 @@ lr_scheduler: ${from_file:lr_scheduler/step_with_0.05_warmup.yaml}
 experiment_dir: ${oc.env:GNN_LIB_EXPERIMENT_DIR}
 data_dir: ${oc.env:GNN_LIB_DATA_DIR}
 datasets:
-  - ${oc.env:GNN_LIB_DATA_DIR}/processed/wikidump_sed_sequence
-  - ${oc.env:GNN_LIB_DATA_DIR}/processed/bookcorpus_sed_sequence
-  - ${oc.env:GNN_LIB_DATA_DIR}/processed/neuspell
+  - ${oc.env:GNN_LIB_DATA_DIR}/processed/wikidump_paragraphs_sed_sequence
+  - ${oc.env:GNN_LIB_DATA_DIR}/processed/bookcorpus_paragraphs_sed_sequence
 dataset_limits:
   - ${oc.env:GNN_LIB_DATA_LIMIT}
   - ${oc.env:GNN_LIB_DATA_LIMIT}
-  - 10000000 # high enough limit for neuspell, contains "only" ~2.7 mio sequences
 val_splits:
-  - 2000
-  - 2000
-  - 1000
+  - 2500
+  - 2500
 
 experiment_name: ${oc.env:GNN_LIB_EXPERIMENT_NAME,dummy}
 epochs: ${oc.env:GNN_LIB_EPOCHS,1}

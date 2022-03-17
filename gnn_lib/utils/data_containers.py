@@ -157,24 +157,29 @@ class F1PrecRecContainer(DataContainer):
 class HistogramContainer(DataContainer):
     def __init__(self, name: str) -> None:
         super().__init__(name)
-        self.values = None
+        self.values = []
 
-    def add(self, data: torch.Tensor) -> None:
-        self.values = data
+    def add(self, data: Union[float, int, torch.Tensor, list]) -> None:
+        if isinstance(data, torch.Tensor):
+            data = data.tolist()
+        if isinstance(data, list):
+            self.values.extend(data)
+        else:
+            self.values.append(data)
 
     @property
-    def value(self) -> torch.Tensor:
+    def value(self) -> List:
         return self.values
 
     def log_to_tensorboard(self, writer: tensorboard.SummaryWriter, step: int) -> None:
         writer.add_histogram(
             tag=self.name,
-            values=self.value,
+            values=torch.tensor(self.value),
             global_step=step
         )
 
     def reset(self) -> None:
-        self.values = None
+        self.values = []
 
 
 class MultiTextContainer(DataContainer):

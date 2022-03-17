@@ -1,16 +1,11 @@
-type: MODEL_FOR_MULTI_NODE_CLASSIFICATION
+type: MODEL_FOR_TOKEN_CLASSIFICATION
 
-embedding: ${from_file:embedding/node_embedding.yaml}
-gnn: ${from_file:gnn/transformer_encoder_gnn.yaml}
+embedding: ${from_file:embedding/token_embedding.yaml}
 
-node_hidden_dim: ${oc.env:GNN_LIB_HIDDEN_DIM,512}
-edge_hidden_dim: ${oc.env:GNN_LIB_EDGE_HIDDEN_DIM,256}
-hidden_feature: "h"
+hidden_dim: ${oc.env:GNN_LIB_HIDDEN_DIM,512}
+dropout: 0.1
+num_layers: ${oc.env:GNN_LIB_NUM_ENCODER_LAYERS,6}
 
-group_nodes: ["token"]
+num_classes: 2
 
-num_classes:
-  token: 2
-
-tokenizers:
-  token: ${from_file:tokenizer/bpe_default.yaml}
+tokenizer: ${from_file:tokenizer/bpe_default.yaml}

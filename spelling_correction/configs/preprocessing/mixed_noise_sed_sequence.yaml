@@ -1,5 +1,5 @@
 type: SWITCH
 cfgs:
-  - ${from_file:preprocessing/mixed.yaml}
+  - ${from_file:preprocessing/mixed_noise.yaml}
   - type: NONE
 probabilities: [0.5, 0.5]

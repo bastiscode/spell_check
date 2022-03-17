@@ -1,5 +1,4 @@
 import enum
-import glob
 import json
 import multiprocessing as mp
 import os
@@ -11,7 +10,6 @@ import time
 from typing import List, Tuple, Any, Dict, Optional
 
 import dgl
-import lmdb
 import lz4.frame
 import numpy as np
 import omegaconf
@@ -20,7 +18,7 @@ from torch.utils import data
 from torch.utils.data import ConcatDataset
 from tqdm import tqdm
 
-from gnn_lib.data import variants, utils, tokenization, index
+from gnn_lib.data import utils, tokenization, index
 from gnn_lib.data.preprocessing import get_preprocessing_from_config, get_preprocessing_fn
 from gnn_lib.data.variants import get_variant_from_config
 from gnn_lib.utils import common, io
@@ -47,6 +45,8 @@ def write_lmdb(files: List[str],
                preprocess_cfg: PreprocessConfig,
                num_files_processed: mp.Value,
                tqdm_disable: bool = True) -> None:
+    logger = common.get_logger("LMDB_WRITER")
+    logger.info(f"Opened LMDB at {lmdb_path}")
     env = utils.open_lmdb(lmdb_path, write=True)
     db_handle = env.open_db()
     with env.begin(write=True) as txn:
@@ -85,7 +85,7 @@ def write_lmdb(files: List[str],
     def add_batch() -> None:
         nonlocal sequences_batch, target_sequences_batch, num_sequences, lengths
 
-        preprocessed_batch = preprocessing_fn(sequences_batch, target_sequences_batch)
+        preprocessed_batch = preprocessing_fn(sequences_batch, target_sequences_batch, False)
 
         preprocessed_samples_ser = utils.serialize_samples([sample for sample, _ in preprocessed_batch])
         for (sample, target_sequence), sample_ser in zip(
@@ -103,7 +103,7 @@ def write_lmdb(files: List[str],
         sequences_batch = []
         target_sequences_batch = []
 
-    for filepath in files:
+    for i, filepath in enumerate(files):
         with open(filepath, "r", encoding="utf8") as f:
             for line in tqdm(f, desc=f"processing {filepath}", total=io.line_count(filepath), disable=tqdm_disable):
                 json_obj = json.loads(line)
@@ -116,8 +116,10 @@ def write_lmdb(files: List[str],
                 if len(sequences_batch) % batch_size == 0:
                     add_batch()
 
-        if num_files_processed is not None:
-            num_files_processed.value += 1
+        num_files_processed.value += 1
+        logger.info(
+            f"Processed and wrote {i+1}/{len(files)} files to LMDB {lmdb_path} (total={num_files_processed.value})"
+        )
 
     # add remaining elements
     add_batch()
@@ -127,10 +129,11 @@ def write_lmdb(files: List[str],
     txn.commit()
     env.close()
 
+    logger.info(f"Wrote {len(lengths)} elements to LMDB {lmdb_path}")
+
 
 def preprocess_dataset(preprocess_cfg: PreprocessConfig) -> None:
     logger = common.get_logger("PREPROCESS_DATASET")
-    start = time.monotonic()
 
     files = []
     for pattern in preprocess_cfg.data:
@@ -159,14 +162,15 @@ def preprocess_dataset(preprocess_cfg: PreprocessConfig) -> None:
 
     sample_limit = preprocess_cfg.limit or float("inf")
 
+    logger.info("Determining which files to process")
     subset_files = []
-    file_idx = 0
     total_sequences = 0
-    while total_sequences < sample_limit and file_idx < len(files):
-        num_samples = io.line_count(files[file_idx])
-        subset_files.append(files[file_idx])
+    for file in files:
+        num_samples = io.line_count(file)
         total_sequences += num_samples
-        file_idx += 1
+        subset_files.append(file)
+        if total_sequences >= sample_limit:
+            break
 
     files = subset_files
     assert len(files) > 0, "got no files to preprocess dataset"
@@ -217,16 +221,22 @@ def preprocess_dataset(preprocess_cfg: PreprocessConfig) -> None:
 
             logger.info(f"Started writer process {p.pid} on {len(file_chunk)} files")
 
+        start = time.perf_counter()
         log_every = max(len(files) // 1000, 1)
         last_num_files_processed = 0
-        while num_files_processed.value < len(files):
+        # start_timeout = time.perf_counter()
+        while (
+                num_files_processed.value < len(files)
+                # and time.perf_counter() - start_timeout <= int(os.environ.get("GNN_LIB_TIMEOUT", 600))
+        ):
             if num_files_processed.value <= last_num_files_processed:
                 time.sleep(1)
                 continue
 
+            # start_timeout = time.perf_counter()
             last_num_files_processed = num_files_processed.value
             if num_files_processed.value % log_every == 0:
-                end = time.monotonic()
+                end = time.perf_counter()
                 logger.info(f"Processed {num_files_processed.value}/{len(files)} files: "
                             f"{common.eta_minutes((end - start) / 60, num_files_processed.value, len(files))}")
 

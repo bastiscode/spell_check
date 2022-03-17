@@ -217,7 +217,7 @@ def _indices_to_sequence_edge_type(from_idx: int, to_idx: int) -> str:
 def sequence_to_word_graph(
         sample: utils.SAMPLE,
         tokenizer: tokenization.Tokenizer,
-        add_sentence_level_node: bool = False,
+        add_sequence_level_node: bool = False,
         dictionary: Optional[Dict[str, int]] = None,
         add_word_features: bool = False,
         add_ner_features: bool = False,
@@ -236,8 +236,8 @@ def sequence_to_word_graph(
     if add_self_loops:
         types.add(("token", "self", "token"))
         types.add(("word", "self", "word"))
-        if add_sentence_level_node:
-            types.add(("sentence", "self", "sentence"))
+        if add_sequence_level_node:
+            types.add(("sequence", "self", "sequence"))
         if add_num_neighbors is not None:
             types.add(("neighbor", "self", "neighbor"))
     if word_fully_connected:
@@ -247,11 +247,11 @@ def sequence_to_word_graph(
     if scheme != "word_to_token":
         types.add(("token", "in", "word"))
 
-    if add_sentence_level_node:
+    if add_sequence_level_node:
         if scheme == "word_to_token":
-            types.add(("token", "in", "sentence"))
+            types.add(("token", "in", "sequence"))
         else:
-            types.add(("word", "in", "sentence"))
+            types.add(("word", "in", "sequence"))
 
     if add_dependency_info:
         types.add(("word", "dep", "word"))
@@ -382,20 +382,20 @@ def sequence_to_word_graph(
                                (depends_on_idx, word_idx),
                                feat_dict)
 
-    if add_sentence_level_node:
+    if add_sequence_level_node:
         if scheme == "word_to_token":
             for token_idx in range(data.get_num_nodes()["token"]):
                 data.add_edge(token_idx,
                               0,
-                              ("token", "in", "sentence"))
+                              ("token", "in", "sequence"))
         else:
             for word_idx in range(data.get_num_nodes()["word"]):
                 data.add_edge(word_idx,
                               0,
-                              ("word", "in", "sentence"))
+                              ("word", "in", "sequence"))
         if add_self_loops:
             data.add_edge(
-                0, 0, ("sentence", "self", "sentence")
+                0, 0, ("sequence", "self", "sequence")
             )
 
     if add_num_neighbors is not None:

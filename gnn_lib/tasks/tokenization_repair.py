@@ -1,15 +1,13 @@
 from typing import Union, List, Dict, Any
 
-import dgl
 import torch
 from torch.nn import functional as F
 
 from gnn_lib import models
 from gnn_lib.data import variants, tokenization
-from gnn_lib.models import MODEL_INPUTS
-from gnn_lib.tasks.multi_node_classification import MultiNodeClassification
-from gnn_lib.utils import tokenization_repair, data_containers
 from gnn_lib.tasks import utils as task_utils
+from gnn_lib.tasks.multi_node_classification import MultiNodeClassification
+from gnn_lib.utils import tokenization_repair, data_containers, BATCH
 
 
 class TokenizationRepair(MultiNodeClassification):
@@ -87,7 +85,7 @@ class TokenizationRepair(MultiNodeClassification):
     @torch.inference_mode()
     def inference(self,
                   model: models.ModelForMultiNodeClassification,
-                  inputs: MODEL_INPUTS,
+                  inputs: Union[List[str], BATCH],
                   **kwargs: Any) -> \
             Union[List[str], List[List[int]]]:
         got_str_input = isinstance(inputs, list) and isinstance(inputs[0], str)

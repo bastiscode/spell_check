@@ -13,7 +13,7 @@ from omegaconf import MISSING, OmegaConf
 from gnn_lib.data import graph, tokenization, utils, index
 from gnn_lib.data.preprocessing import get_preprocessing_from_config, PreprocessingConfig, get_preprocessing_fn
 from gnn_lib.data.tokenization import TokenizerConfig, get_tokenizer_from_config
-from gnn_lib.utils import tokenization_repair, io, MODEL_INPUTS, DATA_INPUT
+from gnn_lib.utils import tokenization_repair, io, BATCH, DATA_INPUT
 
 
 class DatasetVariants(enum.IntEnum):
@@ -29,7 +29,7 @@ class DatasetVariants(enum.IntEnum):
 class DatasetVariantConfig:
     type: DatasetVariants  # = MISSING
 
-    preprocessing = PreprocessingConfig = MISSING
+    preprocessing: PreprocessingConfig = MISSING
 
 
 class DatasetVariant:
@@ -90,7 +90,7 @@ class DatasetVariant:
     def prepare_sequences_for_inference(
             self,
             sequences: List[str]
-    ) -> MODEL_INPUTS:
+    ) -> BATCH:
         items = [self.prepare_sequence(s, is_inference=True) for s in sequences]
         return utils.collate(items)
 
@@ -98,84 +98,90 @@ class DatasetVariant:
 @dataclass
 class SEDSequenceConfig(DatasetVariantConfig):
     type: DatasetVariants = DatasetVariants.SED_SEQUENCE
+
     tokenizer: TokenizerConfig = MISSING
-    word_tokenizer: Optional[TokenizerConfig] = None
-    noise: Any = MISSING
-    dictionary_file: Optional[str] = None
+
+    data_scheme: str = "sequence_graph"
+
     add_word_features: bool = True
+    dictionary_file: Optional[str] = None
+
+    # options for data_scheme not in {token_graph, tensor}
+    index: Optional[str] = None
+    index_num_neighbors: int = 5
     add_dependency_info: bool = True
     word_fully_connected: bool = True
     token_fully_connected: bool = False
-    encoding_scheme: str = "sentence"
-    index: Optional[str] = None
 
 
 class SEDSequence(DatasetVariant):
     def __init__(self, cfg: DatasetVariantConfig, seed: int):
-        self.cfg: SEDSequenceConfig
-        self.tokenizer = get_tokenizer_from_config(self.cfg.tokenizer)
-        if self.cfg.word_tokenizer is not None:
-            self.word_tokenizer = get_tokenizer_from_config(self.cfg.word_tokenizer)
-        else:
-            self.word_tokenizer = None
+        cfg: SEDSequenceConfig
+        self.tokenizer = get_tokenizer_from_config(cfg.tokenizer)
 
-        if self.cfg.dictionary_file is not None:
-            self.dictionary = io.dictionary_from_file(self.cfg.dictionary_file)
+        self.bos_token_id = self.tokenizer.token_to_id(tokenization.BOS)
+        self.eos_token_id = self.tokenizer.token_to_id(tokenization.EOS)
+        self.unk_token_id = self.tokenizer.token_to_id(tokenization.UNK)
+
+        if cfg.dictionary_file is not None:
+            self.dictionary = io.dictionary_from_file(cfg.dictionary_file)
         else:
             self.dictionary = None
 
-        if self.cfg.index is not None:
-            self.index = index.NNIndex(self.cfg.index)
-            self.num_neighbors = int(os.getenv("GNN_LIB_NUM_NEIGHBORS", 5))
-            self.neighbor_fn = index.get_neighbor_fn(self.index, self.num_neighbors)
+        tok_fn = tokenization.get_tokenization_fn(self.tokenizer)
+        if cfg.index is not None:
+            neighbor_index = index.NNIndex(cfg.index)
+            neighbor_fn = index.get_neighbor_fn(neighbor_index, cfg.index_num_neighbors)
         else:
-            self.neighbor_fn = None
-            self.num_neighbors = None
+            neighbor_fn = None
+        preprocessing_sample_kwargs = {}
+        if cfg.data_scheme == "word_graph":
+            preprocessing_sample_kwargs["with_dep_parser"] = cfg.add_dependency_info
 
-        self.tok_fn = tokenization.get_tokenization_fn(self.tokenizer)
+        super().__init__(cfg, seed, tok_fn, neighbor_fn, **preprocessing_sample_kwargs)
 
-        super().__init__(cfg, seed, self.tok_fn, self.neighbor_fn)
-
-    def construct_graph(self, sample: utils.SAMPLE) -> graph.HeterogeneousDGLData:
+    def construct_input(self, sample: utils.SAMPLE) -> Union[torch.Tensor, dgl.DGLHeteroGraph]:
         self.cfg: SEDSequenceConfig
-        if self.cfg.encoding_scheme == "tokens":
-            data = graph.sequence_to_token_graph(
+        if self.cfg.data_scheme == "token_graph":
+            return graph.sequence_to_token_graph(
                 sample=sample
-            )
-        elif self.cfg.encoding_scheme == "words":
-            data = graph.sequence_to_word_graph(
+            ).to_heterograph()
+        elif self.cfg.data_scheme == "word_graph":
+            return graph.sequence_to_word_graph(
                 sample=sample,
                 tokenizer=self.tokenizer,
-                word_tokenizer=self.word_tokenizer,
                 dictionary=self.dictionary,
                 add_word_features=self.cfg.add_word_features,
                 # add_ner_features=True,
                 # add_pos_tag_features=True,
                 add_dependency_info=self.cfg.add_dependency_info,
-                add_num_neighbors=self.num_neighbors,
+                add_num_neighbors=self.cfg.index_num_neighbors if self.cfg.index is not None else None,
                 word_fully_connected=self.cfg.word_fully_connected,
                 token_fully_connected=self.cfg.token_fully_connected,
                 scheme="token_to_word"
-            )
-        elif self.cfg.encoding_scheme == "sentence":
-            data = graph.sequence_to_word_graph(
+            ).to_heterograph()
+        elif self.cfg.data_scheme == "sequence_graph":
+            return graph.sequence_to_word_graph(
                 sample=sample,
                 tokenizer=self.tokenizer,
-                word_tokenizer=self.word_tokenizer,
-                add_sentence_level_node=True,
+                add_sequence_level_node=True,
                 dictionary=self.dictionary,
                 add_word_features=self.cfg.add_word_features,
                 # add_ner_features=True,
                 # add_pos_tag_features=True,
                 add_dependency_info=self.cfg.add_dependency_info,
-                add_num_neighbors=self.num_neighbors,
+                add_num_neighbors=self.cfg.index_num_neighbors if self.cfg.index is not None else None,
                 word_fully_connected=self.cfg.word_fully_connected,
                 token_fully_connected=self.cfg.token_fully_connected,
                 scheme="token_to_word"
+            ).to_heterograph()
+        elif self.cfg.data_scheme == "tensor":
+            return torch.tensor(
+                utils.flatten(sample.tokens),
+                dtype=torch.long
             )
         else:
-            raise ValueError(f"Unknown encoding scheme {self.cfg.encoding_scheme}")
-        return data
+            raise ValueError(f"unknown data scheme {self.cfg.data_scheme}")
 
     def prepare_sequence(
             self,
@@ -188,69 +194,151 @@ class SEDSequence(DatasetVariant):
     ]:
         self.cfg: SEDSequenceConfig
 
-        input_sample, target_sequence = self._get_inputs(sequence, target_sequence, is_inference)
-        input_sample = utils.sanitize_sample(input_sample, unk_token_id=self.tokenizer.token_to_id(tokenization.UNK))
+        input_sample, target_sequence = self._get_inputs(
+            sequence,
+            target_sequence,
+            is_inference
+        )
+        input_sample = utils.sanitize_sample(
+            input_sample,
+            unk_token_id=self.unk_token_id
+        )
+
+        info = {}
         if not is_inference:
             assert target_sequence is not None
             label = int(str(input_sample) != target_sequence)
+            info["label"] = label
+
+        if self.cfg.data_scheme == "word_graph":
+            info["groups"] = {
+                "word": [
+                    {
+                        "stage": "word_to_sequence",
+                        "groups": utils.get_word_and_sequence_groups(input_sample)[1]
+                    }
+                ]
+            }
+
+        elif self.cfg.data_scheme == "token_graph":
+            if self.cfg.add_word_features:
+                # if we add word features, we first aggregate from tokens to words
+                # and then from word to whitespace_words
+                # we need to do this because the features are on the word level and not on the whitespace word level
+                word_groups, sequence_groups = utils.get_word_and_sequence_groups(input_sample)
+                info["groups"] = {
+                    "token": [
+                        {
+                            "stage": "token_to_word",
+                            "groups": word_groups,
+                        },
+                        {
+                            "stage": "word_to_sequence",
+                            "groups": sequence_groups,
+                            "features": utils.get_word_features(input_sample, self.dictionary)
+                        }
+                    ]
+                }
+            else:
+                info["groups"] = {
+                    "token": [
+                        {
+                            "stage": "token_to_sequence",
+                            "groups": utils.get_sequence_groups(input_sample)
+                        }
+                    ]
+                }
+
+        elif self.cfg.data_scheme == "sequence_graph":
+            # sequence graph does not need groups or features since all word features and the sequence aggregation are
+            # already in the graph itself
+            pass
+
+        elif self.cfg.data_scheme == "tensor":
+            if self.cfg.add_word_features:
+                # first aggregate from tokens to words, add word features and then aggregate from words to
+                # sequence
+                word_groups, sequence_groups = utils.get_word_and_sequence_groups(input_sample)
+                info["groups"] = [
+                    {
+                        "stage": "token_to_word",
+                        "groups": word_groups
+                    },
+                    {
+                        "stage": "word_to_sequence",
+                        "groups": sequence_groups,
+                        # features are added before grouping so this is the correct stage
+                        "features": utils.get_word_features(input_sample, self.dictionary)
+                    }
+                ]
+            else:
+                # just aggregate all tokens into a sequence representation
+                info["groups"] = [
+                    {
+                        "stage": "token_to_sequence",
+                        "groups": utils.get_sequence_groups(input_sample)
+                    }
+                ]
+
         else:
-            label = None
+            raise RuntimeError(f"unknown data scheme {self.cfg.data_scheme}")
 
-        data = self.construct_graph(input_sample)
-
-        return data.to_heterograph(), {"label": label}
+        return self.construct_input(input_sample), info
 
 
 @dataclass
 class SEDWordsConfig(DatasetVariantConfig):
     type: DatasetVariants = DatasetVariants.SED_WORDS
-    tokenizer: TokenizerConfig = MISSING
-    noise: Any = MISSING
 
-    encoding_scheme: str = "whitespace_words"
+    tokenizer: TokenizerConfig = MISSING
+
+    data_scheme: str = "word_graph"
+
     dictionary_file: Optional[str] = None
     add_word_features: bool = True
 
     # special args for encoding scheme whitespace_words
+    index: Optional[str] = None
+    index_num_neighbors: int = 5
     add_dependency_info: bool = True
     token_fully_connected: bool = False
     word_fully_connected: bool = True
-    index: Optional[str] = None
 
 
 class SEDWords(DatasetVariant):
     def __init__(self, cfg: DatasetVariantConfig, seed: int):
-        super().__init__(cfg, seed)
-        self.cfg: SEDWordsConfig
+        cfg: SEDWordsConfig
+        self.tokenizer = get_tokenizer_from_config(cfg.tokenizer)
 
-        self.tokenizer = get_tokenizer_from_config(self.cfg.tokenizer)
+        self.bos_token_id = self.tokenizer.token_to_id(tokenization.BOS)
+        self.eos_token_id = self.tokenizer.token_to_id(tokenization.EOS)
+        self.unk_token_id = self.tokenizer.token_to_id(tokenization.UNK)
 
-        if self.cfg.dictionary_file is not None:
-            self.dictionary = io.dictionary_from_file(self.cfg.dictionary_file)
+        if cfg.dictionary_file is not None:
+            self.dictionary = io.dictionary_from_file(cfg.dictionary_file)
         else:
             self.dictionary = None
 
-        if self.cfg.index is not None:
-            self.index = index.NNIndex(self.cfg.index)
-            self.num_neighbors = int(os.getenv("GNN_LIB_NUM_NEIGHBORS", 5))
-            self.neighbor_fn = index.get_neighbor_fn(self.index, self.num_neighbors)
+        tok_fn = tokenization.get_tokenization_fn(self.tokenizer)
+        if cfg.index is not None:
+            neighbor_index = index.NNIndex(cfg.index)
+            neighbor_fn = index.get_neighbor_fn(neighbor_index, cfg.index_num_neighbors)
         else:
-            self.neighbor_fn = None
-            self.num_neighbors = None
+            neighbor_fn = None
+        preprocessing_sample_kwargs = {}
+        if cfg.data_scheme == "word_graph":
+            preprocessing_sample_kwargs["with_dep_parser"] = cfg.add_dependency_info
 
-        self.noise = get_preprocessing_from_config(self.cfg.noise, seed)
-        self.noise_fn = self.noise.apply
+        super().__init__(cfg, seed, tok_fn, neighbor_fn, **preprocessing_sample_kwargs)
 
-        self.tok_fn = tokenization.get_tokenization_fn(self.tokenizer)
-
-        self.sample_kwargs = {}
-        if self.cfg.encoding_scheme != "tokens":
-            self.sample_kwargs["with_dep_parser"] = self.cfg.add_dependency_info
-
-    def construct_graph(self, sample: utils.SAMPLE) -> graph.HeterogeneousDGLData:
+    def construct_input(self, sample: utils.SAMPLE) -> Union[torch.Tensor, dgl.DGLHeteroGraph]:
         self.cfg: SEDWordsConfig
-        if self.cfg.encoding_scheme == "whitespace_words":
-            data = graph.sequence_to_word_graph(
+        if self.cfg.data_scheme == "token_graph":
+            return graph.sequence_to_token_graph(
+                sample=sample
+            ).to_heterograph()
+        elif self.cfg.data_scheme == "word_graph":
+            return graph.sequence_to_word_graph(
                 sample=sample,
                 tokenizer=self.tokenizer,
                 dictionary=self.dictionary,
@@ -258,18 +346,18 @@ class SEDWords(DatasetVariant):
                 # add_ner_features=True,
                 # add_pos_tag_features=True,
                 add_dependency_info=self.cfg.add_dependency_info,
-                add_num_neighbors=self.num_neighbors,
-                token_fully_connected=self.cfg.token_fully_connected,
+                add_num_neighbors=self.cfg.index_num_neighbors if self.cfg.index is not None else None,
                 word_fully_connected=self.cfg.word_fully_connected,
+                token_fully_connected=self.cfg.token_fully_connected,
                 scheme="token_to_word"
-            )
-        elif self.cfg.encoding_scheme == "tokens":
-            data = graph.sequence_to_token_graph(
-                sample=sample
+            ).to_heterograph()
+        elif self.cfg.data_scheme == "tensor":
+            return torch.tensor(
+                utils.flatten(sample.tokens),
+                dtype=torch.long
             )
         else:
-            raise ValueError(f"Unknown encoding scheme {self.cfg.encoding_scheme}")
-        return data
+            raise ValueError(f"unknown data scheme {self.cfg.data_scheme}")
 
     def prepare_sequence(
             self,
@@ -282,22 +370,28 @@ class SEDWords(DatasetVariant):
     ]:
         self.cfg: SEDWordsConfig
 
-        input_sample, target_sequence = self._get_inputs(sequence, target_sequence, is_inference, **self.sample_kwargs)
-        input_sample = utils.sanitize_sample(input_sample, unk_token_id=self.tokenizer.token_to_id(tokenization.UNK))
+        input_sample, target_sequence = self._get_inputs(
+            sequence,
+            target_sequence,
+            is_inference
+        )
+        input_sample = utils.sanitize_sample(
+            input_sample,
+            unk_token_id=self.unk_token_id
+        )
+
+        info = {}
         if not is_inference:
             assert target_sequence is not None
             input_words = str(input_sample).split()
             target_words = target_sequence.split()
             assert len(input_words) == len(target_words), \
                 "expected input and target sequence to not differ in whitespaces"
-            label = [int(i != t) for i, t in zip(input_words, target_words)]
+            label = torch.tensor([int(i != t) for i, t in zip(input_words, target_words)], dtype=torch.long)
         else:
             label = None
 
-        data = self.construct_graph(input_sample)
-
-        info = {}
-        if self.cfg.encoding_scheme == "whitespace_words":
+        if self.cfg.data_scheme == "word_graph":
             info["groups"] = {
                 "word": [
                     {
@@ -306,47 +400,77 @@ class SEDWords(DatasetVariant):
                     }
                 ]
             }
-            if not is_inference:
-                info["label"] = {"word": label}
+            info["label"] = {
+                "word": label
+            }
 
-        elif self.cfg.encoding_scheme == "tokens":
-
+        elif self.cfg.data_scheme == "token_graph":
             if self.cfg.add_word_features:
                 # if we add word features, we first aggregate from tokens to words
                 # and then from word to whitespace_words
                 # we need to do this because the features are on the word level and not on the whitespace word level
                 word_groups, word_whitespace_groups = utils.get_word_and_word_whitespace_groups(input_sample)
-                stages = [
+                info["groups"] = {
+                    "token": [
+                        {
+                            "stage": "token_to_word",
+                            "groups": word_groups,
+                        },
+                        {
+                            "stage": "word_to_word_ws",
+                            "groups": word_whitespace_groups,
+                            "features": torch.tensor(
+                                utils.get_word_features(input_sample, self.dictionary), dtype=torch.float
+                            )
+                        }
+                    ]
+                }
+            else:
+                info["groups"] = {
+                    "token": [
+                        {
+                            "stage": "token_to_word_ws",
+                            "groups": utils.get_word_whitespace_groups(input_sample)
+                        }
+                    ]
+                }
+            info["label"] = {
+                "token": label
+            }
+
+        elif self.cfg.data_scheme == "tensor":
+            if self.cfg.add_word_features:
+                # first aggregate from tokens to words, add word features and then aggregate from words to
+                # whitespace words
+                word_groups, word_ws_groups = utils.get_word_and_word_whitespace_groups(input_sample)
+                info["groups"] = [
                     {
                         "stage": "token_to_word",
-                        "groups": word_groups,
+                        "groups": word_groups
                     },
                     {
                         "stage": "word_to_word_ws",
-                        "groups": word_whitespace_groups,
-                        "features": utils.get_word_features(input_sample, self.dictionary)
+                        "groups": word_ws_groups,
+                        # features are added before grouping so this is the correct stage
+                        "features": torch.tensor(
+                            utils.get_word_features(input_sample, self.dictionary), dtype=torch.float
+                        )
                     }
                 ]
-                info["groups"] = {
-                    "word": stages
-                }
-
             else:
-                stages = [
+                # just aggregate all tokens into whitespace word representations
+                info["groups"] = [
                     {
                         "stage": "token_to_word_ws",
                         "groups": utils.get_word_whitespace_groups(input_sample)
                     }
                 ]
+            info["label"] = label
 
-                info["groups"] = {
-                    "token": stages
-                }
+        else:
+            raise RuntimeError(f"unknown data scheme {self.cfg.data_scheme}")
 
-            if not is_inference:
-                info["label"] = {"token": label}
-
-        return data.to_heterograph(), info
+        return self.construct_input(input_sample), info
 
 
 @dataclass
@@ -482,78 +606,83 @@ class TokenizationRepairNMT(DatasetVariant):
 @dataclass
 class SECWordsNMTConfig(DatasetVariantConfig):
     type: DatasetVariants = DatasetVariants.SEC_WORDS_NMT
-    tokenizers: Dict[str, TokenizerConfig] = MISSING
-    noise: Any = MISSING
+
+    input_tokenizer: TokenizerConfig = MISSING
+    output_tokenizer: TokenizerConfig = MISSING
+
+    data_scheme: str = "tensor"  # one of {token_graph, word_graph, tensor}
+
     dictionary_file: Optional[str] = None
     add_word_features: bool = True
-    add_dependency_info: bool = True
+
+    # specific stuff for data_scheme word_graph
+    add_dependency_info: bool = False
     token_fully_connected: bool = False
     word_fully_connected: bool = True
-    encoding_scheme: str = "whitespace_words"
+    graph_scheme: str = "token_to_word"
     index: Optional[str] = None
+    index_num_neighbors: int = 5
 
 
 class SECWordsNMT(DatasetVariant):
     def __init__(self,
                  cfg: DatasetVariantConfig,
                  seed: int):
-        super().__init__(cfg, seed)
-        self.cfg: SECWordsNMTConfig
+        cfg: SECNMTConfig
+        self.input_tokenizer = get_tokenizer_from_config(cfg.input_tokenizer)
+        self.output_tokenizer = get_tokenizer_from_config(cfg.output_tokenizer)
 
-        self.input_tokenizer = get_tokenizer_from_config(self.cfg.tokenizers["input_tokenizer"])
-        self.output_tokenizer = get_tokenizer_from_config(self.cfg.tokenizers["output_tokenizer"])
-        if "word_tokenizer" in self.cfg.tokenizers:
-            self.word_tokenizer = get_tokenizer_from_config(self.cfg.tokenizers["word_tokenizer"])
-        else:
-            self.word_tokenizer = None
+        self.input_bos_token_id = self.input_tokenizer.token_to_id(tokenization.BOS)
+        self.input_eos_token_id = self.input_tokenizer.token_to_id(tokenization.EOS)
+        self.input_unk_token_id = self.input_tokenizer.token_to_id(tokenization.UNK)
 
-        self.pad_token_id = self.output_tokenizer.token_to_id(tokenization.PAD)
-        if self.cfg.dictionary_file is not None:
-            self.dictionary = io.dictionary_from_file(self.cfg.dictionary_file)
+        self.output_pad_token_id = self.output_tokenizer.token_to_id(tokenization.PAD)
+
+        if cfg.dictionary_file is not None:
+            self.dictionary = io.dictionary_from_file(cfg.dictionary_file)
         else:
             self.dictionary = None
 
-        if self.cfg.index is not None:
-            self.index = index.NNIndex(self.cfg.index)
-            self.num_neighbors = int(os.getenv("GNN_LIB_NUM_NEIGHBORS", 5))
-            self.neighbor_fn = index.get_neighbor_fn(self.index, self.num_neighbors)
+        tok_fn = tokenization.get_tokenization_fn(self.input_tokenizer)
+        if cfg.index is not None:
+            neighbor_index = index.NNIndex(cfg.index)
+            neighbor_fn = index.get_neighbor_fn(neighbor_index, cfg.index_num_neighbors)
         else:
-            self.neighbor_fn = None
-            self.num_neighbors = None
+            neighbor_fn = None
+        preprocessing_sample_kwargs = {}
+        if cfg.data_scheme == "word_graph":
+            preprocessing_sample_kwargs["with_dep_parser"] = cfg.add_dependency_info
 
-        self.noise = get_preprocessing_from_config(self.cfg.noise, seed)
-        self.noise_fn = self.noise.apply
+        super().__init__(cfg, seed, tok_fn, neighbor_fn, **preprocessing_sample_kwargs)
 
-        self.tok_fn = tokenization.get_tokenization_fn(self.input_tokenizer)
-
-        self.sample_kwargs = {}
-        if self.cfg.encoding_scheme != "tokens":
-            self.sample_kwargs["with_dep_parser"] = self.cfg.add_dependency_info
-
-    def construct_graph(self, sample: utils.SAMPLE) -> graph.HeterogeneousDGLData:
-        self.cfg: SECWordsNMTConfig
-        if self.cfg.encoding_scheme == "tokens":
-            data = graph.sequence_to_token_graph(
+    def construct_input(
+            self,
+            sample: utils.SAMPLE
+    ) -> Union[torch.Tensor, dgl.DGLHeteroGraph]:
+        self.cfg: SECNMTConfig
+        if self.cfg.data_scheme == "token_graph":
+            return graph.sequence_to_token_graph(
                 sample=sample
-            )
-        elif self.cfg.encoding_scheme == "whitespace_words":
-            data = graph.sequence_to_word_graph(
+            ).to_heterograph()
+        elif self.cfg.data_scheme == "word_graph":
+            return graph.sequence_to_word_graph(
                 sample=sample,
                 tokenizer=self.input_tokenizer,
-                word_tokenizer=self.word_tokenizer,
                 dictionary=self.dictionary,
                 add_word_features=self.cfg.add_word_features,
-                # add_ner_features=True,
-                # add_pos_tag_features=True,
                 add_dependency_info=self.cfg.add_dependency_info,
-                add_num_neighbors=self.num_neighbors,
+                add_num_neighbors=self.cfg.index_num_neighbors if self.cfg.index is not None else None,
                 token_fully_connected=self.cfg.token_fully_connected,
                 word_fully_connected=self.cfg.word_fully_connected,
-                scheme="token_to_word"
+                scheme=self.cfg.graph_scheme
+            ).to_heterograph()
+        elif self.cfg.data_scheme == "tensor":
+            return torch.tensor(
+                utils.flatten(sample.tokens),
+                dtype=torch.long
             )
         else:
-            raise ValueError(f"Unknown encoding scheme {self.cfg.encoding_scheme}")
-        return data
+            raise ValueError(f"unknown data scheme {self.cfg.data_scheme}")
 
     def prepare_sequence(
             self,
@@ -561,41 +690,45 @@ class SECWordsNMT(DatasetVariant):
             target_sequence: Optional[str] = None,
             is_inference: bool = False
     ) -> Tuple[
-        Union[dgl.DGLHeteroGraph, graph.HeterogeneousDGLData],
+        Union[torch.Tensor, dgl.DGLHeteroGraph],
         Dict[str, Any]
     ]:
         self.cfg: SECWordsNMTConfig
 
-        input_sample, target_sequence = self._get_inputs(sequence, target_sequence, is_inference,
-                                                         **self.sample_kwargs)
-        input_sample = utils.sanitize_sample(input_sample,
-                                             unk_token_id=self.input_tokenizer.token_to_id(tokenization.UNK))
+        input_sample, target_sequence = self._get_inputs(
+            sequence,
+            target_sequence,
+            is_inference
+        )
+        input_sample = utils.sanitize_sample(
+            input_sample,
+            unk_token_id=self.input_unk_token_id
+        )
+
+        input_words = str(input_sample).split()
         if not is_inference:
             assert target_sequence is not None
-            input_words = str(input_sample).split()
             target_words = target_sequence.split()
             assert len(input_words) == len(target_words)
             label = [
-                self.output_tokenizer.tokenize(word, add_bos_eos=True)
+                torch.tensor(self.output_tokenizer.tokenize(word, add_bos_eos=True), dtype=torch.long)
                 for word in target_words
             ]
         else:
             label = None
 
-        data = self.construct_graph(input_sample)
+        encoder_group_lengths = [0] * len(input_words)
+        word_ws_idx = 0
+        for tokens, word in zip(input_sample.tokens, input_sample.doc):
+            encoder_group_lengths[word_ws_idx] += len(tokens)
+            if word.whitespace_ == " ":
+                word_ws_idx += 1
 
-        if self.cfg.encoding_scheme == "whitespace_words":
-            info = {
-                "label": {"word": label},
-                "pad_token_id": {"word": self.pad_token_id}
-            }
-        else:
-            info = {
-                "label": {"token": label},
-                "pad_token_id": {"token": self.pad_token_id}
-            }
-
-        return data.to_heterograph(), info
+        return self.construct_input(input_sample), {
+            "encoder_group_lengths": encoder_group_lengths,
+            "label": label,
+            "pad_token_id": self.output_pad_token_id
+        }
 
 
 @dataclass
@@ -623,27 +756,30 @@ class SECNMT(DatasetVariant):
     def __init__(self,
                  cfg: DatasetVariantConfig,
                  seed: int):
-        self.cfg: SECNMTConfig
-        self.input_tokenizer = get_tokenizer_from_config(self.cfg.input_tokenizer)
-        self.output_tokenizer = get_tokenizer_from_config(self.cfg.output_tokenizer)
+        cfg: SECNMTConfig
+        self.input_tokenizer = get_tokenizer_from_config(cfg.input_tokenizer)
+        self.output_tokenizer = get_tokenizer_from_config(cfg.output_tokenizer)
 
+        self.input_bos_token_id = self.input_tokenizer.token_to_id(tokenization.BOS)
+        self.input_eos_token_id = self.input_tokenizer.token_to_id(tokenization.EOS)
         self.input_unk_token_id = self.input_tokenizer.token_to_id(tokenization.UNK)
+
         self.output_pad_token_id = self.output_tokenizer.token_to_id(tokenization.PAD)
 
-        if self.cfg.dictionary_file is not None:
-            self.dictionary = io.dictionary_from_file(self.cfg.dictionary_file)
+        if cfg.dictionary_file is not None:
+            self.dictionary = io.dictionary_from_file(cfg.dictionary_file)
         else:
             self.dictionary = None
 
         tok_fn = tokenization.get_tokenization_fn(self.input_tokenizer)
-        if self.cfg.index is not None:
-            neighbor_index = index.NNIndex(self.cfg.index)
-            neighbor_fn = index.get_neighbor_fn(neighbor_index, self.cfg.index_num_neighbors)
+        if cfg.index is not None:
+            neighbor_index = index.NNIndex(cfg.index)
+            neighbor_fn = index.get_neighbor_fn(neighbor_index, cfg.index_num_neighbors)
         else:
             neighbor_fn = None
         preprocessing_sample_kwargs = {}
-        if self.cfg.data_scheme == "word_graph":
-            preprocessing_sample_kwargs["with_dep_parser"] = self.cfg.add_dependency_info
+        if cfg.data_scheme == "word_graph":
+            preprocessing_sample_kwargs["with_dep_parser"] = cfg.add_dependency_info
 
         super().__init__(cfg, seed, tok_fn, neighbor_fn, **preprocessing_sample_kwargs)
 
@@ -652,11 +788,11 @@ class SECNMT(DatasetVariant):
             sample: utils.SAMPLE
     ) -> Union[torch.Tensor, dgl.DGLHeteroGraph]:
         self.cfg: SECNMTConfig
-        if self.cfg.data_scheme == "tokens":
+        if self.cfg.data_scheme == "token_graph":
             return graph.sequence_to_token_graph(
                 sample=sample
             ).to_heterograph()
-        elif self.cfg.data_scheme == "words":
+        elif self.cfg.data_scheme == "word_graph":
             return graph.sequence_to_word_graph(
                 sample=sample,
                 tokenizer=self.input_tokenizer,
@@ -669,7 +805,10 @@ class SECNMT(DatasetVariant):
                 scheme=self.cfg.graph_scheme
             ).to_heterograph()
         elif self.cfg.data_scheme == "tensor":
-            return torch.tensor(utils.flatten(sample.tokens), dtype=torch.long)
+            return torch.tensor(
+                [self.input_bos_token_id] + utils.flatten(sample.tokens) + [self.input_eos_token_id],
+                dtype=torch.long
+            )
         else:
             raise ValueError(f"unknown data scheme {self.cfg.data_scheme}")
 
@@ -679,7 +818,7 @@ class SECNMT(DatasetVariant):
             target_sequence: Optional[str] = None,
             is_inference: bool = False
     ) -> Tuple[
-        Union[dgl.DGLHeteroGraph, graph.HeterogeneousDGLData],
+        Union[torch.Tensor, dgl.DGLHeteroGraph],
         Dict[str, Any]
     ]:
         self.cfg: SECNMTConfig
@@ -696,7 +835,7 @@ class SECNMT(DatasetVariant):
 
         if not is_inference:
             assert target_sequence is not None
-            label = self.output_tokenizer.tokenize(target_sequence, add_bos_eos=True)
+            label = torch.tensor(self.output_tokenizer.tokenize(target_sequence, add_bos_eos=True), dtype=torch.long)
         else:
             label = None
 

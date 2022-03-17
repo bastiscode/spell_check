@@ -11,7 +11,7 @@ from gnn_lib.utils import tokenization_repair
 
 
 class TokenizationRepairNMT(Graph2Seq):
-    expected_model = models.ModelForGraph2Seq  # type: ignore
+    expected_models = models.ModelForGraph2Seq  # type: ignore
 
     def __init__(self, variant_cfg: variants.DatasetVariantConfig, checkpoint_dir: str, seed: int):
         super().__init__(variant_cfg, checkpoint_dir, seed)

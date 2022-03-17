@@ -3,9 +3,10 @@ data:
 
 output_dir: ${oc.env:GNN_LIB_DATA_DIR}/processed/bookcorpus_paragraphs_sed_sequence
 seed: 22
-limit: ${oc.env:GNN_LIB_LIMIT,35000000}
+limit: ${oc.env:GNN_LIB_LIMIT,100000000}
 
 max_length: 512
 tokenizer: ${from_file:tokenizer/bpe_default.yaml}
-spell_check_index_dir: ${oc.env:GNN_LIB_DATA_DIR}/spell_check_index/ctx_0_ned_string
-noise: ${from_file:preprocessing/mixed_sed_sequence.yaml}
+preprocessing: ${from_file:preprocessing/mixed_noise_sed_sequence.yaml}
+
+with_dep_parser: true
