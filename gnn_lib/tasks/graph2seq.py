@@ -78,14 +78,15 @@ class Graph2Seq(tasks.Task):
                       model_output: Any,
                       stats: Dict[str, data_containers.DataContainer],
                       step: int,
-                      log_every: int) -> None:
-        text_container = stats["text"]
-        if step % max(log_every // text_container.max_samples, 1) != 0 or \
-                len(text_container.samples) >= text_container.max_samples:
+                      total_steps: int) -> None:
+        text_container: data_containers.MultiTextContainer = stats["text"]  # type: ignore
+        if (
+                step % max(total_steps // text_container.max_samples, 1) != 0
+                or len(text_container.samples) >= text_container.max_samples
+        ):
             return
 
-        token_tokenizer: tokenization.Tokenizer = model.tokenizers["token"]
-        output_tokenizer: tokenization.Tokenizer = model.tokenizers["output_tokenizer"]
+        token_tokenizer: tokenization.Tokenizer = model.input_tokenizers["token"]
 
         token_ids = task_utils.get_token_ids_from_graphs(inputs["g"])
         input_str = token_tokenizer.de_tokenize(token_ids[0])
@@ -94,8 +95,8 @@ class Graph2Seq(tasks.Task):
         label_ids = labels["labels"][0, :length].tolist()
         output_ids = torch.argmax(model_output[0, :length], dim=1).tolist()
 
-        labels_str = output_tokenizer.de_tokenize(label_ids)
-        pred_str = output_tokenizer.de_tokenize(output_ids)
+        labels_str = model.output_tokenizer.de_tokenize(label_ids)
+        pred_str = model.output_tokenizer.de_tokenize(output_ids)
 
         # this multiline string looks silly but has to be that way, since tensorboard formats text as markdown
         text_container.add(

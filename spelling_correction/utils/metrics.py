@@ -1,11 +1,8 @@
 import collections
-import os.path
 from typing import Optional, Callable, Tuple, List, Any, Set, Dict
 
 import torch
 from Levenshtein import distance as ed
-
-from gnn_lib.utils import io
 
 
 def check_same_length(*args: Any) -> None:
@@ -129,12 +126,11 @@ def evaluate(groundtruth_file: str,
         for gt, p, ipt in zip(gtf, pf, inf):
             # filter for "correct" sentences, that are not all capitalized
             # ipt_words = ipt.strip().split()
-            # if all(i.isupper() for i in ipt_words):  # or len(ipt_words) < 2 or not ipt_words[0].istitle():
+            # if all(i.isupper() for i in ipt_words) or len(ipt_words) < 2 or not ipt_words[0].istitle():
             #     continue
-            #
 
-            if len(inputs) > 350:
-                break
+            # if len(inputs) >= 200:
+            #     break
 
             groundtruths.append(gt.strip())
             predictions.append(p.strip())

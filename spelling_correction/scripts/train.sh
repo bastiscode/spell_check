@@ -10,7 +10,8 @@
 
 master_port=${GNN_LIB_MASTER_PORT:-33334}
 
-if [[ -n $SLURM_JOB_ID ]] ; then
+force_local=${GNN_LIB_FORCE_LOCAL:-false}
+if [[ -n $SLURM_JOB_ID && $force_local == false ]] ; then
   script_dir=$(scontrol show job $SLURM_JOBID | awk -F= '/Command=/{print $2}')
   is_local=false
 else
@@ -27,7 +28,7 @@ if [[ $is_local == true ]]; then
   experiment_dir=$workspace/local_experiments
 
   master_addr="127.0.0.1"
-  world_size=1
+  world_size=$(python -c "import torch; print(torch.cuda.device_count())")
 else
   export MPLCONFIGDIR=$TMPDIR/matplotlib
   export GNN_LIB_DISABLE_TQDM=true
@@ -85,7 +86,7 @@ if [[ $is_local == true ]]; then
   echo "Starting local training with cmd $train_cmd"
   torchrun \
     --nnodes=1 \
-    --nproc_per_node=1 \
+    --nproc_per_node=$world_size \
     $train_cmd
 else
   echo "Starting Slurm training with cmd $train_cmd"

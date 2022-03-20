@@ -1,6 +1,5 @@
 import enum
 import json
-import multiprocessing as mp
 import os
 import pickle
 import random
@@ -14,6 +13,7 @@ import lz4.frame
 import numpy as np
 import omegaconf
 from omegaconf import OmegaConf
+from torch import multiprocessing as mp
 from torch.utils import data
 from torch.utils.data import ConcatDataset
 from tqdm import tqdm
@@ -40,11 +40,12 @@ def _decompress(data: bytes) -> Any:
     return pickle.loads(lz4.frame.decompress(data))
 
 
-def write_lmdb(files: List[str],
-               lmdb_path: str,
-               preprocess_cfg: PreprocessConfig,
-               num_files_processed: mp.Value,
-               tqdm_disable: bool = True) -> None:
+def write_lmdb(
+        file_queue: mp.Queue,
+        lmdb_path: str,
+        preprocess_cfg: PreprocessConfig,
+        tqdm_disable: bool = True
+) -> None:
     logger = common.get_logger("LMDB_WRITER")
     logger.info(f"Opened LMDB at {lmdb_path}")
     env = utils.open_lmdb(lmdb_path, write=True)
@@ -103,7 +104,12 @@ def write_lmdb(files: List[str],
         sequences_batch = []
         target_sequences_batch = []
 
-    for i, filepath in enumerate(files):
+    while not file_queue.empty():
+        try:
+            filepath = file_queue.get(timeout=5)
+        except Exception:
+            continue
+
         with open(filepath, "r", encoding="utf8") as f:
             for line in tqdm(f, desc=f"processing {filepath}", total=io.line_count(filepath), disable=tqdm_disable):
                 json_obj = json.loads(line)
@@ -115,11 +121,6 @@ def write_lmdb(files: List[str],
 
                 if len(sequences_batch) % batch_size == 0:
                     add_batch()
-
-        num_files_processed.value += 1
-        logger.info(
-            f"Processed and wrote {i+1}/{len(files)} files to LMDB {lmdb_path} (total={num_files_processed.value})"
-        )
 
     # add remaining elements
     add_batch()
@@ -181,64 +182,47 @@ def preprocess_dataset(preprocess_cfg: PreprocessConfig) -> None:
     temp_dir = tempfile.mkdtemp()
     logger.info(f"Created temporary directory {temp_dir} to store intermediate files")
 
-    ctx = mp.get_context("spawn")
-    num_files_processed: mp.Value = ctx.Value("i", 0)
-
-    processes = []
+    # fill queue with files
+    file_queue = mp.Queue()
+    for file in subset_files:
+        file_queue.put(file)
 
     num_processes = min(int(os.environ.get("GNN_LIB_NUM_PROCESSES", min(8, len(os.sched_getaffinity(0))))), len(files))
-    files_per_process = len(files) / num_processes
-    files_per_process_ceil = int(np.ceil(files_per_process))
-    files_per_process_floor = int(np.floor(files_per_process))
-    file_chunks = []
-    file_idx = 0
-    for i in range(num_processes):
-        if i < int(np.ceil((files_per_process - files_per_process_floor) * num_processes)):
-            file_chunks.append(files[file_idx:file_idx + files_per_process_ceil])
-            file_idx += files_per_process_ceil
-        else:
-            file_chunks.append(files[file_idx:file_idx + files_per_process_floor])
-            file_idx += files_per_process_floor
-
-    assert sum(len(chunk) for chunk in file_chunks) == len(files)
 
     try:
+        processes = []
         lmdb_files = []
-        for i, file_chunk in enumerate(file_chunks):
+        for i in range(num_processes):
             lmdb_path = os.path.join(temp_dir, f"lmdb_{i}")
             lmdb_files.append(lmdb_path)
-            p = ctx.Process(
+            p = mp.Process(
                 target=write_lmdb,
                 args=(
-                    file_chunk,
+                    file_queue,
                     lmdb_path,
-                    preprocess_cfg,
-                    num_files_processed
+                    preprocess_cfg
                 )
             )
             p.start()
             processes.append(p)
 
-            logger.info(f"Started writer process {p.pid} on {len(file_chunk)} files")
+            logger.info(f"Started writer process {p.pid}")
 
         start = time.perf_counter()
-        log_every = max(len(files) // 1000, 1)
-        last_num_files_processed = 0
-        # start_timeout = time.perf_counter()
-        while (
-                num_files_processed.value < len(files)
-                # and time.perf_counter() - start_timeout <= int(os.environ.get("GNN_LIB_TIMEOUT", 600))
-        ):
-            if num_files_processed.value <= last_num_files_processed:
+        file_queue_size = file_queue.qsize()
+        while not file_queue.empty():
+            current_queue_size = file_queue.qsize()
+            if current_queue_size >= file_queue_size:
                 time.sleep(1)
                 continue
 
-            # start_timeout = time.perf_counter()
-            last_num_files_processed = num_files_processed.value
-            if num_files_processed.value % log_every == 0:
-                end = time.perf_counter()
-                logger.info(f"Processed {num_files_processed.value}/{len(files)} files: "
-                            f"{common.eta_minutes((end - start) / 60, num_files_processed.value, len(files))}")
+            file_queue_size = current_queue_size
+            end = time.perf_counter()
+            files_processed = len(files) - file_queue_size
+            logger.info(
+                f"{file_queue_size}/{len(files)} left in queue: "
+                f"{common.eta_minutes((end - start) / 60, files_processed, len(files))}"
+            )
 
         for p in processes:
             p.join()
@@ -285,7 +269,8 @@ class PreprocessedDataset(data.Dataset):
         rand = np.random.default_rng(self.seed)
         self.indices = rand.permutation(len(self))
 
-        self.variant = get_variant_from_config(variant_cfg, seed)
+        self.variant_cfg = variant_cfg
+        self.variant = get_variant_from_config(self.variant_cfg, self.seed)
 
     def __getstate__(self) -> Dict[str, Any]:
         state = self.__dict__
@@ -293,6 +278,7 @@ class PreprocessedDataset(data.Dataset):
         state["txns"] = None
         state["lengths"] = None
         state["indices"] = None
+        state["variant"] = None
         return state
 
     def __setstate__(self, state: Dict[str, Any]) -> None:
@@ -309,6 +295,7 @@ class PreprocessedDataset(data.Dataset):
 
         rand = np.random.default_rng(self.seed)
         self.indices = rand.permutation(len(self))
+        self.variant = get_variant_from_config(self.variant_cfg, self.seed)
 
     def __getitem__(self, idx: int) -> Tuple[dgl.DGLHeteroGraph, Dict]:
         idx = self.indices[idx]

@@ -20,9 +20,11 @@ class DatasetVariants(enum.IntEnum):
     SED_SEQUENCE = 1
     SED_WORDS = 2
     TOKENIZATION_REPAIR = 3
-    TOKENIZATION_REPAIR_NMT = 4
-    SEC_WORDS_NMT = 5
-    SEC_NMT = 6
+    SEC_WORDS_NMT = 4
+    SEC_NMT = 5
+    SED_PLUS_SEC = 6
+    TOKENIZATION_REPAIR_PLUS_SED = 6
+    TOKENIZATION_REPAIR_PLUS_SED_PLUS_SEC = 7
 
 
 @dataclass
@@ -69,9 +71,10 @@ class DatasetVariant:
             is_inference: bool = False
     ) -> Tuple[utils.SAMPLE, Optional[str]]:
         if is_inference:
+            assert target_sequence is None, "target sequence must be None during inference"
             return (
-                (sequence, target_sequence) if isinstance(sequence, utils.SAMPLE)
-                else (self.preprocessing_fn([sequence], [target_sequence], is_inference)[0][0], None)
+                (sequence, None) if isinstance(sequence, utils.SAMPLE)
+                else (self.preprocessing_fn([sequence], [None], is_inference)[0][0], None)
             )
         else:
             if isinstance(sequence, utils.SAMPLE) and target_sequence is not None:
@@ -101,7 +104,7 @@ class SEDSequenceConfig(DatasetVariantConfig):
 
     tokenizer: TokenizerConfig = MISSING
 
-    data_scheme: str = "sequence_graph"
+    data_scheme: str = "tensor"
 
     add_word_features: bool = True
     dictionary_file: Optional[str] = None
@@ -208,7 +211,7 @@ class SEDSequence(DatasetVariant):
         if not is_inference:
             assert target_sequence is not None
             label = int(str(input_sample) != target_sequence)
-            info["label"] = label
+            info["label"] = torch.tensor([label], dtype=torch.long)
 
         if self.cfg.data_scheme == "word_graph":
             info["groups"] = {
@@ -235,7 +238,7 @@ class SEDSequence(DatasetVariant):
                         {
                             "stage": "word_to_sequence",
                             "groups": sequence_groups,
-                            "features": utils.get_word_features(input_sample, self.dictionary)
+                            "features": utils.get_word_features(input_sample.doc, self.dictionary)
                         }
                     ]
                 }
@@ -268,7 +271,7 @@ class SEDSequence(DatasetVariant):
                         "stage": "word_to_sequence",
                         "groups": sequence_groups,
                         # features are added before grouping so this is the correct stage
-                        "features": utils.get_word_features(input_sample, self.dictionary)
+                        "features": utils.get_word_features(input_sample.doc, self.dictionary)
                     }
                 ]
             else:
@@ -292,7 +295,7 @@ class SEDWordsConfig(DatasetVariantConfig):
 
     tokenizer: TokenizerConfig = MISSING
 
-    data_scheme: str = "word_graph"
+    data_scheme: str = "tensor"
 
     dictionary_file: Optional[str] = None
     add_word_features: bool = True
@@ -419,9 +422,7 @@ class SEDWords(DatasetVariant):
                         {
                             "stage": "word_to_word_ws",
                             "groups": word_whitespace_groups,
-                            "features": torch.tensor(
-                                utils.get_word_features(input_sample, self.dictionary), dtype=torch.float
-                            )
+                            "features": utils.get_word_features(input_sample.doc, self.dictionary)
                         }
                     ]
                 }
@@ -452,9 +453,7 @@ class SEDWords(DatasetVariant):
                         "stage": "word_to_word_ws",
                         "groups": word_ws_groups,
                         # features are added before grouping so this is the correct stage
-                        "features": torch.tensor(
-                            utils.get_word_features(input_sample, self.dictionary), dtype=torch.float
-                        )
+                        "features": utils.get_word_features(input_sample.doc, self.dictionary)
                     }
                 ]
             else:
@@ -476,131 +475,63 @@ class SEDWords(DatasetVariant):
 @dataclass
 class TokenizationRepairConfig(DatasetVariantConfig):
     type: DatasetVariants = DatasetVariants.TOKENIZATION_REPAIR
-    noise: Any = MISSING
-    encoding_scheme: str = "chars"
+
+    data_scheme: str = "tensor"
+
+    tokenization_level: str = "char"  # one of {char, byte}
 
 
 class TokenizationRepair(DatasetVariant):
     def __init__(self, cfg: DatasetVariantConfig, seed: int):
-        super().__init__(cfg, seed)
+        cfg: TokenizationRepairConfig
+
+        if cfg.tokenization_level == "char":
+            self.tokenizer = tokenization.CharTokenizer()
+        elif cfg.tokenization_level == "byte":
+            self.tokenizer = tokenization.ByteTokenizer()
+        else:
+            raise ValueError(f"unknown tokenization level {cfg.tokenization_level}, must be one of {{char, byte}}")
+
+        tok_fn = tokenization.get_tokenization_fn(self.tokenizer, True)
+
+        super().__init__(cfg, seed, tok_fn)
+
+    def construct_input(self, sample: utils.SAMPLE) -> Union[dgl.DGLHeteroGraph, torch.Tensor]:
         self.cfg: TokenizationRepairConfig
-        self.char_tokenizer = tokenization.CharTokenizer()
-
-        self.noise = get_preprocessing_from_config(self.cfg.noise, seed)
-        self.noise_fn = self.noise.apply
-
-        self.tok_fn = tokenization.get_tokenization_fn(self.char_tokenizer, True)
-
-    def construct_graph(self, sample: utils.SAMPLE) -> graph.HeterogeneousDGLData:
-        self.cfg: TokenizationRepairConfig
-        if self.cfg.encoding_scheme == "chars":
-            data = graph.sequence_to_token_graph(
-                sample=sample
+        if self.cfg.data_scheme == "tensor":
+            return torch.tensor(
+                utils.flatten(sample.tokens), dtype=torch.long
             )
         else:
-            raise ValueError(f"Unknown encoding scheme {self.cfg.encoding_scheme}")
-        return data
+            raise ValueError(f"Unknown data scheme {self.cfg.data_scheme}")
 
     def prepare_sequence(
             self,
             sequence: Union[str, utils.SAMPLE],
-            target_sequence: Union[str, utils.SAMPLE] = None,
-            is_inference: bool = False
-    ) -> Tuple[
-        Union[dgl.DGLHeteroGraph, graph.HeterogeneousDGLData],
-        Dict[str, Any]
-    ]:
-        self.cfg: TokenizationRepairConfig
-
-        input_sample, target_sequence = self._get_inputs(sequence, target_sequence, is_inference)
-        input_sample = utils.sanitize_sample(input_sample,
-                                             unk_token_id=self.char_tokenizer.token_to_id(tokenization.UNK))
-        if not is_inference:
-            assert target_sequence is not None
-            # get the whitespace operations to turn input_sample into target_sequence
-            label = tokenization_repair.get_whitespace_operations(
-                str(input_sample), target_sequence
-            )
-        else:
-            label = None
-
-        data = self.construct_graph(input_sample)
-
-        if not is_inference:
-            if self.cfg.encoding_scheme == "chars":
-                assert len(label) == data.get_num_nodes()["token"]
-                for n in range(data.get_num_nodes()["token"]):
-                    data.add_node_data(
-                        node_type="token",
-                        node=n,
-                        feat_dict={"label": label[n]}
-                    )
-            else:
-                raise RuntimeError("should not happen")
-
-        return data.to_heterograph(), {}
-
-
-@dataclass
-class TokenizationRepairNMTConfig(DatasetVariantConfig):
-    type: DatasetVariants = DatasetVariants.TOKENIZATION_REPAIR_NMT
-    noise: Any = MISSING
-    encoding_scheme: str = "chars"
-
-
-class TokenizationRepairNMT(DatasetVariant):
-    def __init__(self, cfg: DatasetVariantConfig, seed: int):
-        super().__init__(cfg, seed)
-        self.cfg: TokenizationRepairNMTConfig
-        self.char_tokenizer = tokenization.CharTokenizer()
-        self.tok_tokenizer = tokenization.TokenizationRepairTokenizer()
-        self.bos_token_id = self.tok_tokenizer.token_to_id(tokenization.BOS)
-        self.eos_token_id = self.tok_tokenizer.token_to_id(tokenization.EOS)
-        self.pad_token_id = self.tok_tokenizer.token_to_id(tokenization.PAD)
-
-        self.noise = get_preprocessing_from_config(self.cfg.noise, seed)
-        self.noise_fn = self.noise.apply
-
-        self.tok_fn = tokenization.get_tokenization_fn(self.char_tokenizer, True)
-
-    def construct_graph(self, sample: utils.SAMPLE) -> graph.HeterogeneousDGLData:
-        self.cfg: TokenizationRepairNMTConfig
-        if self.cfg.encoding_scheme == "chars":
-            data = graph.sequence_to_token_graph(
-                sample=sample
-            )
-        else:
-            raise ValueError(f"Unknown encoding scheme {self.cfg.encoding_scheme}")
-        return data
-
-    def prepare_sequence(
-            self,
-            sequence: str,
             target_sequence: Optional[str] = None,
             is_inference: bool = False
     ) -> Tuple[
         Union[dgl.DGLHeteroGraph, graph.HeterogeneousDGLData],
         Dict[str, Any]
     ]:
+        self.cfg: TokenizationRepairConfig
+
         input_sample, target_sequence = self._get_inputs(sequence, target_sequence, is_inference)
-        input_sample = utils.sanitize_sample(input_sample,
-                                             unk_token_id=self.char_tokenizer.token_to_id(tokenization.UNK))
+        input_sample = utils.sanitize_sample(
+            input_sample,
+            unk_token_id=self.tokenizer.token_to_id(tokenization.UNK)
+        )
+
+        info = {}
         if not is_inference:
             assert target_sequence is not None
-            # 0 -> keep, 1 -> insert, 2 -> delete, 3 -> unk, 4 -> bos, 5 -> eos, 6 -> pad
+            # get the whitespace operations to turn input_sample into target_sequence
             label = tokenization_repair.get_whitespace_operations(
                 str(input_sample), target_sequence
             )
-            label = [self.bos_token_id] + label + [self.eos_token_id]
-        else:
-            label = None
+            info["label"] = torch.tensor(label, dtype=torch.long)
 
-        data = self.construct_graph(input_sample)
-
-        return data.to_heterograph(), {
-            "label": label,
-            "pad_token_id": self.pad_token_id
-        }
+        return self.construct_input(input_sample), info
 
 
 @dataclass
@@ -705,17 +636,19 @@ class SECWordsNMT(DatasetVariant):
             unk_token_id=self.input_unk_token_id
         )
 
+        info = {"pad_token_id": self.output_pad_token_id}
         input_words = str(input_sample).split()
         if not is_inference:
             assert target_sequence is not None
             target_words = target_sequence.split()
             assert len(input_words) == len(target_words)
             label = [
-                torch.tensor(self.output_tokenizer.tokenize(word, add_bos_eos=True), dtype=torch.long)
+                self.output_tokenizer.tokenize(word, add_bos_eos=True)
                 for word in target_words
             ]
-        else:
-            label = None
+            label_splits = [len(labels) for labels in label]
+            info["label"] = torch.tensor(utils.flatten(label), dtype=torch.long)
+            info["label_splits"] = label_splits
 
         encoder_group_lengths = [0] * len(input_words)
         word_ws_idx = 0
@@ -723,12 +656,9 @@ class SECWordsNMT(DatasetVariant):
             encoder_group_lengths[word_ws_idx] += len(tokens)
             if word.whitespace_ == " ":
                 word_ws_idx += 1
+        info["encoder_group_lengths"] = torch.tensor(encoder_group_lengths, dtype=torch.long)
 
-        return self.construct_input(input_sample), {
-            "encoder_group_lengths": encoder_group_lengths,
-            "label": label,
-            "pad_token_id": self.output_pad_token_id
-        }
+        return self.construct_input(input_sample), info
 
 
 @dataclass
@@ -833,16 +763,109 @@ class SECNMT(DatasetVariant):
             unk_token_id=self.input_unk_token_id
         )
 
+        info = {"pad_token_id": self.output_pad_token_id}
         if not is_inference:
             assert target_sequence is not None
             label = torch.tensor(self.output_tokenizer.tokenize(target_sequence, add_bos_eos=True), dtype=torch.long)
-        else:
-            label = None
+            info["label"] = label
 
-        return self.construct_input(input_sample), {
-            "label": label,
-            "pad_token_id": self.output_pad_token_id
-        }
+        return self.construct_input(input_sample), info
+
+
+@dataclass
+class TokenizationRepairPlusSEDConfig(TokenizationRepairConfig):
+    type: DatasetVariants = DatasetVariants.TOKENIZATION_REPAIR_PLUS_SED
+
+    dictionary_file: Optional[str] = None
+    add_word_features: bool = True
+
+
+class TokenizationRepairPlusSED(TokenizationRepair):
+    def __init__(self, cfg: DatasetVariantConfig, seed: int):
+        super().__init__(cfg, seed)
+        self.cfg: TokenizationRepairPlusSEDConfig
+
+        if self.cfg.dictionary_file is not None:
+            self.dictionary = io.dictionary_from_file(self.cfg.dictionary_file)
+        else:
+            self.dictionary = None
+
+    def prepare_sequence(
+            self,
+            sequence: Union[str, utils.SAMPLE],
+            target_sequence: Optional[str] = None,
+            is_inference: bool = False
+    ) -> Tuple[
+        Union[dgl.DGLHeteroGraph, graph.HeterogeneousDGLData],
+        Dict[str, Any]
+    ]:
+        self.cfg: TokenizationRepairPlusSEDConfig
+
+        input_sample, target_sequence = self._get_inputs(sequence, target_sequence, is_inference)
+        input_sample = utils.sanitize_sample(
+            input_sample,
+            unk_token_id=self.tokenizer.token_to_id(tokenization.UNK)
+        )
+
+        info = {}
+        if not is_inference:
+            assert target_sequence is not None
+            # get the whitespace operations to turn input_sample into target_sequence
+            tokenization_repair_label = tokenization_repair.get_whitespace_operations(
+                str(input_sample), target_sequence
+            )
+
+            assert "org_sequence" in input_sample.info
+            org_words = input_sample.info["org_sequence"].split()
+            target_words = target_sequence.split()
+            assert len(target_words) == len(org_words)
+
+            info["tokenization_repair_label"] = torch.tensor(tokenization_repair_label, dtype=torch.long)
+            repaired_words, repaired_doc = utils.tokenize_words(target_sequence, return_doc=True)
+            info["word_groups"] = [
+                {
+                    "stage": "char_to_word",
+                    "groups": utils.get_character_groups_from_repaired_doc(list(str(input_sample)), repaired_doc)
+                }
+            ]
+            word_ws_groups = [0] * len(target_words)
+            word_ws_idx = 0
+            for word in repaired_doc:
+                word_ws_groups[word_ws_idx] += 1
+                if word.whitespace_ == " ":
+                    word_ws_idx += 1
+
+            info["word_ws_groups"] = [
+                {
+                    "stage": "word_to_word_ws",
+                    "groups": word_ws_groups,
+                    "features": utils.get_word_features(repaired_doc, self.dictionary)
+                }
+            ]
+
+            info["sed_label"] = torch.tensor(
+                [
+                    int(org_word != target_word)
+                    for org_word, target_word in zip(org_words, target_words)
+                ], dtype=torch.long
+            )
+
+        return self.construct_input(input_sample), info
+
+
+@dataclass
+class TokenizationRepairPlusSEDPlusSECConfig(TokenizationRepairPlusSEDConfig):
+    type: DatasetVariants = DatasetVariants.TOKENIZATION_REPAIR_PLUS_SED_PLUS_SEC
+
+
+@dataclass
+class SEDPlusSECConfig(DatasetVariantConfig):
+    type: DatasetVariants = DatasetVariants.SED_PLUS_SEC
+
+    data_scheme: str = "tensor"
+
+    dictionary_file: Optional[str] = None
+    add_word_features: bool = True
 
 
 def get_variant_from_config(
@@ -859,14 +882,20 @@ def get_variant_from_config(
     elif variant_type == DatasetVariants.TOKENIZATION_REPAIR:
         cfg = OmegaConf.structured(TokenizationRepairConfig(**cfg))
         return TokenizationRepair(cfg, seed)
-    elif variant_type == DatasetVariants.TOKENIZATION_REPAIR_NMT:
-        cfg = OmegaConf.structured(TokenizationRepairNMTConfig(**cfg))
-        return TokenizationRepairNMT(cfg, seed)
     elif variant_type == DatasetVariants.SEC_WORDS_NMT:
         cfg = OmegaConf.structured(SECWordsNMTConfig(**cfg))
         return SECWordsNMT(cfg, seed)
     elif variant_type == DatasetVariants.SEC_NMT:
         cfg = OmegaConf.structured(SECNMTConfig(**cfg))
         return SECNMT(cfg, seed)
+    elif variant_type == DatasetVariants.TOKENIZATION_REPAIR_PLUS_SED:
+        cfg = OmegaConf.structured(TokenizationRepairPlusSEDConfig(**cfg))
+        return TokenizationRepairPlusSED(cfg, seed)
+    elif variant_type == DatasetVariants.TOKENIZATION_REPAIR_PLUS_SED_PLUS_SEC:
+        cfg = OmegaConf.structured(TokenizationRepairPlusSEDPlusSECConfig(**cfg))
+        return TokenizationRepairPlusSED(cfg, seed)
+    elif variant_type == DatasetVariants.SED_PLUS_SEC:
+        cfg = OmegaConf.structured(SEDPlusSECConfig(**cfg))
+        return SEDPlusSEC(cfg, seed)
     else:
         raise ValueError(f"Unknown variant {cfg.type.name}")

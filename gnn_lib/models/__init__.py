@@ -3,10 +3,9 @@ from dataclasses import dataclass
 from typing import Optional, Dict, Tuple, List, Any, Union
 
 import dgl
-import numpy as np
 import omegaconf
-from omegaconf import MISSING
 import torch
+from omegaconf import MISSING
 from torch import nn
 
 from gnn_lib.data import tokenization
@@ -18,16 +17,18 @@ from gnn_lib.utils import TENSOR_INPUT, BATCH, DATA_INPUT, to
 
 
 class Models(enum.IntEnum):
-    # graph based models (GNNs)
+    # graph based models (Graph neural networks)
     MODEL_FOR_GRAPH_CLASSIFICATION = 1
     MODEL_FOR_MULTI_NODE_CLASSIFICATION = 2
     MODEL_FOR_GRAPH2SEQ = 3
     MODEL_FOR_MULTI_NODE2SEQ = 4
     # tensor based models (Standard architectures like CNN, LSTM and Transformer)
-    MODEL_FOR_TOKEN_CLASSIFICATION = 5  # equivalent to multi node classification
-    MODEL_FOR_SEQ2SEQ = 6  # equivalent to graph2seq
-    MODEL_FOR_TOKEN2SEQ = 7  # equivalent to multi node2seq
-    MODEL_FOR_SEQUENCE_CLASSIFICATION = 8  # equivalent to graph classification
+    MODEL_FOR_TOKEN_CLASSIFICATION = 5  # analog to multi node classification
+    MODEL_FOR_SEQ2SEQ = 6  # analog to graph2seq
+    MODEL_FOR_TOKEN2SEQ = 7  # analog to multi node2seq
+    MODEL_FOR_SEQUENCE_CLASSIFICATION = 8  # analog to graph classification
+
+    MODEL_FOR_TOKENIZATION_REPAIR_PLUS = 9
 
 
 class GNNs(enum.IntEnum):
@@ -378,7 +379,7 @@ class ModelForMultiNodeClassification(GraphModel):
             num_features=self.cfg.node_hidden_dim,
             num_classes=self.cfg.num_classes,
             num_additional_features={
-                node_type: {stage["stage"]: len(stage["features"][0]) for stage in stages if "features" in stage}
+                node_type: {stage["stage"]: stage["features"].shape[1] for stage in stages if "features" in stage}
                 for node_type, stages in sample_inputs.info["groups"][0].items()
             },
             aggregation={
@@ -567,21 +568,19 @@ class ModelForMultiNode2Seq(GraphModel, GraphEncoderMixin):
                        sum(len(lengths) for lengths in decoder_lengths)
                 decoder_positions = []
                 for encoder_positions, lengths in zip(aligned_encoder_positions, decoder_lengths):
-                    lengths = lengths.cpu().numpy()
-                    encoder_positions = encoder_positions.cpu().numpy()
                     encoder_positions_plus_lengths = encoder_positions + lengths
-                    upper_indices = np.cumsum(lengths, 0)
-                    lower_indices = np.concatenate([[0], upper_indices[:-1]])
+                    upper_indices = torch.cumsum(lengths, 0)
+                    lower_indices = torch.cat([torch.tensor([0]), upper_indices[:-1]])
 
-                    positions = np.zeros((upper_indices[-1],), dtype=int)
+                    positions = torch.zeros(upper_indices[-1], dtype=torch.long)
                     for idx_lower, idx_upper, range_lower, range_upper in zip(
                             lower_indices,
                             upper_indices,
                             encoder_positions,
                             encoder_positions_plus_lengths
                     ):
-                        positions[idx_lower:idx_upper] = np.arange(range_lower, range_upper)
-                    decoder_positions.append(torch.from_numpy(positions))
+                        positions[idx_lower:idx_upper] = torch.arange(range_lower, range_upper)
+                    decoder_positions.append(positions)
                 decoder_positions = pad(decoder_positions).to(g.device)
             else:
                 decoder_positions = None
@@ -598,7 +597,7 @@ class ModelForMultiNode2Seq(GraphModel, GraphEncoderMixin):
             decoder_mask = torch.stack([
                 utils.square_causal_block_mask(
                     decoder_inputs.shape[1],
-                    dec_lengths.cpu().numpy(),
+                    dec_lengths,
                     device=g.device
                 ) for dec_lengths in decoder_lengths
             ])
@@ -609,8 +608,8 @@ class ModelForMultiNode2Seq(GraphModel, GraphEncoderMixin):
                     utils.rectangular_block_mask(
                         decoder_inputs.shape[1],
                         encoder_outputs[enc_node_type].shape[1],
-                        dec_lengths.cpu().numpy(),
-                        lengths.cpu().numpy(),
+                        dec_lengths,
+                        lengths,
                         device=g.device
                     ) for lengths, dec_lengths in
                     zip(enc_lengths, decoder_lengths)
@@ -717,8 +716,8 @@ class ModelForToken2Seq(TensorModel, TensorEncoderMixin, DecoderMixin):
             self,
             x: DATA_INPUT,
             decoder_inputs: Optional[DATA_INPUT] = None,
-            decoder_group_lengths: Optional[List[List[int]]] = None,
-            encoder_group_lengths: Optional[List[List[int]]] = None,
+            decoder_group_lengths: Optional[List[torch.Tensor]] = None,
+            encoder_group_lengths: Optional[List[torch.Tensor]] = None,
             **kwargs: Any
     ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
         assert decoder_inputs is not None
@@ -728,7 +727,6 @@ class ModelForToken2Seq(TensorModel, TensorEncoderMixin, DecoderMixin):
 
         decoder_lengths = [len(t) for t in decoder_inputs]
         decoder_inputs = to(utils.pad(decoder_inputs, self.output_pad_token_id).long(), self.device)
-
         decoder_masks = []
         encoder_masks = []
         decoder_positions = []
@@ -737,11 +735,12 @@ class ModelForToken2Seq(TensorModel, TensorEncoderMixin, DecoderMixin):
                 torch.cat(
                     [
                         torch.arange(enc_position, enc_position + dec_length)
-                        for enc_position, dec_length in zip([0] + list(np.cumsum(enc_lengths))[:-1], dec_lengths)
+                        for enc_position, dec_length
+                        in zip(torch.cat([torch.tensor([0]), torch.cumsum(enc_lengths, dim=0)[:-1]]), dec_lengths)
                     ]
                 )
             )
-            assert len(decoder_positions[-1]) == sum(dec_lengths)
+            assert len(decoder_positions[-1]) == dec_lengths.sum()
 
             decoder_masks.append(
                 utils.square_causal_block_mask(
@@ -907,7 +906,7 @@ class ModelForSequenceClassification(TensorModel):
 
         super().__init__(sample_inputs, cfg, device)
 
-    def build_embedding(self, sample_input: TENSOR_INPUT) -> embedding.TensorEmbedding:
+    def build_embedding(self, sample_input: DATA_INPUT) -> embedding.TensorEmbedding:
         self.cfg: ModelForSequenceClassificationConfig
         return embedding.get_embedding_from_config(
             self.cfg.embedding,
@@ -917,7 +916,7 @@ class ModelForSequenceClassification(TensorModel):
             padding_idx=self.pad_token_id
         )
 
-    def build_encoder(self, sample_input: TENSOR_INPUT) -> nn.Module:
+    def build_encoder(self, sample_input: DATA_INPUT) -> nn.Module:
         self.cfg: ModelForSequenceClassificationConfig
         return encoders.Transformer(
             in_dim=self.cfg.hidden_dim,
@@ -928,18 +927,18 @@ class ModelForSequenceClassification(TensorModel):
 
     def build_head(self, sample_input: BATCH) -> heads.TensorGroupHead:
         self.cfg: ModelForSequenceClassificationConfig
-        _, sample_info = sample_input
+        additional_features = {}
+        aggregation = {}
+        if "groups" in sample_input.info:
+            for stage in sample_input.info["groups"][0]:
+                if "features" in stage:
+                    additional_features[stage["stage"]] = stage["features"].shape[1]
+                aggregation[stage["stage"]] = stage.get("aggregation", "mean")
         return heads.TensorGroupHead(
             hidden_dim=self.cfg.hidden_dim,
             num_classes=self.cfg.num_classes,
-            num_additional_features={
-                stage["stage"]: len(stage["features"][0])
-                for stage in sample_info["groups"][0] if "features" in stage
-            },
-            aggregation={
-                stage["stage"]: stage.get("aggregation", "mean")
-                for stage in sample_info["groups"][0]
-            }
+            num_additional_features=additional_features,
+            aggregation=aggregation
         )
 
     def forward(
@@ -948,10 +947,9 @@ class ModelForSequenceClassification(TensorModel):
             **kwargs: Any
     ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
         assert all(t.ndim == 1 for t in x)
-        x = to(x, self.device)
-
+        
         lengths = [len(t) for t in x]
-        x = utils.pad(x, self.pad_token_id).long()
+        x = to(utils.pad(x, self.pad_token_id).long(), self.device)
         padding_mask = utils.padding_mask(x, lengths)
 
         x = self.embedding(x)
@@ -984,7 +982,7 @@ class ModelForTokenClassification(TensorModel):
 
         super().__init__(sample_inputs, cfg, device)
 
-    def build_embedding(self, sample_input: TENSOR_INPUT) -> embedding.TensorEmbedding:
+    def build_embedding(self, sample_input: DATA_INPUT) -> embedding.TensorEmbedding:
         self.cfg: ModelForTokenClassificationConfig
         return embedding.get_embedding_from_config(
             self.cfg.embedding,
@@ -994,7 +992,7 @@ class ModelForTokenClassification(TensorModel):
             padding_idx=self.pad_token_id
         )
 
-    def build_encoder(self, sample_input: TENSOR_INPUT) -> nn.Module:
+    def build_encoder(self, sample_input: DATA_INPUT) -> nn.Module:
         self.cfg: ModelForTokenClassificationConfig
         return encoders.Transformer(
             in_dim=self.cfg.hidden_dim,
@@ -1005,17 +1003,18 @@ class ModelForTokenClassification(TensorModel):
 
     def build_head(self, sample_input: BATCH) -> heads.TensorGroupHead:
         self.cfg: ModelForTokenClassificationConfig
+        additional_features = {}
+        aggregation = {}
+        if "groups" in sample_input.info:
+            for stage in sample_input.info["groups"][0]:
+                if "features" in stage:
+                    additional_features[stage["stage"]] = stage["features"].shape[1]
+                aggregation[stage["stage"]] = stage.get("aggregation", "mean")
         return heads.TensorGroupHead(
             hidden_dim=self.cfg.hidden_dim,
             num_classes=self.cfg.num_classes,
-            num_additional_features={
-                stage["stage"]: len(stage["features"][0])
-                for stage in sample_input.info["groups"][0] if "features" in stage
-            },
-            aggregation={
-                stage["stage"]: stage.get("aggregation", "mean")
-                for stage in sample_input.info["groups"][0]
-            }
+            num_additional_features=additional_features,
+            aggregation=aggregation
         )
 
     def forward(
@@ -1024,14 +1023,144 @@ class ModelForTokenClassification(TensorModel):
             **kwargs: Any
     ) -> Tuple[List[torch.Tensor], Dict[str, torch.Tensor]]:
         assert all(t.ndim == 1 for t in x)
-        x = to(x, self.device)
-
+        
         lengths = [len(t) for t in x]
-        x = utils.pad(x, self.pad_token_id).long()
+        x = to(utils.pad(x, self.pad_token_id).long(), self.device)
         padding_mask = utils.padding_mask(x, lengths)
 
         x = self.embedding(x)
         x = self.encoder(x, padding_mask=padding_mask)
+        x = [x[i, :l] for i, l in enumerate(lengths)]
+        output = self.head(x, **kwargs)
+        return output, {}
+
+
+@dataclass
+class ModelForTokenizationRepairPlusConfig(TensorModelConfig):
+    type: Models = Models.MODEL_FOR_TOKENIZATION_REPAIR_PLUS
+
+    input_type: str = "char"  # one of {char, byte}
+    # one of {tokenization_repair_plus_sed, tokenization_repair_plus_sed_plus_sec}
+    output_type: str = "tokenization_repair_plus_sed"
+
+    embedding: TensorEmbeddingConfig = MISSING
+    dropout: float = 0.1
+    num_input_layers: int = MISSING
+    num_word_layers: int = MISSING
+
+    # special args when output_type is tokenization_repair_plus_sed_plus_sec
+    sec_tokenizer: Optional[TokenizerConfig] = None
+    num_sec_layers: int = MISSING
+
+
+class ModelForTokenizationRepairPlus(TensorModel):
+    def __init__(
+            self,
+            sample_inputs: BATCH,
+            cfg: ModelForTokenizationRepairPlusConfig,
+            device: torch.device
+    ) -> None:
+        assert cfg.output_type in {"tokenization_repair_plus_sed", "tokenization_repair_plus_sed_plus_sec"}
+
+        if cfg.input_type == "char":
+            self.input_tokenizer = tokenization.CharTokenizer()
+        elif cfg.input_type == "byte":
+            self.input_tokenizer = tokenization.ByteTokenizer()
+        else:
+            raise ValueError(f"unknown input type {cfg.input_type}, must be one of {{char, byte}}")
+
+        self.input_pad_token_id = self.input_tokenizer.token_to_id(tokenization.PAD)
+
+        if cfg.output_type == "tokenization_repair_plus_sed_plus_sec":
+            assert cfg.sec_tokenizer is not None
+            self.sec_tokenizer = get_tokenizer_from_config(cfg.sec_tokenizer)
+            self.sec_pad_token_id = self.sec_tokenizer.token_to_id(tokenization.PAD)
+
+        super().__init__(sample_inputs, cfg, device)
+
+    def build_embedding(self, sample_input: DATA_INPUT) -> embedding.TensorEmbedding:
+        self.cfg: ModelForTokenClassificationConfig
+        return embedding.get_embedding_from_config(
+            self.cfg.embedding,
+            sample_input,
+            hidden_dim=self.cfg.hidden_dim,
+            num_embeddings=self.input_tokenizer.vocab_size,
+            padding_idx=self.input_pad_token_id
+        )
+
+    def build_encoder(self, sample_input: DATA_INPUT) -> nn.ModuleDict:
+        self.cfg: ModelForTokenizationRepairPlusConfig
+        encoder_dict = nn.ModuleDict({
+            self.cfg.input_type: encoders.Transformer(
+                in_dim=self.cfg.hidden_dim,
+                hidden_dim=self.cfg.hidden_dim,
+                dropout=self.cfg.dropout,
+                num_layers=self.cfg.num_input_layers
+            ),
+            "word": encoders.Transformer(
+                in_dim=self.cfg.hidden_dim,
+                hidden_dim=self.cfg.hidden_dim,
+                dropout=self.cfg.dropout,
+                num_layers=self.cfg.num_word_layers
+            )
+        })
+        return encoder_dict
+
+    def build_head(self, sample_input: BATCH) -> nn.ModuleDict:
+        self.cfg: ModelForTokenizationRepairPlusConfig
+
+        sed_additional_features = {}
+        sed_aggregation = {}
+        assert "word_ws_groups" in sample_input.info
+        for stage in sample_input.info["word_ws_groups"][0]:
+            if "features" in stage:
+                sed_additional_features[stage["stage"]] = stage["features"].shape[1]
+            sed_aggregation[stage["stage"]] = stage.get("aggregation", "mean")
+
+        heads_dict = nn.ModuleDict({
+            "tokenization_repair": heads.TensorGroupHead(
+                hidden_dim=self.cfg.hidden_dim,
+                num_classes=3,
+                num_additional_features={},
+                aggregation={}
+            ),
+            "sed": heads.TensorGroupHead(
+                hidden_dim=self.cfg.hidden_dim,
+                num_classes=2,
+                num_additional_features=sed_additional_features,
+                aggregation=sed_aggregation
+            )
+        })
+        if self.cfg.output_type == "tokenization_repair_plus_sed_plus_sec":
+            heads_dict["sec"] = heads.TransformerDecoderHead(
+                contexts=[self.cfg.input_type, "word"],
+                pad_token_id=self.sec_pad_token_id,
+                max_length=512,
+                hidden_dim=self.cfg.hidden_dim,
+                num_outputs=self.sec_tokenizer.vocab_size,
+                dropout=self.cfg.dropout,
+                num_layers=self.cfg.num_sec_layers
+            )
+        return heads_dict
+
+    def forward(
+            self,
+            x: DATA_INPUT,
+            word_groups: Optional[int] = None,
+            word_ws_groups: Optional[int] = None,
+            **kwargs: Any
+    ) -> Tuple[Dict[str, Any], Dict[str, torch.Tensor]]:
+        self.cfg: ModelForTokenizationRepairPlusConfig
+        
+        assert word_groups is not None and word_ws_groups is not None
+        assert all(t.ndim == 1 for t in x)
+        
+        lengths = [len(t) for t in x]
+        x = to(utils.pad(x, self.input_pad_token_id).long(), self.device)
+        padding_mask = utils.padding_mask(x, lengths)
+
+        x = self.embedding(x)
+        x = self.encoder[self.cfg.input_type](x, padding_mask=padding_mask)
         x = [x[i, :l] for i, l in enumerate(lengths)]
         output = self.head(x, **kwargs)
         return output, {}

@@ -6,7 +6,7 @@ from torch.nn import functional as F
 from gnn_lib import tasks, models
 from gnn_lib.modules import utils
 from gnn_lib.tasks import utils as task_utils
-from gnn_lib.utils import data_containers, BATCH
+from gnn_lib.utils import data_containers, BATCH, to
 from gnn_lib.utils.distributed import DistributedDevice
 
 
@@ -27,7 +27,7 @@ class SequenceClassification(tasks.Task):
                                    batch: BATCH,
                                    device: DistributedDevice) -> Tuple[Dict[str, Any], Any]:
         # extract labels from info dict
-        labels = torch.cat(batch.info.pop("label")).to(device.device, non_blocking=True)
+        labels = to(torch.cat(batch.info.pop("label")), device.device)
 
         return {"x": batch.data, **batch.info}, labels
 
@@ -38,7 +38,7 @@ class SequenceClassification(tasks.Task):
         return F.cross_entropy(model_output, labels) + sum(additional_losses.values())
 
     def _update_stats(self,
-                      model: models.ModelForMultiNodeClassification,
+                      model: models.ModelForSequenceClassification,
                       inputs: Dict[str, Any],
                       labels: torch.Tensor,
                       model_output: torch.Tensor,

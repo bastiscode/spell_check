@@ -8,8 +8,6 @@ from gnn_lib.tasks.multi_node2seq import MultiNode2Seq
 
 
 class GraphSECWordsNMT(MultiNode2Seq):
-    expected_models = models.ModelForMultiNode2Seq  # type: ignore
-
     @torch.inference_mode()
     def inference(
             self,

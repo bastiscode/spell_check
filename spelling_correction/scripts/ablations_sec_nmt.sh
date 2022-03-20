@@ -9,11 +9,11 @@ cd "$workspace" || exit 1
 # some defaults which stay the same across ablations
 export GNN_LIB_EPOCHS=1
 export GNN_LIB_HIDDEN_DIM=512
-export GNN_LIB_NUM_LAYERS=6
+export GNN_LIB_NUM_ENCODER_LAYERS=6
 export GNN_LIB_NUM_DECODER_LAYERS=6
 export GNN_LIB_LOG_PER_EPOCH=200
 export GNN_LIB_EVAL_PER_EPOCH=20
-export GNN_LIB_DATA_LIMIT=50000000
+export GNN_LIB_DATA_LIMIT=100000000
 export GNN_LIB_LR=0.0001
 export GNN_LIB_WEIGHT_DECAY=0.01
 export GNN_LIB_MIXED_PRECISION=true
@@ -22,7 +22,7 @@ export GNN_LIB_MASTER_PORT=$(python -c "import random; print(random.randrange(10
 ablations_type=${ABLATIONS_TYPE:-"ABLATIONS_TYPE is not defined"}
 
 if [[ $ablations_type == "transformer" ]]; then
-  config="$config_dir/sec_nmt_transformer_paragraphs.yaml"
+  config="$config_dir/sec_nmt_transformer.yaml"
   rel_config=$(realpath "$config" --relative-to "$workspace")
   echo "Starting ablation with config $(realpath "$config" --relative-to "$config_dir")"
   export GNN_LIB_EXPERIMENT_NAME="transformer_sec_nmt"

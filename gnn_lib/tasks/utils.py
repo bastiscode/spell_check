@@ -69,9 +69,12 @@ class EMA:
         self.ema_factor = ema_factor
         self.one_minus_ema_factor = 1 - ema_factor
 
-    def update(self):
+    def update(self, overwrite: bool = False):
         for ema_param, model_param in zip(self.ema_model.parameters(), self.model.parameters()):
-            ema_param.mul_(self.ema_factor).add_(model_param.data, alpha=self.one_minus_ema_factor)
+            if overwrite:
+                ema_param.data = model_param.data
+            else:
+                ema_param.mul_(self.ema_factor).add_(model_param.data, alpha=self.one_minus_ema_factor)
 
         for ema_buffer, model_buffer in zip(self.ema_model.buffers(), self.model.buffers()):
             ema_buffer.data = model_buffer.data

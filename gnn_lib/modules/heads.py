@@ -114,8 +114,7 @@ class MultiNodeClassificationGroupHead(GraphHead):
                 ),
                 groups=node_type_groups,
                 additional_feature_encoders=self.additional_features[node_type],
-                aggregations=self.aggregation[node_type],
-                device=g.device
+                aggregations=self.aggregation[node_type]
             )
             outputs[node_type] = self.clf[node_type](torch.cat(grouped_feats, dim=0))
 
@@ -166,8 +165,7 @@ class TensorGroupHead(nn.Module):
                 grouped_feats=x,
                 groups=groups,
                 additional_feature_encoders=self.additional_features,
-                aggregations=self.aggregation,
-                device=next(self.parameters()).device
+                aggregations=self.aggregation
             )
         return list(torch.split(self.clf(torch.cat(x, dim=0)), [len(t) for t in x]))
 

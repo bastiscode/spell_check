@@ -1,3 +1,4 @@
 type: ADAMW
 lr: ${oc.env:GNN_LIB_LR,0.0001}
 weight_decay: ${oc.env:GNN_LIB_WEIGHT_DECAY,0.001}
+zero_redundancy: true

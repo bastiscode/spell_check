@@ -1,3 +1,4 @@
+import copy
 import enum
 import hashlib
 import json
@@ -35,7 +36,7 @@ def realistic_edits(
         return word
 
 
-def corrupt_sequence(
+def corrupt_words(
         words: List[str],
         doc: Doc,
         edit_token_p: float,
@@ -121,29 +122,33 @@ def corrupt_whitespace(
         iw_p: float,
         dw_p: float,
         no_ws_p: float,
+        full_ws_p: float,
         rand: np.random.Generator) -> str:
     if rand.random() < no_ws_p:
         return sequence.replace(" ", "")
+    elif rand.random() < no_ws_p + full_ws_p:
+        return " ".join(sequence.replace(" ", ""))
+    else:
+        new_s = ""
+        sequence_ptr = 0
+        while sequence_ptr < len(sequence):
+            char = sequence[sequence_ptr]
+            prev_char = sequence[sequence_ptr - 1] if sequence_ptr > 0 else " "
+            r = rand.random()
 
-    new_s = ""
-    sequence_ptr = 0
-    while sequence_ptr < len(sequence):
-        char = sequence[sequence_ptr]
-        prev_char = sequence[sequence_ptr - 1] if sequence_ptr > 0 else " "
-        r = rand.random()
-
-        if char == " ":
-            if r < dw_p:
-                pass
+            if char == " ":
+                if r < dw_p:
+                    pass
+                else:
+                    new_s += char
+            elif prev_char != " " and r < iw_p:
+                new_s += " " + char
             else:
                 new_s += char
-        elif prev_char != " " and r < iw_p:
-            new_s += " " + char
-        else:
-            new_s += char
 
-        sequence_ptr += 1
-    return new_s
+            sequence_ptr += 1
+
+        return new_s
 
 
 class Preprocessings(enum.IntEnum):
@@ -155,6 +160,7 @@ class Preprocessings(enum.IntEnum):
     SWITCH = 6
     NONE = 7
     SUBSTRING = 8
+    SAVE = 9
 
 
 @dataclass
@@ -174,10 +180,10 @@ class Preprocessing:
     def apply(
             self,
             sequences: List[str],
-            target_sequences: List[str],
+            target_sequences: List[Optional[str]],
             infos: List[Dict[str, Any]],
             is_inference: bool = False
-    ) -> Tuple[List[str], List[str], List[Dict[str, Any]]]:
+    ) -> Tuple[List[str], List[Optional[str]], List[Dict[str, Any]]]:
         raise NotImplementedError
 
     @property
@@ -187,139 +193,143 @@ class Preprocessing:
 
 
 @dataclass
-class ArtificialNoiseConfig(PreprocessingConfig):
-    type: Preprocessings = Preprocessings.ARTIFICIAL_NOISE
-
-    edit_token_p: float = MISSING
-    num_edits_p: float = MISSING
-    re_weight_edit_token_p: bool = True
+class SaveConfig(PreprocessingConfig):
+    save_sequence_as: Optional[str] = None
+    save_target_sequence_as: Optional[str] = None
 
 
-class ArtificialNoise(Preprocessing):
+class Save(Preprocessing):
     def apply(
             self,
             sequences: List[str],
-            target_sequences: List[str],
+            target_sequences: List[Optional[str]],
             infos: List[Dict[str, Any]],
             is_inference: bool = False
-    ) -> Tuple[List[str], List[str], List[Dict[str, Any]]]:
+    ) -> Tuple[List[str], List[Optional[str]], List[Dict[str, Any]]]:
+        self.cfg: SaveConfig
+        if is_inference or (self.cfg.save_sequence_as is None and self.cfg.save_target_sequence_as is None):
+            return sequences, target_sequences, infos
+
+        new_infos = []
+        for sequence, target_sequence, info in zip(sequences, target_sequences, infos):
+            info = copy.deepcopy(info)
+            if self.cfg.save_sequence_as is not None:
+                info[self.cfg.save_sequence_as] = sequence
+            if self.cfg.save_target_sequence_as is not None:
+                info[self.cfg.save_target_sequence_as] = target_sequence
+            new_infos.append(info)
+        return sequences, target_sequences, new_infos
+
+
+@dataclass
+class NoiseConfig(PreprocessingConfig):
+    edit_token_p: float = MISSING
+    re_weight_edit_token_p: bool = True
+
+
+class Noise(Preprocessing):
+    def _noise_words(self, words: List[str], doc: Doc) -> List[str]:
+        raise NotImplementedError
+
+    def apply(
+            self,
+            sequences: List[str],
+            target_sequences: List[Optional[str]],
+            infos: List[Dict[str, Any]],
+            is_inference: bool = False
+    ) -> Tuple[List[str], List[Optional[str]], List[Dict[str, Any]]]:
         if is_inference:
             return sequences, target_sequences, infos
-        self.cfg: ArtificialNoiseConfig
-        batch = utils.tokenize_words_batch(sequences, return_docs=True)
+
+        self.cfg: NoiseConfig
         batch_corrupted = [
-            corrupt_sequence(
-                words=words,
-                doc=doc,
-                edit_token_p=self.cfg.edit_token_p,
-                num_edits_p=self.cfg.num_edits_p,
-                corrupt_method="artificial",
-                rand=self.rand,
-                re_weight_edit_token_p=self.cfg.re_weight_edit_token_p
-            )
-            for words, doc in batch
+            utils.de_tokenize_words(self._noise_words(words, doc), doc)
+            for words, doc in utils.tokenize_words_batch(sequences, return_docs=True)
         ]
         return (
-            [utils.de_tokenize_words(words, doc) for words, (_, doc) in zip(batch_corrupted, batch)],
+            batch_corrupted,
             target_sequences,
             infos
         )
 
 
 @dataclass
-class RealisticNoiseConfig(PreprocessingConfig):
+class ArtificialNoiseConfig(NoiseConfig):
+    type: Preprocessings = Preprocessings.ARTIFICIAL_NOISE
+
+    num_edits_p: float = MISSING
+
+
+class ArtificialNoise(Noise):
+    def _noise_words(self, words: List[str], doc: Doc) -> List[str]:
+        self.cfg: ArtificialNoiseConfig
+        return corrupt_words(
+            words=words,
+            doc=doc,
+            edit_token_p=self.cfg.edit_token_p,
+            num_edits_p=self.cfg.num_edits_p,
+            corrupt_method="artificial",
+            rand=self.rand,
+            re_weight_edit_token_p=self.cfg.re_weight_edit_token_p
+        )
+
+
+@dataclass
+class RealisticNoiseConfig(NoiseConfig):
     type: Preprocessings = Preprocessings.REALISTIC_NOISE
 
-    edit_token_p: float = MISSING
     word_misspellings_file: str = MISSING
-    re_weight_edit_token_p: bool = True
 
 
-class RealisticNoise(Preprocessing):
+class RealisticNoise(Noise):
     def __init__(self, cfg: PreprocessingConfig, seed: int) -> None:
         super().__init__(cfg, seed)
         self.cfg: RealisticNoiseConfig
         with open(self.cfg.word_misspellings_file, "r", encoding="utf8") as inf:
             self.word_misspellings = json.load(inf)
 
-    def apply(
-            self,
-            sequences: List[str],
-            target_sequences: List[str],
-            infos: List[Dict[str, Any]],
-            is_inference: bool = False
-    ) -> Tuple[List[str], List[str], List[Dict[str, Any]]]:
-        if is_inference:
-            return sequences, target_sequences, infos
+    def _noise_words(self, words: List[str], doc: Doc) -> List[str]:
         self.cfg: RealisticNoiseConfig
-        batch = utils.tokenize_words_batch(sequences, return_docs=True)
-        batch_corrupted = [
-            corrupt_sequence(
-                words=words,
-                doc=doc,
-                edit_token_p=self.cfg.edit_token_p,
-                num_edits_p=0,  # not used for realistic noise
-                corrupt_method="realistic",
-                rand=self.rand,
-                word_misspellings=self.word_misspellings,
-                re_weight_edit_token_p=self.cfg.re_weight_edit_token_p
-            )
-            for words, doc in batch
-        ]
-        return (
-            [utils.de_tokenize_words(words, doc) for words, (_, doc) in zip(batch_corrupted, batch)],
-            target_sequences,
-            infos
+        return corrupt_words(
+            words=words,
+            doc=doc,
+            edit_token_p=self.cfg.edit_token_p,
+            num_edits_p=0,  # not used for realistic noise
+            corrupt_method="realistic",
+            rand=self.rand,
+            word_misspellings=self.word_misspellings,
+            re_weight_edit_token_p=self.cfg.re_weight_edit_token_p
         )
 
 
 @dataclass
-class MixedNoiseConfig(PreprocessingConfig):
+class MixedNoiseConfig(NoiseConfig):
     type: Preprocessings = Preprocessings.MIXED_NOISE
 
-    edit_token_p: float = MISSING
     artificial_num_edits_p: float = MISSING
     word_misspellings_file: str = MISSING
     artificial_p: float = MISSING
-    re_weight_edit_token_p: bool = True
 
 
-class MixedNoise(Preprocessing):
+class MixedNoise(Noise):
     def __init__(self, cfg: PreprocessingConfig, seed: int) -> None:
         super().__init__(cfg, seed)
         self.cfg: MixedNoiseConfig
         with open(self.cfg.word_misspellings_file, "r", encoding="utf8") as inf:
             self.word_misspellings = json.load(inf)
 
-    def apply(
-            self,
-            sequences: List[str],
-            target_sequences: List[str],
-            infos: List[Dict[str, Any]],
-            is_inference: bool = False
-    ) -> Tuple[List[str], List[str], List[Dict[str, Any]]]:
-        if is_inference:
-            return sequences, target_sequences, infos
+    def _noise_words(self, words: List[str], doc: Doc) -> List[str]:
         self.cfg: MixedNoiseConfig
-        batch = utils.tokenize_words_batch(sequences, return_docs=True)
-        batch_corrupted = [
-            corrupt_sequence(
-                words=words,
-                doc=doc,
-                num_edits_p=self.cfg.artificial_num_edits_p,
-                edit_token_p=self.cfg.edit_token_p,
-                corrupt_method="mixed",
-                rand=self.rand,
-                word_misspellings=self.word_misspellings,
-                mixed_artificial_p=self.cfg.artificial_p,
-                re_weight_edit_token_p=self.cfg.re_weight_edit_token_p
-            )
-            for words, doc in batch
-        ]
-        return (
-            [utils.de_tokenize_words(words, doc) for words, (_, doc) in zip(batch_corrupted, batch)],
-            target_sequences,
-            infos
+        return corrupt_words(
+            words=words,
+            doc=doc,
+            edit_token_p=self.cfg.edit_token_p,
+            num_edits_p=self.cfg.artificial_num_edits_p,
+            corrupt_method="mixed",
+            rand=self.rand,
+            word_misspellings=self.word_misspellings,
+            mixed_artificial_p=self.cfg.artificial_p,
+            re_weight_edit_token_p=self.cfg.re_weight_edit_token_p
         )
 
 
@@ -328,20 +338,22 @@ class WhitespaceNoiseConfig(PreprocessingConfig):
     type: Preprocessings = Preprocessings.WHITESPACE_NOISE
 
     no_whitespace_p: float = MISSING
+    full_whitespace_p: float = MISSING
     insert_whitespace_p: float = MISSING
     delete_whitespace_p: float = MISSING
 
 
-class Whitespace(Preprocessing):
+class WhitespaceNoise(Preprocessing):
     def apply(
             self,
             sequences: List[str],
-            target_sequences: List[str],
+            target_sequences: List[Optional[str]],
             infos: List[Dict[str, Any]],
             is_inference: bool = False
-    ) -> Tuple[List[str], List[str], List[Dict[str, Any]]]:
+    ) -> Tuple[List[str], List[Optional[str]], List[Dict[str, Any]]]:
         if is_inference:
             return sequences, target_sequences, infos
+
         self.cfg: WhitespaceNoiseConfig
         return (
             [
@@ -350,6 +362,7 @@ class Whitespace(Preprocessing):
                     iw_p=self.cfg.insert_whitespace_p,
                     dw_p=self.cfg.delete_whitespace_p,
                     no_ws_p=self.cfg.no_whitespace_p,
+                    full_ws_p=self.cfg.full_whitespace_p,
                     rand=self.rand
                 )
                 for sequence in sequences
@@ -380,13 +393,13 @@ class Chained(Preprocessing):
     def apply(
             self,
             sequences: List[str],
-            target_sequences: List[str],
+            target_sequences: List[Optional[str]],
             infos: List[Dict[str, Any]],
             is_inference: bool = False
-    ) -> Tuple[List[str], List[str], List[Dict[str, Any]]]:
+    ) -> Tuple[List[str], List[Optional[str]], List[Dict[str, Any]]]:
         for override, preprocessing in zip(self.overrides, self.preprocessing):
             sequences, target_sequences, infos = preprocessing.apply(sequences, target_sequences, infos, is_inference)
-            if override:
+            if override and not is_inference:
                 target_sequences = sequences
         return sequences, target_sequences, infos
 
@@ -412,10 +425,10 @@ class Switch(Preprocessing):
     def apply(
             self,
             sequences: List[str],
-            target_sequences: List[str],
+            target_sequences: List[Optional[str]],
             infos: List[Dict[str, Any]],
             is_inference: bool = False
-    ) -> Tuple[List[str], List[str], List[Dict[str, Any]]]:
+    ) -> Tuple[List[str], List[Optional[str]], List[Dict[str, Any]]]:
         idx = self.rand.choice(np.arange(len(self.preprocessing)), p=self.probabilities)
         return self.preprocessing[idx].apply(sequences, target_sequences, infos, is_inference)
 
@@ -424,33 +437,82 @@ class Switch(Preprocessing):
 class SubstringConfig(PreprocessingConfig):
     type: Preprocessings = Preprocessings.SUBSTRING
     max_length: int = 512
+    unit: str = "char"  # one of {byte, char}
 
 
 class Substring(Preprocessing):
+    def _get_start_end(
+            self,
+            sequence: str,
+            target_sequence: Optional[str],
+            is_inference: bool
+    ) -> Tuple[Tuple[int, int], Optional[Tuple[int, int]]]:
+        self.cfg: SubstringConfig
+        if self.cfg.unit == "char":
+            if is_inference:
+                start_idx, end_idx = 0, self.cfg.max_length
+            else:
+                start_idx = self.rand.integers(0, max(1, len(sequence) - self.cfg.max_length + 1))
+                end_idx = start_idx + self.cfg.max_length
+        elif self.cfg.unit == "byte":
+            byte_list = [list(char.encode("utf8")) for char in sequence]
+            num_bytes_cum = np.cumsum([len(byt) for byt in byte_list])
+            if is_inference:
+                start_idx = 0
+                end_idx = (num_bytes_cum <= self.cfg.max_length).sum()
+            else:
+                upper_idx = (
+                        num_bytes_cum + self.cfg.max_length
+                        <= num_bytes_cum[-1]
+                ).sum()
+                start_idx = self.rand.integers(0, max(1, upper_idx))
+                end_idx = (
+                        num_bytes_cum
+                        <= self.cfg.max_length + (0 if start_idx == 0 else num_bytes_cum[start_idx - 1])
+                ).sum()
+        else:
+            raise RuntimeError(f"unknown unit {self.cfg.unit}, must be one of {{char, byte}}")
+
+        if is_inference:
+            return (start_idx, end_idx), None
+        else:
+            target_start_idx, target_end_idx = utils.find_substring_ignoring_spaces(
+                sequence[start_idx: end_idx], target_sequence
+            )
+            return (start_idx, end_idx), (target_start_idx, target_end_idx)
+
     def apply(
             self,
             sequences: List[str],
-            target_sequences: List[str],
+            target_sequences: List[Optional[str]],
             infos: List[Dict[str, Any]],
             is_inference: bool = False
-    ) -> Tuple[List[str], List[str], List[Dict[str, Any]]]:
+    ) -> Tuple[List[str], List[Optional[str]], List[Dict[str, Any]]]:
         self.cfg: SubstringConfig
 
         substring_sequences = []
         substring_target_sequences = []
-        for sequence, target_sequence in zip(sequences, target_sequences):
-            assert len(sequence) == len(target_sequence), \
-                f"substring preprocessing should only be used for sequences that have the same length"
+        new_infos = []
+        for sequence, target_sequence, info in zip(sequences, target_sequences, infos):
+            (start, end), target_indices = self._get_start_end(sequence, target_sequence, is_inference)
+
+            substring_sequences.append(sequence[start: end])
             if is_inference:
-                sequence = sequence[:self.cfg.max_length]
-                target_sequence = target_sequence[:self.cfg.max_length]
+                substring_target_sequences.append(None)
             else:
-                start_idx = self.rand.integers(0, max(1, len(sequence) - self.cfg.max_length + 1))
-                sequence = sequence[start_idx:start_idx + self.cfg.max_length]
-                target_sequence = target_sequence[start_idx:start_idx + self.cfg.max_length]
-            substring_sequences.append(sequence)
-            substring_target_sequences.append(target_sequence)
-        return substring_sequences, substring_target_sequences, infos
+                target_start, target_end = target_indices
+                substring_target_sequences.append(target_sequence[target_start: target_end])
+                if "org_sequence" in info:
+                    info = copy.deepcopy(info)
+                    # filter original sequence
+                    num_words_before = target_sequence[:target_start].count(" ")
+                    num_words = target_sequence[target_start:target_end].count(" ")
+                    org_words = info["org_sequence"].split()
+                    info["org_sequence"] = " ".join(org_words[num_words_before:num_words_before + num_words + 1])
+                    assert len(info["org_sequence"].split()) == len(substring_target_sequences[-1].split())
+            new_infos.append(info)
+
+        return substring_sequences, substring_target_sequences, new_infos
 
 
 @dataclass
@@ -462,10 +524,10 @@ class NoPreprocessing(Preprocessing):
     def apply(
             self,
             sequences: List[str],
-            target_sequences: List[str],
+            target_sequences: List[Optional[str]],
             infos: List[Dict[str, Any]],
             is_inference: bool = False
-    ) -> Tuple[List[str], List[str], List[Dict[str, Any]]]:
+    ) -> Tuple[List[str], List[Optional[str]], List[Dict[str, Any]]]:
         return sequences, target_sequences, infos
 
 
@@ -482,7 +544,7 @@ def get_preprocessing_from_config(cfg: Union[PreprocessingConfig, omegaconf.Dict
         return MixedNoise(cfg, seed)
     elif preprocessing_type == Preprocessings.WHITESPACE_NOISE:
         cfg = OmegaConf.structured(WhitespaceNoiseConfig(**cfg))
-        return Whitespace(cfg, seed)
+        return WhitespaceNoise(cfg, seed)
     elif preprocessing_type == Preprocessings.CHAINED:
         cfg = OmegaConf.structured(ChainedConfig(**cfg))
         return Chained(cfg, seed)
@@ -495,6 +557,9 @@ def get_preprocessing_from_config(cfg: Union[PreprocessingConfig, omegaconf.Dict
     elif preprocessing_type == Preprocessings.SUBSTRING:
         cfg = OmegaConf.structured(SubstringConfig(**cfg))
         return Substring(cfg, seed)
+    elif preprocessing_type == Preprocessings.SAVE:
+        cfg = OmegaConf.structured(SaveConfig(**cfg))
+        return Save(cfg, seed)
     else:
         raise ValueError(f"Unknown noise {cfg.type.name}")
 
@@ -516,11 +581,12 @@ def get_preprocessing_fn(
     ) -> List[Tuple[SAMPLE, str]]:
         # initialize target sequences with target sequences if given else with input sequences
         target_sequences = [
-            target_sequence if target_sequence is not None else sequence
+            None if is_inference else target_sequence or sequence
             for sequence, target_sequence in zip(sequences, target_sequences)
         ]
         infos = [dict()] * len(sequences)
         sequences, target_sequences, infos = preprocessing.apply(sequences, target_sequences, infos, is_inference)
+
         samples = utils.prepare_samples(
             sequences,
             infos,

@@ -1,0 +1,12 @@
+data:
+  - ${oc.env:GNN_LIB_DATA_DIR}/cleaned/bookcorpus_paragraphs/train_files.txt
+
+output_dir: ${oc.env:GNN_LIB_DATA_DIR}/processed/bookcorpus_paragraphs_tokenization_repair_plus
+seed: 22
+limit: ${oc.env:GNN_LIB_LIMIT,100000000}
+
+max_length: 512
+tokenizer:
+  type: CHAR
+preprocessing: ${from_file:preprocessing/tokenization_repair_plus.yaml}
+respect_leading_whitespaces: true

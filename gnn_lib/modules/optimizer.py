@@ -2,6 +2,7 @@ from dataclasses import dataclass
 
 import omegaconf
 from torch import optim, nn
+from torch.distributed import optim as dist_optim
 
 from gnn_lib.modules import Optimizers
 
@@ -9,6 +10,7 @@ from gnn_lib.modules import Optimizers
 @dataclass
 class OptimizerConfig:
     type: Optimizers  # = MISSING
+    zero_redundancy: bool = False
     lr: float = 0.0001
 
 
@@ -37,27 +39,39 @@ def get_optimizer_from_config(
 ) -> optim.Optimizer:
     optim_type = Optimizers[cfg.type]
     if optim_type == Optimizers.ADAMW:
-        cfg = omegaconf.OmegaConf.structured(AdamWConfig(**cfg))
-        return optim.AdamW(
-            model.parameters(),
-            lr=cfg.lr,
-            weight_decay=cfg.weight_decay
-        )
+        cfg: AdamWConfig = omegaconf.OmegaConf.structured(AdamWConfig(**cfg))
+        optim_cls = optim.AdamW
+        kwargs = {
+            "lr": cfg.lr,
+            "weight_decay": cfg.weight_decay
+        }
     elif optim_type == Optimizers.ADAM:
         cfg = omegaconf.OmegaConf.structured(AdamConfig(**cfg))
-        return optim.Adam(
-            model.parameters(),
-            lr=cfg.lr,
-            weight_decay=cfg.weight_decay
-        )
+        optim_cls = optim.Adam
+        kwargs = {
+            "lr": cfg.lr,
+            "weight_decay": cfg.weight_decay
+        }
     elif optim_type == Optimizers.SGD:
-        cfg = omegaconf.OmegaConf.structured(SGDConfig(**cfg))
-        return optim.SGD(
-            model.parameters(),
-            lr=cfg.lr,
-            momentum=cfg.momentum,
-            weight_decay=cfg.weight_decay,
-            nesterov=True
-        )
+        cfg: SGDConfig = omegaconf.OmegaConf.structured(SGDConfig(**cfg))
+        optim_cls = optim.SGD
+        kwargs = {
+            "lr": cfg.lr,
+            "momentum": cfg.momentum,
+            "weight_decay": cfg.weight_decay,
+            "nesterov": True
+        }
     else:
         raise ValueError(f"Unknown optimizer type {optim_type}")
+
+    if cfg.zero_redundancy:
+        return dist_optim.ZeroRedundancyOptimizer(
+            params=model.parameters(),
+            optimizer_class=optim_cls,
+            **kwargs
+        )
+    else:
+        return optim_cls(
+            params=model.parameters(),
+            **kwargs
+        )

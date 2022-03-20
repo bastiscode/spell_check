@@ -55,14 +55,6 @@ class TestNLP:
         assert gnn_lib.data.utils.is_valid_sequence(sequence[0], min_length=min_length) == \
                (sequence[1] if len(sequence[0]) >= min_length else False)
 
-    @pytest.mark.parametrize("tokens", [
-        (["This", "is", "a", "test"], "This is a test"),
-        (["I", "have", "n't", "done", "this"], "I haven't done this"),
-        (["Sentence", "with", "punctuation", "!"], "Sentence with punctuation!"),
-    ])
-    def test_tokens_to_text(self, tokens: Tuple[List[str], str]) -> None:
-        assert gnn_lib.data.utils.tokens_to_text(tokens[0]) == tokens[1]
-
     @pytest.mark.parametrize("token", ["this", "Test", "something"])
     @pytest.mark.parametrize("include", [
         (0,),

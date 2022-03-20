@@ -1,6 +1,5 @@
-from typing import Union, List, Any
+from typing import List, Any
 
-import dgl
 import torch
 
 from gnn_lib import models
@@ -11,7 +10,7 @@ class GraphSECNMT(Graph2Seq):
     @torch.inference_mode()
     def inference(self,
                   model: models.ModelForGraph2Seq,
-                  inputs: Union[List[str], dgl.DGLHeteroGraph],
+                  inputs: List[str],
                   **kwargs: Any) -> List[List[str]]:
         assert isinstance(inputs, list) and isinstance(inputs[0], str)
         kwargs.update({

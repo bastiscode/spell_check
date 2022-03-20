@@ -1,4 +1,4 @@
-from typing import List, Any, Dict, Tuple
+from typing import List, Any, Dict, Tuple, Union
 
 import torch
 from torch.nn import functional as F
@@ -60,13 +60,15 @@ class Seq2Seq(tasks.Task):
                       model_output: Any,
                       stats: Dict[str, data_containers.DataContainer],
                       step: int,
-                      log_every: int) -> None:
+                      total_steps: int) -> None:
         sequence_length_container = stats["seq_length"]
         sequence_length_container.add([len(t) for t in inputs["x"]])
 
-        text_container = stats["text"]
-        if step % max(log_every // text_container.max_samples, 1) != 0 or \
-                len(text_container.samples) >= text_container.max_samples:
+        text_container: data_containers.MultiTextContainer = stats["text"]  # type: ignore
+        if (
+                step % max(total_steps // text_container.max_samples, 1) != 0
+                or len(text_container.samples) >= text_container.max_samples
+        ):
             return
 
         input_str = model.input_tokenizer.de_tokenize(inputs["x"][0].tolist())
@@ -91,27 +93,25 @@ class Seq2Seq(tasks.Task):
     @torch.inference_mode()
     def inference(self,
                   model: models.ModelForSeq2Seq,
-                  inputs: List[str],
+                  inputs: Union[BATCH, List[str]],
                   **kwargs: Any) -> List[List[str]]:
         self._check_model(model)
         model = model.eval()
 
         got_str_input = isinstance(inputs, list) and isinstance(inputs[0], str)
         if got_str_input:
-            tensors, infos = self.variant.prepare_sequences_for_inference(inputs)
+            batch = self.variant.prepare_sequences_for_inference(inputs)
         else:
-            tensors, infos = inputs
+            batch = inputs
 
-        output_tokenizer = model.tokenizers["output_tokenizer"]
-
-        encoder_inputs, encoder_padding_mask = model.pad_inputs(tensors)
+        encoder_inputs, encoder_padding_mask = model.pad_inputs(batch.data)
         encoder_outputs = model.encode(encoder_inputs, encoder_padding_mask)
 
         return inference.run_inference(
             model=model.head,
-            output_tokenizer=output_tokenizer,
+            output_tokenizer=model.output_tokenizer,
             encoder_outputs={"encoder_outputs": encoder_outputs},
-            encoder_lengths={"encoder_outputs": torch.tensor([len(t) for t in tensors], dtype=torch.long)},
+            encoder_lengths={"encoder_outputs": torch.tensor([len(t) for t in batch.data], dtype=torch.long)},
             max_length=512,
             **kwargs
         )

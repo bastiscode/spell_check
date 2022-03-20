@@ -29,17 +29,17 @@ class Token2Seq(tasks.Task):
         decoder_inputs = []
         decoder_labels = []
         decoder_group_lengths = []
-        for labels in batch.info.pop("label"):
+        for labels, splits in zip(batch.info.pop("label"), batch.info.pop("label_splits")):
             word_decoder_inputs = []
             word_decoder_labels = []
             word_decoder_lengths = []
-            for word_labels in labels:
+            for word_labels in torch.split(labels, splits):
                 word_decoder_inputs.append(word_labels[:-1])
                 word_decoder_labels.append(word_labels[1:])
                 word_decoder_lengths.append(len(word_labels) - 1)
             decoder_inputs.append(torch.cat(word_decoder_inputs))
             decoder_labels.append(torch.cat(word_decoder_labels))
-            decoder_group_lengths.append(word_decoder_lengths)
+            decoder_group_lengths.append(torch.tensor(word_decoder_lengths, dtype=torch.long))
 
         decoder_labels = to(utils.pad(decoder_labels, val=batch.info["pad_token_id"][0]).long(), device.device)
 
@@ -70,13 +70,15 @@ class Token2Seq(tasks.Task):
                       model_output: Any,
                       stats: Dict[str, data_containers.DataContainer],
                       step: int,
-                      log_every: int) -> None:
+                      total_steps: int) -> None:
         sequence_length_container = stats["seq_length"]
         sequence_length_container.add([len(t) for t in inputs["x"]])
 
-        text_container = stats["text"]
-        if step % max(log_every // text_container.max_samples, 1) != 0 or \
-                len(text_container.samples) >= text_container.max_samples:
+        text_container: data_containers.MultiTextContainer = stats["text"]  # type: ignore
+        if (
+                step % max(total_steps // text_container.max_samples, 1) != 0
+                or len(text_container.samples) >= text_container.max_samples
+        ):
             return
 
         input_str = model.input_tokenizer.de_tokenize(inputs["x"][0].tolist())

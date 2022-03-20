@@ -1,6 +1,8 @@
 type: CHAINED
 cfgs:
   - ${from_file:preprocessing/mixed_noise.yaml}
+  - type: SAVE
+    save_target_sequence_as: org_sequence
   - type: WHITESPACE_NOISE
     no_whitespace_p: 0.1
     full_whitespace_p: 0.1
@@ -10,6 +12,7 @@ cfgs:
     max_length: 512
     unit: char
 overrides:
-  - true
+  - false
+  - true # overriding target sequence after saving it
   - false
   - false

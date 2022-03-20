@@ -24,7 +24,8 @@ def remove_whitespace(sequence: str) -> str:
 
 def get_whitespace_operations(
         from_sequence: str,
-        to_sequence: str) -> List[int]:
+        to_sequence: str
+) -> List[int]:
     """
 
     Get the repair sequence that turns from_sequence into to_sequence
@@ -74,20 +75,6 @@ def get_whitespace_operations(
     assert len(repair_tokens) == len(from_sequence)
 
     return repair_tokens
-
-
-def separate_repair_tokens(sequence: str, repair_tokens: List[int]) -> Tuple[List[int], List[int]]:
-    char_repair_tokens = []
-    group_repair_tokens = []
-    assert len(sequence) == len(repair_tokens)
-    for char, repair_token in zip(sequence, repair_tokens):
-        if char != " ":
-            assert repair_token in {0, 1}
-            char_repair_tokens.append(repair_token)
-        else:
-            assert repair_token in {0, 2}
-            group_repair_tokens.append(int(repair_token > 0))
-    return char_repair_tokens, group_repair_tokens
 
 
 def repair_whitespace(

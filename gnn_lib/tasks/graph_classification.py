@@ -7,7 +7,7 @@ from torch.nn import functional as F
 from gnn_lib import tasks, models
 from gnn_lib.modules import utils
 from gnn_lib.tasks import utils as task_utils
-from gnn_lib.utils import data_containers, BATCH
+from gnn_lib.utils import data_containers, BATCH, to
 from gnn_lib.utils.distributed import DistributedDevice
 
 
@@ -16,21 +16,16 @@ class GraphClassification(tasks.Task):
 
     def _get_additional_stats(self, model: models.ModelForGraphClassification) -> \
             Dict[str, data_containers.DataContainer]:
-        stats = {
-            "accuracy": data_containers.AverageScalarContainer(name="accuracy"),
-            "f1_prec_rec": data_containers.F1PrecRecContainer(
-                name="fpr",
-                class_names={i: str(i) for i in range(model.cfg.num_classes)}
-            )
+        return {
+            "accuracy": data_containers.AverageScalarContainer(name="accuracy")
         }
-        return stats
 
     def _prepare_inputs_and_labels(self,
                                    batch: BATCH,
                                    device: DistributedDevice) -> Tuple[Dict[str, Any], Any]:
-        g, info = batch
-        labels = torch.tensor(info["label"], device=device.device, dtype=torch.long)
-        return {"g": g.to(device.device)}, labels
+        labels = to(torch.cat(batch.info.pop("label")), device.device)
+
+        return {"g": batch.data, **batch.info}, labels
 
     def _calc_loss(self,
                    labels: torch.Tensor,
@@ -48,13 +43,12 @@ class GraphClassification(tasks.Task):
                       total_steps: int) -> None:
         predictions = torch.argmax(model_output, dim=1)
         stats["accuracy"].add((labels == predictions).cpu())
-        stats["f1_prec_rec"].add((labels.cpu(), predictions.cpu()))
 
     @torch.inference_mode()
     def inference(
             self,
             model: models.ModelForGraphClassification,
-            inputs: Union[List[str], Tuple[dgl.DGLHeteroGraph, List[Dict[str, Any]]]],
+            inputs: Union[List[str], BATCH],
             **kwargs: Any
     ) -> List:
         self._check_model(model)
@@ -65,11 +59,11 @@ class GraphClassification(tasks.Task):
 
         got_str_input = isinstance(inputs, list) and isinstance(inputs[0], str)
         if got_str_input:
-            g, infos = self.variant.prepare_sequences_for_inference(inputs)
+            batch = self.variant.prepare_sequences_for_inference(inputs)
         else:
-            g, infos = inputs
+            batch = inputs
 
-        outputs, _ = model(g, **infos)
+        outputs, _ = model(batch.data, **batch.info)
 
         return_logits = kwargs.get("return_logits", False)
         if return_logits:

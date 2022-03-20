@@ -2,13 +2,16 @@ import argparse
 import datetime
 import os
 import pickle
+import signal
+import sys
 import time
 from typing import Optional
+import resource
 
-from omegaconf import OmegaConf
 import torch
-from torch import multiprocessing as mp
+from omegaconf import OmegaConf
 from torch import distributed as dist
+from torch import multiprocessing as mp
 from torch.backends import cudnn
 from torch.cuda import amp
 from torch.nn.parallel import DistributedDataParallel
@@ -28,9 +31,16 @@ from gnn_lib.utils.distributed import DistributedDevice, unwrap_ddp
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 
+def worker_init_fn(_: int) -> None:
+    mp.set_sharing_strategy("file_system")
+
+
 def train(args: argparse.Namespace, device: DistributedDevice) -> None:
     logger = common.get_logger("TRAIN")
     base_dir = os.getcwd()
+
+    rlimit = resource.getrlimit(resource.RLIMIT_NOFILE)
+    resource.setrlimit(resource.RLIMIT_NOFILE, (4096, rlimit[1]))
 
     # create config
     if args.config is not None:
@@ -139,9 +149,9 @@ def train(args: argparse.Namespace, device: DistributedDevice) -> None:
         if device.is_main_process:
             logger.info(f"Successfully loaded weights from {cfg.start_from_checkpoint}")
 
-    torch.cuda.set_device(device.local_rank)
-    model = model.to(device.local_rank)
-    model = DistributedDataParallel(model, device_ids=[device.local_rank], output_device=device.local_rank)
+    model = model.to(device.device)
+    torch.cuda.set_device(device.device)
+    model = DistributedDataParallel(model)  # , device_ids=[device.local_rank], output_device=device.local_rank)
 
     # this makes sure we can use DDP with parameter sharing and gradient checkpointing,
     # but we have to make sure that our models to not have any control flow in them (e.g. if statements),
@@ -176,25 +186,11 @@ def train(args: argparse.Namespace, device: DistributedDevice) -> None:
             shuffle=True,
             drop_last=True
         )
-        train_loader = data.DataLoader(
-            dataset=train_dataset,
-            batch_sampler=train_batch_sampler,
-            collate_fn=utils.collate,
-            num_workers=num_workers,
-            pin_memory=True
-        )
 
         val_batch_sampler = data.BatchSampler(
             sampler=data.SequentialSampler(val_dataset),
             batch_size=max(cfg.batch_size // device.world_size, 1),
             drop_last=False
-        )
-        val_loader = data.DataLoader(
-            dataset=val_dataset,
-            batch_sampler=val_batch_sampler,
-            collate_fn=utils.collate,
-            num_workers=num_workers,
-            pin_memory=True
         )
     else:
         train_batch_sampler = utils.DistributedDynamicSampler(
@@ -211,13 +207,6 @@ def train(args: argparse.Namespace, device: DistributedDevice) -> None:
             drop_last=True,
             shuffle=True
         )
-        train_loader = data.DataLoader(
-            dataset=train_dataset,
-            batch_sampler=train_batch_sampler,
-            collate_fn=utils.collate,
-            num_workers=num_workers,
-            pin_memory=True
-        )
 
         val_batch_sampler = utils.BucketSampler(
             dataset=val_dataset,
@@ -227,15 +216,26 @@ def train(args: argparse.Namespace, device: DistributedDevice) -> None:
             seed=cfg.seed,
             shuffle=False
         )
-        val_loader = data.DataLoader(
-            dataset=val_dataset,
-            batch_sampler=val_batch_sampler,
-            collate_fn=utils.collate,
-            num_workers=num_workers,
-            pin_memory=True
-        )
+
+    train_loader = data.DataLoader(
+        dataset=train_dataset,
+        batch_sampler=train_batch_sampler,
+        collate_fn=utils.collate,
+        num_workers=num_workers,
+        pin_memory=True,
+        worker_init_fn=worker_init_fn
+    )
+    val_loader = data.DataLoader(
+        dataset=val_dataset,
+        batch_sampler=val_batch_sampler,
+        collate_fn=utils.collate,
+        num_workers=num_workers,
+        pin_memory=True,
+        worker_init_fn=worker_init_fn
+    )
 
     ema: Optional[task_utils.EMA] = None
+    ema_start_at = 0
     ema_update_every = 1
     if device.is_main_process:
         logger.info(f"Using config:\n{OmegaConf.to_yaml(cfg)}")
@@ -258,9 +258,16 @@ def train(args: argparse.Namespace, device: DistributedDevice) -> None:
         )
         # only use ema on main process because we also only save models on main process
         if cfg.exponential_moving_average is not None:
-            assert len(cfg.exponential_moving_average) == 2
+            assert len(cfg.exponential_moving_average) == 3
             ema_factor = cfg.exponential_moving_average[0]
-            ema_update_every = int(cfg.exponential_moving_average[1])
+            ema_update_every = max(1, int(cfg.exponential_moving_average[1]))
+            ema_start_at = max(
+                1,
+                int(
+                    cfg.exponential_moving_average[2] if cfg.exponential_moving_average[2] >= 1
+                    else int(len(train_loader) * cfg.epochs * cfg.exponential_moving_average[2])
+                )
+            )
 
             ema = task_utils.EMA(
                 model=unwrap_ddp(model),
@@ -316,6 +323,7 @@ def train(args: argparse.Namespace, device: DistributedDevice) -> None:
             keep_last_n_checkpoints=cfg.keep_last_n_checkpoints,
             ema=ema,
             ema_update_every=ema_update_every,
+            ema_start_at=ema_start_at,
             steps_to_fast_forward=steps_to_fast_forward
         )
 
@@ -369,7 +377,7 @@ def initialize() -> DistributedDevice:
             and "WORLD_SIZE" in os.environ
     ), f"could not find at least one of MASTER_ADDR, MASTER_PORT and WORLD_SIZE env variables"
     master_addr = os.environ["MASTER_ADDR"]
-    master_port = os.environ["MASTER_PORT"]
+    master_port = int(os.environ["MASTER_PORT"])
     world_size = int(os.environ["WORLD_SIZE"])
 
     if "SLURM_PROCID" in os.environ and os.environ.get("GNN_LIB_FORCE_LOCAL", "false") != "true":

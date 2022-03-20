@@ -1,13 +1,14 @@
 import enum
 import os
 import time
-from typing import Any, Type, Dict, Optional, Tuple, Set
+from typing import Any, Type, Dict, Optional, Tuple, Set, Union
 
 import dgl
 import omegaconf
 import psutil
 import torch
 from torch import optim, nn
+from torch.distributed import optim as dist_optim
 from torch.cuda import amp
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils import tensorboard
@@ -27,10 +28,9 @@ class Tasks(enum.IntEnum):
     GRAPH_CLASSIFICATION = 1
     MULTI_NODE_CLASSIFICATION = 2
     TOKENIZATION_REPAIR = 3
-    TOKENIZATION_REPAIR_NMT = 4
-    SEC_WORDS_NMT = 5
-    SEC_NMT = 6
-    SED_WORDS = 7
+    SEC_WORDS_NMT = 4
+    SEC_NMT = 5
+    SED_WORDS = 6
 
 
 class Task:
@@ -136,7 +136,7 @@ class Task:
             self,
             train_loader: DataLoader,
             model: DDP,
-            optimizer: optim.Optimizer,
+            optimizer: Union[optim.Optimizer, dist_optim.ZeroRedundancyOptimizer],
             grad_scaler: amp.GradScaler,
             writer: tensorboard.SummaryWriter,
             device: DistributedDevice,
@@ -147,6 +147,7 @@ class Task:
             keep_last_n_checkpoints: int = 3,
             ema: Optional[utils.EMA] = None,
             ema_update_every: int = 100,
+            ema_start_at: int = 1,
             steps_to_fast_forward: int = 0
     ) -> None:
         unwrapped_model = unwrap_ddp(model)
@@ -184,6 +185,8 @@ class Task:
                 leave=False,
                 disable=not device.is_main_process or common.disable_tqdm()
         ):
+            assert model.training
+
             start_iteration = time.perf_counter()
             iteration = i + 1 + steps_to_fast_forward
 
@@ -215,116 +218,124 @@ class Task:
 
             end_backward_and_update = time.perf_counter()
 
-            if not device.is_main_process:
-                # ema, logging and evaluation is only done on main process
-                continue
+            if device.is_main_process:
+                # ema and logging is only done on main process
+                if ema is not None and ema_start_at >= self.step and self.step % ema_update_every == 0:
+                    ema.update(overwrite=ema_start_at == self.step)
 
-            if ema is not None and self.step % ema_update_every == 0:
-                ema.update()
+                # update stats
+                self._update_stats(unwrapped_model, inputs, labels, output, stats, self.step, log_every)
+                loss_stat.add(loss.item())
+                # this is an approximation, since we only record batch statistics on the main process, but
+                # want to log the overall batch size in tensorboard, we multiply by the world size here
+                batch_size = utils.get_batch_size_from_data(batch.data)
+                batch_size_stat.add(batch_size * device.world_size)
+                forward_pass_perf_stat.add((end_forward_pass - start_forward_pass) * 1000)
+                backward_and_update_perf_stat.add((end_backward_and_update - start_backward_and_update) * 1000)
+                # we time the iteration here because we do not want to count logging and evaluation, which is
+                # anyway done infrequently, to the duration of an average iteration
+                end_iteration = time.perf_counter()
+                iteration_perf_stat.add((end_iteration - start_iteration) * 1000)
 
-            # update stats
-            self._update_stats(unwrapped_model, inputs, labels, output, stats, self.step, log_every)
-            loss_stat.add(loss.item())
-            # this is an approximation, since we only record batch statistics on the main process, but
-            # want to log the overall batch size in tensorboard, we multiply by the world size here
-            batch_size = utils.get_batch_size_from_data(batch.data)
-            batch_size_stat.add(batch_size * device.world_size)
-            forward_pass_perf_stat.add((end_forward_pass - start_forward_pass) * 1000)
-            backward_and_update_perf_stat.add((end_backward_and_update - start_backward_and_update) * 1000)
-            # we time the iteration here because we do not want to count logging and evaluation, which is
-            # anyway done infrequently, to the duration of an average iteration
-            end_iteration = time.perf_counter()
-            iteration_perf_stat.add((end_iteration - start_iteration) * 1000)
+                if self.step % log_every == 0:
+                    max_mem_usage = 0
+                    for device_id in range(device.local_world_size):
+                        mem_total = torch.cuda.get_device_properties(device_id).total_memory / 1024 ** 3
+                        mem_alloc = torch.cuda.max_memory_reserved(device_id) / 1024 ** 3
+                        mem_usage = mem_alloc / mem_total
+                        if mem_usage > max_mem_usage:
+                            max_mem_usage = mem_usage
 
-            if self.step % log_every == 0:
-                max_mem_usage = 0
-                for device_id in range(device.local_world_size):
-                    mem_total = torch.cuda.get_device_properties(device_id).total_memory / 1024 ** 3
-                    mem_alloc = torch.cuda.max_memory_reserved(device_id) / 1024 ** 3
-                    mem_usage = mem_alloc / mem_total
-                    if mem_usage > max_mem_usage:
-                        max_mem_usage = mem_usage
-
-                writer.add_scalar(
-                    "max_gpu_memory_usage",
-                    max_mem_usage,
-                    self.step
-                )
-
-                writer.add_scalar(
-                    "node_cpu_usage",
-                    psutil.cpu_percent(),
-                    self.step
-                )
-
-                writer.add_scalar(
-                    "node_ram_usage",
-                    psutil.virtual_memory().percent,
-                    self.step
-                )
-
-                if common.disable_tqdm():
-                    self.logger.info(f"[{self.step}|{iteration}/{org_train_loader_length}] "
-                                     f"train_loss={loss_stat.value:.5f}")
-                    minutes = (time.perf_counter() - start) / 60
-                    self.logger.info(
-                        f"[{self.step}|{iteration}/{org_train_loader_length}] "
-                        f"{common.eta_minutes(minutes, i + 1, len(train_loader))}"
-                    )
-                    self.logger.info(f"GPU 0:\n{torch.cuda.memory_summary(0, True)}")
-                    torch.cuda.reset_peak_memory_stats()
-
-                loss_stat.log_to_tensorboard(writer, self.step)
-                loss_stat.reset()
-
-                batch_size_stat.log_to_tensorboard(writer, self.step)
-                batch_size_stat.reset()
-
-                forward_pass_perf_stat.log_to_tensorboard(writer, self.step)
-                forward_pass_perf_stat.reset()
-
-                iteration_perf_stat.log_to_tensorboard(writer, self.step)
-                iteration_perf_stat.reset()
-
-                backward_and_update_perf_stat.log_to_tensorboard(writer, self.step)
-                backward_and_update_perf_stat.reset()
-
-                for _, stat in stats.items():
-                    stat.log_to_tensorboard(writer, self.step)
-                    stat.reset()
-
-                if lr_scheduler:
                     writer.add_scalar(
-                        "train_lr",
-                        lr_scheduler.get_last_lr()[0],
+                        "max_gpu_memory_usage",
+                        max_mem_usage,
                         self.step
                     )
+
+                    writer.add_scalar(
+                        "node_cpu_usage",
+                        psutil.cpu_percent(),
+                        self.step
+                    )
+
+                    writer.add_scalar(
+                        "node_ram_usage",
+                        psutil.virtual_memory().percent,
+                        self.step
+                    )
+
+                    if common.disable_tqdm():
+                        self.logger.info(f"[{self.step}|{iteration}/{org_train_loader_length}] "
+                                         f"train_loss={loss_stat.value:.5f}")
+                        minutes = (time.perf_counter() - start) / 60
+                        self.logger.info(
+                            f"[{self.step}|{iteration}/{org_train_loader_length}] "
+                            f"{common.eta_minutes(minutes, i + 1, len(train_loader))}"
+                        )
+                        self.logger.info(f"GPU 0:\n{torch.cuda.memory_summary(0, True)}")
+                        torch.cuda.reset_peak_memory_stats()
+
+                    loss_stat.log_to_tensorboard(writer, self.step)
+                    loss_stat.reset()
+
+                    batch_size_stat.log_to_tensorboard(writer, self.step)
+                    batch_size_stat.reset()
+
+                    forward_pass_perf_stat.log_to_tensorboard(writer, self.step)
+                    forward_pass_perf_stat.reset()
+
+                    iteration_perf_stat.log_to_tensorboard(writer, self.step)
+                    iteration_perf_stat.reset()
+
+                    backward_and_update_perf_stat.log_to_tensorboard(writer, self.step)
+                    backward_and_update_perf_stat.reset()
+
+                    for _, stat in stats.items():
+                        stat.log_to_tensorboard(writer, self.step)
+                        stat.reset()
+
+                    if lr_scheduler:
+                        writer.add_scalar(
+                            "train_lr",
+                            lr_scheduler.get_last_lr()[0],
+                            self.step
+                        )
 
             if self.step % eval_every == 0:
                 assert val_loader is not None, "validation loader must be given if you want" \
                                                "to validate during the training epochs"
 
-                val_loss, best = self.evaluate(val_loader,
-                                               model if ema is None else ema.ema_model,
-                                               writer,
-                                               device,
-                                               grad_scaler)
+                if isinstance(optimizer, dist_optim.ZeroRedundancyOptimizer):
+                    optimizer.consolidate_state_dict()
 
-                if common.disable_tqdm():
-                    self.logger.info(f"[{self.step}|{iteration}/{org_train_loader_length}] "
-                                     f"val_loss={val_loss:.5f}, best={best}")
+                if device.is_main_process:
+                    val_loss, best = self.evaluate(val_loader,
+                                                   (
+                                                       ema.ema_model if ema is not None and ema_start_at >= self.step
+                                                       else model
+                                                   ),
+                                                   writer,
+                                                   device,
+                                                   grad_scaler)
 
-                self.save_checkpoint(
-                    unwrapped_model if ema is None else ema.ema_model,
-                    device,
-                    val_loss,
-                    best,
-                    optimizer,
-                    lr_scheduler,
-                    keep_last_n_checkpoints
-                )
+                    if common.disable_tqdm():
+                        self.logger.info(f"[{self.step}|{iteration}/{org_train_loader_length}] "
+                                         f"val_loss={val_loss:.5f}, best={best}")
 
-                model = model.train()
+                    self.save_checkpoint(
+                        (
+                          ema.ema_model if ema is not None and ema_start_at >= self.step
+                          else unwrapped_model
+                        ),
+                        device,
+                        val_loss,
+                        best,
+                        optimizer,
+                        lr_scheduler,
+                        keep_last_n_checkpoints
+                    )
+
+                    model = model.train()
 
     @torch.no_grad()
     def evaluate(
@@ -357,6 +368,8 @@ class Task:
                 leave=False,
                 disable=common.disable_tqdm()
         ):
+            assert not model.training
+
             inputs, labels = self._prepare_inputs_and_labels(batch, device)
 
             with amp.autocast(enabled=grad_scaler.is_enabled()):
@@ -476,7 +489,6 @@ def get_task(
         seed: int
 ) -> Task:
     from gnn_lib.tasks.tokenization_repair import TokenizationRepair
-    from gnn_lib.tasks.tokenization_repair_nmt import TokenizationRepairNMT
     from gnn_lib.tasks.graph_sed_sequence import GraphSEDSequence
     from gnn_lib.tasks.sed_sequence import SEDSequence
     from gnn_lib.tasks.graph_sec_nmt import GraphSECNMT
@@ -513,9 +525,6 @@ def get_task(
             return SECWordsNMT(variant_cfg, checkpoint_dir, seed)
         else:
             return GraphSECWordsNMT(variant_cfg, checkpoint_dir, seed)
-
-    elif variant_type == DatasetVariants.TOKENIZATION_REPAIR_NMT:
-        return TokenizationRepairNMT(variant_cfg, checkpoint_dir, seed)
 
     else:
         raise ValueError(f"Could not determine task from variant type {variant_type}")

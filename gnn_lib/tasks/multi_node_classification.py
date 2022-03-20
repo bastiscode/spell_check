@@ -18,11 +18,10 @@ class MultiNodeClassification(tasks.Task):
 
     def _get_additional_stats(self, model: models.ModelForMultiNodeClassification) \
             -> Dict[str, data_containers.DataContainer]:
-        stats = {}
-        # for multi node classification, by default record accuracy and 1 vs all precision, recall and f1 scores
-        for node_type, num_classes in model.cfg.num_classes.items():
-            stats[f"{node_type}_accuracy"] = data_containers.AverageScalarContainer(name=f"{node_type}_accuracy")
-        return stats
+        return {
+            f"{node_type}_accuracy": data_containers.AverageScalarContainer(name=f"{node_type}_accuracy")
+            for node_type, num_classes in model.cfg.num_classes.items()
+        }
 
     def _prepare_inputs_and_labels(self,
                                    batch: BATCH,
@@ -62,7 +61,7 @@ class MultiNodeClassification(tasks.Task):
     def inference(
             self,
             model: models.ModelForMultiNodeClassification,
-            inputs: Union[List[str], Tuple[dgl.DGLHeteroGraph, List[Dict[str, Any]]]],
+            inputs: Union[List[str], BATCH],
             **kwargs: Any
     ) -> List[Dict[str, List]]:
         self._check_model(model)
@@ -70,19 +69,19 @@ class MultiNodeClassification(tasks.Task):
 
         got_str_input = isinstance(inputs, list) and isinstance(inputs[0], str)
         if got_str_input:
-            g, infos = self.variant.prepare_sequences_for_inference(inputs)
+            batch = self.variant.prepare_sequences_for_inference(inputs)
         else:
-            g, infos = inputs
+            batch = inputs
 
-        outputs, _ = model(g, **infos)
+        outputs, _ = model(batch.data, **batch.info)
 
         return_logits = kwargs.get("return_logits", False)
 
         batch_predictions_dict = {}
         for node_type in model.cfg.num_classes:
-            num_nodes = g.batch_num_nodes(node_type)
-            if "groups" in infos and node_type in infos["groups"][0]:
-                num_nodes = [max(group[node_type][-1]["groups"]) + 1 for group in infos["groups"]]
+            num_nodes = batch.data.batch_num_nodes(node_type)
+            if "groups" in batch.info and node_type in batch.info["groups"][0]:
+                num_nodes = [max(group[node_type][-1]["groups"]) + 1 for group in batch.info["groups"]]
 
             if return_logits:
                 predictions = utils.tensor_to_python(outputs[node_type], force_list=True)
@@ -106,5 +105,5 @@ class MultiNodeClassification(tasks.Task):
 
         return [
             {node_type: predictions[i] for node_type, predictions in batch_predictions_dict.items()}
-            for i in range(g.batch_size)
+            for i in range(batch.data.batch_size)
         ]

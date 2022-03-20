@@ -4,10 +4,9 @@ import torch
 from torch.nn import functional as F
 
 from gnn_lib import tasks, models
-from gnn_lib.data.utils import flatten
 from gnn_lib.modules import utils
 from gnn_lib.tasks import utils as task_utils
-from gnn_lib.utils import data_containers, BATCH
+from gnn_lib.utils import data_containers, BATCH, to
 from gnn_lib.utils.distributed import DistributedDevice
 
 
@@ -28,7 +27,7 @@ class TokenClassification(tasks.Task):
                                    batch: BATCH,
                                    device: DistributedDevice) -> Tuple[Dict[str, Any], Any]:
         # extract labels from info dict
-        labels = torch.cat(batch.info.pop("label")).to(device.device, non_blocking=True)
+        labels = to(torch.cat(batch.info.pop("label")), device.device)
 
         return {"x": batch.data, **batch.info}, labels
 
@@ -39,7 +38,7 @@ class TokenClassification(tasks.Task):
         return F.cross_entropy(torch.cat(model_output, dim=0), labels) + sum(additional_losses.values())
 
     def _update_stats(self,
-                      model: models.ModelForMultiNodeClassification,
+                      model: models.ModelForTokenClassification,
                       inputs: Dict[str, Any],
                       labels: torch.Tensor,
                       model_output: List[torch.Tensor],
@@ -58,47 +57,33 @@ class TokenClassification(tasks.Task):
             model: models.ModelForTokenClassification,
             inputs: Union[List[str], BATCH],
             **kwargs: Any
-    ) -> List[Dict[str, List]]:
+    ) -> List[List]:
         self._check_model(model)
         model = model.eval()
 
         got_str_input = isinstance(inputs, list) and isinstance(inputs[0], str)
         if got_str_input:
-            g, infos = self.variant.prepare_sequences_for_inference(inputs)
+            batch = self.variant.prepare_sequences_for_inference(inputs)
         else:
-            g, infos = inputs
+            batch = inputs
 
-        outputs, _ = model(g, **infos)
+        outputs, _ = model(batch.data, **batch.info)
 
         return_logits = kwargs.get("return_logits", False)
-
-        batch_predictions_dict = {}
-        for node_type in model.cfg.num_classes:
-            num_nodes = g.batch_num_nodes(node_type)
-            if "groups" in infos and node_type in infos["groups"][0]:
-                num_nodes = [max(group[node_type][-1]["groups"]) + 1 for group in infos["groups"]]
-
-            if return_logits:
-                predictions = utils.tensor_to_python(outputs[node_type], force_list=True)
-            else:
-                threshold = kwargs.get(f"{node_type}_threshold", kwargs.get("threshold", 0.5))
-                temperature = kwargs.get(f"{node_type}_temperature", kwargs.get("temperature", 1.0))
-                predictions = utils.tensor_to_python(
+        if return_logits:
+            predictions = [utils.tensor_to_python(output, force_list=True) for output in outputs]
+        else:
+            threshold = kwargs.get("threshold", 0.5)
+            temperature = kwargs.get("temperature", 1.0)
+            predictions = [
+                utils.tensor_to_python(
                     task_utils.class_predictions(
-                        outputs[node_type],
+                        output,
                         threshold,
                         temperature
                     ),
                     force_list=True
-                )
+                ) for output in outputs
+            ]
 
-            predictions = utils.split(
-                predictions,
-                num_nodes
-            )
-            batch_predictions_dict[node_type] = predictions
-
-        return [
-            {node_type: predictions[i] for node_type, predictions in batch_predictions_dict.items()}
-            for i in range(g.batch_size)
-        ]
+        return predictions

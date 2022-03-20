@@ -54,7 +54,6 @@ def save_checkpoint(checkpoint_path: str,
     :param optimizer: Pytorch optimizer
     :param lr_scheduler: Pytorch learning rate scheduler
     """
-
     state = {
         "model_state_dict": model.state_dict(),
         "step": step,

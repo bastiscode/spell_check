@@ -195,7 +195,7 @@ def run(args: argparse.Namespace) -> None:
 
         corrections = corrector.correct_text(
             inputs=inputs,
-            detections=detections,
+            detections=detections if args.sed_in else None,
             batch_size=args.batch_size,
             sort_by_length=not args.unsorted,
             show_progress=True

@@ -11,6 +11,7 @@ import ftfy
 import lmdb
 import numpy as np
 import spacy
+import torch
 from spacy import Vocab
 from spacy.tokens import Token, Doc
 from torch import distributed as dist
@@ -484,19 +485,19 @@ class BucketSampler(Sampler):
 
 def get_word_whitespace_groups(
         sample: SAMPLE
-) -> List[int]:
+) -> torch.Tensor:
     word_whitespace_groups = []
     word_ws_group = 0
     for i, (tokens, word) in enumerate(zip(sample.tokens, sample.doc)):
         word_whitespace_groups.extend([word_ws_group] * len(tokens))
         if word.whitespace_ == " ":
             word_ws_group += 1
-    return word_whitespace_groups
+    return torch.tensor(word_whitespace_groups, dtype=torch.long)
 
 
 def get_word_and_word_whitespace_groups(
         sample: SAMPLE
-) -> Tuple[List[int], List[int]]:
+) -> Tuple[torch.Tensor, torch.Tensor]:
     word_groups = []
     word_whitespace_groups = []
     word_ws_group = 0
@@ -505,30 +506,50 @@ def get_word_and_word_whitespace_groups(
         word_whitespace_groups.append(word_ws_group)
         if word.whitespace_ == " ":
             word_ws_group += 1
-    return word_groups, word_whitespace_groups
+    return torch.tensor(word_groups, dtype=torch.long), torch.tensor(word_whitespace_groups, dtype=torch.long)
 
 
 def get_sequence_groups(
         sample: SAMPLE
-) -> List[int]:
-    return [0] * len(flatten(sample.tokens))
+) -> torch.Tensor:
+    return torch.tensor([0] * len(flatten(sample.tokens)), dtype=torch.long)
 
 
 def get_word_and_sequence_groups(
         sample: SAMPLE
-) -> Tuple[List[int], List[int]]:
+) -> Tuple[torch.Tensor, torch.Tensor]:
     word_groups = []
     for i, tokens in enumerate(sample.tokens):
         word_groups.extend([i] * len(tokens))
     sequence_groups = [0] * len(sample.doc)
-    return word_groups, sequence_groups
+    return torch.tensor(word_groups, dtype=torch.long), torch.tensor(sequence_groups, dtype=torch.long)
 
 
-def get_word_features(sample: SAMPLE, dictionary: Optional[Dict[str, int]]) -> List[List[bool]]:
+def get_word_features(doc: Doc, dictionary: Optional[Dict[str, int]]) -> torch.Tensor:
     features = []
-    for word in sample.doc:
+    for word in doc:
         features.append(token_flags(word, dictionary))
-    return features
+    return torch.tensor(features, dtype=torch.float)
+
+
+def get_character_groups_from_repaired_doc(
+        input_characters: List[str],
+        repaired_doc: Doc
+) -> List[int]:
+    character_groups = []
+    char_idx = 0
+    for i, word in enumerate(repaired_doc):
+        running_word = ""
+        while running_word != word:
+            if input_characters[char_idx] == " ":
+                character_groups.append(-1)
+            else:
+                running_word += input_characters[char_idx]
+                character_groups.append(i)
+            char_idx += 1
+
+    assert char_idx == len(input_characters)
+    return character_groups
 
 
 def clean_sequence(sequence: str) -> str:
@@ -585,36 +606,6 @@ def is_valid_sequence(sequence: str, min_length: int = 0, max_length: int = -1, 
         return False
     # if sequence passes all the tests its valid
     return True
-
-
-_APOSTROPH = {r"\s(['`]\w+)": r"\1",
-              r"\s(n['`]t\s)": r"\1"}
-_PUNCTUATION = {r"\s([.,?!;:])": r"\1"}
-
-
-def tokens_to_text(tokens: List[str]) -> str:
-    """
-
-    Bring tokens together to a proper string.
-    Just joining with whitespaces is not enough,
-    e.g. ["I", "have", "n't"] should get
-    "I haven't" and not "I have n't".
-
-    :param tokens: list of tokens
-    :return: proper string
-    """
-    tokens = [token.strip() for token in tokens]
-
-    sequence = " ".join(tokens)
-    sequence = fix_unicode(sequence)
-
-    for pattern, sub in _APOSTROPH.items():
-        sequence = re.sub(pattern, sub, sequence)
-
-    for pattern, sub in _PUNCTUATION.items():
-        sequence = re.sub(pattern, sub, sequence)
-
-    return clean_sequence(sequence)
 
 
 _INCLUDE_ALL = tuple(i for i in range(4))
@@ -715,3 +706,13 @@ def edit_token(token: str,
 
     assert len(token) == len(edits)
     return token, edits, exclude_indices
+
+
+def find_substring_ignoring_spaces(
+        substring: str,
+        search_str: str
+) -> Tuple[int, int]:
+    pattern = r"\s*".join(re.escape(char) for char in substring.replace(" ", ""))
+    match = re.search(pattern, search_str)
+    assert match is not None
+    return match.start(), match.end()

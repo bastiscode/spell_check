@@ -13,15 +13,13 @@ export GNN_LIB_EDGE_HIDDEN_DIM=256
 export GNN_LIB_NUM_LAYERS=6
 export GNN_LIB_LOG_PER_EPOCH=200
 export GNN_LIB_EVAL_PER_EPOCH=20
-export GNN_LIB_DATA_LIMIT=35000000
+export GNN_LIB_DATA_LIMIT=100000000
 export GNN_LIB_LR=0.0001
 export GNN_LIB_WEIGHT_DECAY=0.01
 export GNN_LIB_NUM_NEIGHBORS=3
 export GNN_LIB_MIXED_PRECISION=true
-
-#export SYNC_DATASETS="bookcorpus_sed_words_and_sec wikidump_sed_words_and_sec neuspell"
-
 export GNN_LIB_MASTER_PORT=$(python -c "import random; print(random.randrange(10000, 60000))")
+
 ablations_type=${ABLATIONS_TYPE:-"ABLATIONS_TYPE is not defined"}
 
 # architecture ablations
