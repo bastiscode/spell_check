@@ -510,14 +510,14 @@ def transfer_features(from_g: dgl.DGLHeteroGraph, to_g: dgl.DGLHeteroGraph, feat
 def group_features(
         grouped_feats: List[torch.Tensor],
         groups: List[List[Dict[str, Any]]],
-        additional_feature_encoders: nn.ModuleDict,
-        aggregations: Dict[str, str]
+        additional_feature_encoders: Dict[str, nn.Module],
+        aggregations: Dict[str, str] = None
 ) -> List[torch.Tensor]:
     stage_names = [stage["stage"] for stage in groups[0]]
 
     # iterate through stages
     for i, stage_name in enumerate(stage_names):
-        aggregation = aggregations[stage_name]
+        aggregation = aggregations.get(stage_name, "mean")
 
         has_additional_features = stage_name in additional_feature_encoders
         batch_groups = []

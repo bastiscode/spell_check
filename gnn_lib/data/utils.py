@@ -535,21 +535,22 @@ def get_word_features(doc: Doc, dictionary: Optional[Dict[str, int]]) -> torch.T
 def get_character_groups_from_repaired_doc(
         input_characters: List[str],
         repaired_doc: Doc
-) -> List[int]:
+) -> torch.Tensor:
     character_groups = []
     char_idx = 0
     for i, word in enumerate(repaired_doc):
         running_word = ""
-        while running_word != word:
+        while running_word != word.text and len(running_word) < len(word.text):
             if input_characters[char_idx] == " ":
                 character_groups.append(-1)
             else:
                 running_word += input_characters[char_idx]
                 character_groups.append(i)
             char_idx += 1
+        assert running_word == word.text
 
     assert char_idx == len(input_characters)
-    return character_groups
+    return torch.tensor(character_groups, dtype=torch.long)
 
 
 def clean_sequence(sequence: str) -> str:

@@ -292,6 +292,9 @@ def get_model_from_config(
     elif model_type == Models.MODEL_FOR_SEQUENCE_CLASSIFICATION:
         cfg = omegaconf.OmegaConf.structured(ModelForSequenceClassificationConfig(**cfg))
         return ModelForSequenceClassification(sample_inputs, cfg, device)
+    elif model_type == Models.MODEL_FOR_TOKENIZATION_REPAIR_PLUS:
+        cfg = omegaconf.OmegaConf.structured(ModelForTokenizationRepairPlusConfig(**cfg))
+        return ModelForTokenizationRepairPlus(sample_inputs, cfg, device)
     else:
         raise ValueError(f"Unknown model type {model_type}")
 
@@ -715,7 +718,7 @@ class ModelForToken2Seq(TensorModel, TensorEncoderMixin, DecoderMixin):
     def forward(
             self,
             x: DATA_INPUT,
-            decoder_inputs: Optional[DATA_INPUT] = None,
+            decoder_inputs: Optional[List[torch.Tensor]] = None,
             decoder_group_lengths: Optional[List[torch.Tensor]] = None,
             encoder_group_lengths: Optional[List[torch.Tensor]] = None,
             **kwargs: Any
@@ -947,7 +950,7 @@ class ModelForSequenceClassification(TensorModel):
             **kwargs: Any
     ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
         assert all(t.ndim == 1 for t in x)
-        
+
         lengths = [len(t) for t in x]
         x = to(utils.pad(x, self.pad_token_id).long(), self.device)
         padding_mask = utils.padding_mask(x, lengths)
@@ -1023,7 +1026,7 @@ class ModelForTokenClassification(TensorModel):
             **kwargs: Any
     ) -> Tuple[List[torch.Tensor], Dict[str, torch.Tensor]]:
         assert all(t.ndim == 1 for t in x)
-        
+
         lengths = [len(t) for t in x]
         x = to(utils.pad(x, self.pad_token_id).long(), self.device)
         padding_mask = utils.padding_mask(x, lengths)
@@ -1060,7 +1063,11 @@ class ModelForTokenizationRepairPlus(TensorModel):
             cfg: ModelForTokenizationRepairPlusConfig,
             device: torch.device
     ) -> None:
-        assert cfg.output_type in {"tokenization_repair_plus_sed", "tokenization_repair_plus_sed_plus_sec"}
+        assert cfg.output_type in {
+            "tokenization_repair",
+            "tokenization_repair_plus_sed",
+            "tokenization_repair_plus_sed_plus_sec"
+        }
 
         if cfg.input_type == "char":
             self.input_tokenizer = tokenization.CharTokenizer()
@@ -1146,21 +1153,38 @@ class ModelForTokenizationRepairPlus(TensorModel):
     def forward(
             self,
             x: DATA_INPUT,
-            word_groups: Optional[int] = None,
-            word_ws_groups: Optional[int] = None,
+            word_groups: Optional[List[List[Dict[str, torch.Tensor]]]] = None,
+            word_ws_groups: Optional[List[List[Dict[str, torch.Tensor]]]] = None,
+            sec_decoder_inputs: Optional[List[torch.Tensor]] = None,
+            sec_decoder_group_lengths: Optional[List[torch.Tensor]] = None,
             **kwargs: Any
     ) -> Tuple[Dict[str, Any], Dict[str, torch.Tensor]]:
         self.cfg: ModelForTokenizationRepairPlusConfig
-        
+
         assert word_groups is not None and word_ws_groups is not None
         assert all(t.ndim == 1 for t in x)
-        
+
         lengths = [len(t) for t in x]
         x = to(utils.pad(x, self.input_pad_token_id).long(), self.device)
         padding_mask = utils.padding_mask(x, lengths)
 
         x = self.embedding(x)
-        x = self.encoder[self.cfg.input_type](x, padding_mask=padding_mask)
-        x = [x[i, :l] for i, l in enumerate(lengths)]
-        output = self.head(x, **kwargs)
-        return output, {}
+
+        tok_feat = self.encoder[self.cfg.input_type](x, padding_mask=padding_mask)
+        tok_feat = [tok_feat[i, :l] for i, l in enumerate(lengths)]
+
+        word_feat = utils.group_features(
+            tok_feat, word_groups, {}, {}
+        )
+        padded_word_feat = to(utils.pad(word_feat), self.device)
+        lengths = [len(t) for t in word_feat]
+        padding_mask = utils.padding_mask(padded_word_feat, lengths)
+        padded_word_feat = self.encoder["word"](padded_word_feat, padding_mask=padding_mask)
+        word_feat = [padded_word_feat[i, :l, :] for i, l in enumerate(lengths)]
+
+        outputs = {
+            "tokenization_repair": self.head["tokenization_repair"](tok_feat, groups=None),
+            "sed": self.head["sed"](word_feat, groups=word_ws_groups)
+        }
+
+        return outputs, {}

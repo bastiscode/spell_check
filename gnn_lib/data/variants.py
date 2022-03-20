@@ -22,9 +22,7 @@ class DatasetVariants(enum.IntEnum):
     TOKENIZATION_REPAIR = 3
     SEC_WORDS_NMT = 4
     SEC_NMT = 5
-    SED_PLUS_SEC = 6
-    TOKENIZATION_REPAIR_PLUS_SED = 6
-    TOKENIZATION_REPAIR_PLUS_SED_PLUS_SEC = 7
+    TOKENIZATION_REPAIR_PLUS = 6
 
 
 @dataclass
@@ -773,22 +771,35 @@ class SECNMT(DatasetVariant):
 
 
 @dataclass
-class TokenizationRepairPlusSEDConfig(TokenizationRepairConfig):
-    type: DatasetVariants = DatasetVariants.TOKENIZATION_REPAIR_PLUS_SED
+class TokenizationRepairPlusConfig(TokenizationRepairConfig):
+    type: DatasetVariants = DatasetVariants.TOKENIZATION_REPAIR_PLUS
+
+    # one of {tokenization_repair_plus_sed, tokenization_repair_plus_sed_plus_sec}
+    output_type: str = "tokenization_repair_plus_sed"
 
     dictionary_file: Optional[str] = None
     add_word_features: bool = True
 
+    # for tokenization_repair_plus_sed_plus_sec
+    sec_tokenizer: Optional[TokenizerConfig] = None
 
-class TokenizationRepairPlusSED(TokenizationRepair):
+
+class TokenizationRepairPlus(TokenizationRepair):
     def __init__(self, cfg: DatasetVariantConfig, seed: int):
         super().__init__(cfg, seed)
-        self.cfg: TokenizationRepairPlusSEDConfig
+        self.cfg: TokenizationRepairPlusConfig
+        assert self.cfg.output_type in {"tokenization_repair_plus_sed", "tokenization_repair_plus_sed_plus_sec"}
 
         if self.cfg.dictionary_file is not None:
             self.dictionary = io.dictionary_from_file(self.cfg.dictionary_file)
         else:
             self.dictionary = None
+
+        if self.cfg.sec_tokenizer is not None:
+            self.sec_tokenizer = get_tokenizer_from_config(self.cfg.sec_tokenizer)
+            self.sec_pad_token_id = self.sec_tokenizer.token_to_id(tokenization.PAD)
+        else:
+            self.sec_tokenizer = None
 
     def prepare_sequence(
             self,
@@ -799,7 +810,7 @@ class TokenizationRepairPlusSED(TokenizationRepair):
         Union[dgl.DGLHeteroGraph, graph.HeterogeneousDGLData],
         Dict[str, Any]
     ]:
-        self.cfg: TokenizationRepairPlusSEDConfig
+        self.cfg: TokenizationRepairPlusConfig
 
         input_sample, target_sequence = self._get_inputs(sequence, target_sequence, is_inference)
         input_sample = utils.sanitize_sample(
@@ -814,13 +825,13 @@ class TokenizationRepairPlusSED(TokenizationRepair):
             tokenization_repair_label = tokenization_repair.get_whitespace_operations(
                 str(input_sample), target_sequence
             )
+            info["tokenization_repair_label"] = torch.tensor(tokenization_repair_label, dtype=torch.long)
 
             assert "org_sequence" in input_sample.info
             org_words = input_sample.info["org_sequence"].split()
             target_words = target_sequence.split()
             assert len(target_words) == len(org_words)
 
-            info["tokenization_repair_label"] = torch.tensor(tokenization_repair_label, dtype=torch.long)
             repaired_words, repaired_doc = utils.tokenize_words(target_sequence, return_doc=True)
             info["word_groups"] = [
                 {
@@ -828,17 +839,18 @@ class TokenizationRepairPlusSED(TokenizationRepair):
                     "groups": utils.get_character_groups_from_repaired_doc(list(str(input_sample)), repaired_doc)
                 }
             ]
-            word_ws_groups = [0] * len(target_words)
+
+            word_ws_groups = []
             word_ws_idx = 0
             for word in repaired_doc:
-                word_ws_groups[word_ws_idx] += 1
+                word_ws_groups.append(word_ws_idx)
                 if word.whitespace_ == " ":
                     word_ws_idx += 1
 
             info["word_ws_groups"] = [
                 {
                     "stage": "word_to_word_ws",
-                    "groups": word_ws_groups,
+                    "groups": torch.tensor(word_ws_groups, dtype=torch.long),
                     "features": utils.get_word_features(repaired_doc, self.dictionary)
                 }
             ]
@@ -850,22 +862,18 @@ class TokenizationRepairPlusSED(TokenizationRepair):
                 ], dtype=torch.long
             )
 
+            if self.cfg.output_type == "tokenization_repair_plus_sed_plus_sec":
+                assert self.sec_tokenizer is not None, "output tokenizer must be specified to use sec output"
+                label = [
+                    self.sec_tokenizer.tokenize(word, add_bos_eos=True)
+                    for word in org_words
+                ]
+                label_splits = [len(labels) for labels in label]
+                info["sec_label"] = torch.tensor(utils.flatten(label), dtype=torch.long)
+                info["sec_label_splits"] = label_splits
+                info["sec_pad_token_id"] = self.sec_pad_token_id
+
         return self.construct_input(input_sample), info
-
-
-@dataclass
-class TokenizationRepairPlusSEDPlusSECConfig(TokenizationRepairPlusSEDConfig):
-    type: DatasetVariants = DatasetVariants.TOKENIZATION_REPAIR_PLUS_SED_PLUS_SEC
-
-
-@dataclass
-class SEDPlusSECConfig(DatasetVariantConfig):
-    type: DatasetVariants = DatasetVariants.SED_PLUS_SEC
-
-    data_scheme: str = "tensor"
-
-    dictionary_file: Optional[str] = None
-    add_word_features: bool = True
 
 
 def get_variant_from_config(
@@ -888,14 +896,8 @@ def get_variant_from_config(
     elif variant_type == DatasetVariants.SEC_NMT:
         cfg = OmegaConf.structured(SECNMTConfig(**cfg))
         return SECNMT(cfg, seed)
-    elif variant_type == DatasetVariants.TOKENIZATION_REPAIR_PLUS_SED:
-        cfg = OmegaConf.structured(TokenizationRepairPlusSEDConfig(**cfg))
-        return TokenizationRepairPlusSED(cfg, seed)
-    elif variant_type == DatasetVariants.TOKENIZATION_REPAIR_PLUS_SED_PLUS_SEC:
-        cfg = OmegaConf.structured(TokenizationRepairPlusSEDPlusSECConfig(**cfg))
-        return TokenizationRepairPlusSED(cfg, seed)
-    elif variant_type == DatasetVariants.SED_PLUS_SEC:
-        cfg = OmegaConf.structured(SEDPlusSECConfig(**cfg))
-        return SEDPlusSEC(cfg, seed)
+    elif variant_type == DatasetVariants.TOKENIZATION_REPAIR_PLUS:
+        cfg = OmegaConf.structured(TokenizationRepairPlusConfig(**cfg))
+        return TokenizationRepairPlus(cfg, seed)
     else:
         raise ValueError(f"Unknown variant {cfg.type.name}")

@@ -1,7 +1,7 @@
 import enum
 import os
 import time
-from typing import Any, Type, Dict, Optional, Tuple, Set, Union
+from typing import Any, Type, Dict, Optional, Tuple, Set, Union, List
 
 import dgl
 import omegaconf
@@ -62,17 +62,20 @@ class Task:
         batch = self.generate_sample_inputs(num_samples=1)
         inputs, _ = self._prepare_inputs_and_labels(batch, device)
 
+        def _sum(item: Union[torch.Tensor, List, Dict]) -> Union[torch.Tensor, List, Dict]:
+            if isinstance(item, torch.Tensor):
+                return item.sum()
+            elif isinstance(item, list):
+                return sum([_sum(i) for i in item])
+            elif isinstance(item, dict):
+                return sum(_sum(v) for v in item.values())
+            else:
+                raise RuntimeError("expected model output to be any nesting of dicts, lists and tensors, "
+                                   f"but got {type(item)}")
+
         with amp.autocast(enabled=grad_scaler.is_enabled()):
             outputs, _ = model(**inputs)
-
-            if isinstance(outputs, dict):
-                loss = sum(v.sum() for v in outputs.values())
-            elif isinstance(outputs, list):
-                loss = sum(v.sum() for v in outputs)
-            elif isinstance(outputs, torch.Tensor):
-                loss = outputs.sum()
-            else:
-                raise ValueError(f"Expected model output to be either dictionary of tensors, list of tensors or tensor")
+            loss = _sum(outputs)
 
         grad_scaler.scale(loss).backward()
 
@@ -489,6 +492,7 @@ def get_task(
         seed: int
 ) -> Task:
     from gnn_lib.tasks.tokenization_repair import TokenizationRepair
+    from gnn_lib.tasks.tokenization_repair_plus import TokenizationRepairPlus
     from gnn_lib.tasks.graph_sed_sequence import GraphSEDSequence
     from gnn_lib.tasks.sed_sequence import SEDSequence
     from gnn_lib.tasks.graph_sec_nmt import GraphSECNMT
@@ -513,6 +517,9 @@ def get_task(
 
     elif variant_type == DatasetVariants.TOKENIZATION_REPAIR:
         return TokenizationRepair(variant_cfg, checkpoint_dir, seed)
+
+    elif variant_type == DatasetVariants.TOKENIZATION_REPAIR_PLUS:
+        return TokenizationRepairPlus(variant_cfg, checkpoint_dir, seed)
 
     elif variant_type == DatasetVariants.SEC_NMT:
         if variant_cfg.data_scheme == "tensor":
