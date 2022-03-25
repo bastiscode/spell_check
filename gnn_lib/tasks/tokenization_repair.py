@@ -4,8 +4,9 @@ import torch
 from torch.nn import functional as F
 
 from gnn_lib import models
+from gnn_lib.tasks import utils as task_utils
 from gnn_lib.tasks.token_classification import TokenClassification
-from gnn_lib.utils import tokenization_repair, data_containers, BATCH
+from gnn_lib.utils import tokenization_repair, data_containers
 
 
 class TokenizationRepair(TokenClassification):
@@ -43,24 +44,18 @@ class TokenizationRepair(TokenClassification):
     def inference(
             self,
             model: models.ModelForTokenClassification,
-            inputs: Union[List[str], BATCH],
+            inputs: List[str],
             **kwargs: Any
     ) -> Union[List[str], List[List[int]]]:
-        got_str_input = isinstance(inputs, list) and isinstance(inputs[0], str)
-        if got_str_input:
-            batch = self.variant.prepare_sequences_for_inference(inputs)
-        else:
-            batch = inputs
+        assert task_utils.is_string_input(inputs)
+        batch = self.variant.prepare_sequences_for_inference(inputs)
 
         repair_tokens_list = super().inference(model, batch, **kwargs)
 
-        if got_str_input:
-            return [
-                tokenization_repair.repair_whitespace(
-                    ipt,
-                    repair_tokens
-                )
-                for ipt, repair_tokens in zip(inputs, repair_tokens_list)
-            ]
-        else:
-            return repair_tokens_list
+        return [
+            tokenization_repair.repair_whitespace(
+                ipt,
+                repair_tokens
+            )
+            for ipt, repair_tokens in zip(inputs, repair_tokens_list)
+        ]

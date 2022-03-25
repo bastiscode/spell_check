@@ -88,7 +88,7 @@ class GraphSECWordsNMT(MultiNode2Seq):
             output_tokenizer=output_tokenizer,
             encoder_outputs=encoder_outputs,
             encoder_lengths=encoder_lengths,
-            max_length=512,
+            max_length=model.cfg.max_length,
             decoder_positions=decoder_positions,
             input_strings=input_strings,
             **kwargs

@@ -50,7 +50,7 @@ def tokenize_words_regex(sequence: str) -> Tuple[List[str], List[bool]]:
             whitespaces.append(last_end < match.start())
         last_end = match.end()
     if len(words) > 0:
-        whitespaces.append(False)
+        whitespaces.append(sequence.endswith(" "))
     return words, whitespaces
 
 
@@ -317,7 +317,6 @@ def open_lmdb(lmdb_path: str, write: bool = False) -> lmdb.Environment:
         map_size=5e10,
         subdir=False,
         readonly=not write,
-        readahead=False,
         lock=False
     )
 
@@ -553,16 +552,19 @@ def get_character_groups_from_repaired_doc(
     return torch.tensor(character_groups, dtype=torch.long)
 
 
-def clean_sequence(sequence: str) -> str:
+def clean_sequence(sequence: str, fix_unicode_errors: bool = False) -> str:
     """
 
     Replace all multiple whitespaces, tabs,
     linebreaks etc. with single whitespaces.
 
     :param sequence: string
+    :param fix_unicode_errors: bool
     :return: cleaned string
     """
-    return " ".join(fix_unicode(sequence).strip().split())
+    if fix_unicode_errors:
+        sequence = fix_unicode(sequence)
+    return " ".join(sequence.strip().split())
 
 
 def fix_unicode(sequence: str) -> str:

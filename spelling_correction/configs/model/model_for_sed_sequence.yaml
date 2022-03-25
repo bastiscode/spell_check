@@ -8,8 +8,8 @@ edge_hidden_dim: ${oc.env:GNN_LIB_EDGE_HIDDEN_DIM,256}
 hidden_feature: "h"
 
 num_classes: 2
-node_type: "sequence"
+node_type: "word"
 pooling_type: "mean"
 
 tokenizers:
-  token: ${from_file:tokenizer/bpe_default.yaml}
+  token: ${from_file:tokenizer/bpe_no_prefix_space.yaml}

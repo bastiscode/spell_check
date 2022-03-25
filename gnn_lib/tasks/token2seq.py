@@ -1,4 +1,4 @@
-from typing import List, Any, Dict, Tuple
+from typing import List, Any, Dict, Tuple, Union
 
 import torch
 from torch.nn import functional as F
@@ -7,6 +7,7 @@ from gnn_lib import models, tasks
 from gnn_lib.modules import inference, utils
 from gnn_lib.utils import data_containers, BATCH, to
 from gnn_lib.utils.distributed import DistributedDevice
+from gnn_lib.tasks import utils as task_utils
 
 
 class Token2Seq(tasks.Task):
@@ -14,10 +15,6 @@ class Token2Seq(tasks.Task):
 
     def _get_additional_stats(self, model: models.ModelForToken2Seq) -> Dict[str, data_containers.DataContainer]:
         return {
-            "text": data_containers.MultiTextContainer(
-                name="text_samples",
-                max_samples=4
-            ),
             "seq_length": data_containers.HistogramContainer(
                 name="input_sequence_length"
             )
@@ -74,56 +71,9 @@ class Token2Seq(tasks.Task):
         sequence_length_container = stats["seq_length"]
         sequence_length_container.add([len(t) for t in inputs["x"]])
 
-        text_container: data_containers.MultiTextContainer = stats["text"]  # type: ignore
-        if (
-                step % max(total_steps // text_container.max_samples, 1) != 0
-                or len(text_container.samples) >= text_container.max_samples
-        ):
-            return
-
-        input_str = model.input_tokenizer.de_tokenize(inputs["x"][0].tolist())
-
-        length = len(inputs["decoder_inputs"][0])
-        label_ids = labels["labels"][0, :length].tolist()
-        output_ids = torch.argmax(model_output[0, :length], dim=1).tolist()
-
-        labels_str = model.output_tokenizer.de_tokenize(label_ids)
-        pred_str = model.output_tokenizer.de_tokenize(output_ids)
-
-        # this multiline string looks silly but has to be that way, since tensorboard formats text as markdown
-        text_container.add(
-            f"""
-    input:\t{input_str}
-    label:\t{labels_str}
-    pred:\t{pred_str}
----
-            """
-        )
-
     @torch.inference_mode()
     def inference(self,
-                  model: models.ModelForSeq2Seq,
-                  inputs: List[str],
+                  model: models.ModelForToken2Seq,
+                  inputs: Union[List[str], BATCH],
                   **kwargs: Any) -> List[List[str]]:
-        self._check_model(model)
-        model = model.eval()
-
-        got_str_input = isinstance(inputs, list) and isinstance(inputs[0], str)
-        if got_str_input:
-            tensors, infos = self.variant.prepare_sequences_for_inference(inputs)
-        else:
-            tensors, infos = inputs
-
-        output_tokenizer = model.tokenizers["output_tokenizer"]
-
-        encoder_inputs, encoder_padding_mask = model.pad_inputs(tensors)
-        encoder_outputs = model.encode(encoder_inputs, encoder_padding_mask)
-
-        return inference.run_inference(
-            model=model.head,
-            output_tokenizer=output_tokenizer,
-            encoder_outputs={"encoder_outputs": encoder_outputs},
-            encoder_lengths={"encoder_outputs": torch.tensor([len(t) for t in tensors], dtype=torch.long)},
-            max_length=512,
-            **kwargs
-        )
+        raise NotImplementedError

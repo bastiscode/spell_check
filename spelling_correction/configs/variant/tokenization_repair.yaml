@@ -1,4 +1,4 @@
-type: TOKENIZATION_REPAIR_PLUS
+type: TOKENIZATION_REPAIR
 
 preprocessing: ${from_file:preprocessing/tokenization_repair_plus.yaml}
 

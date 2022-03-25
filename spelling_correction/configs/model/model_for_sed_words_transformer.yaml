@@ -8,4 +8,4 @@ num_layers: ${oc.env:GNN_LIB_NUM_ENCODER_LAYERS,6}
 
 num_classes: 2
 
-tokenizer: ${from_file:tokenizer/bpe_default.yaml}
+tokenizer: ${from_file:tokenizer/bpe_no_prefix_space.yaml}

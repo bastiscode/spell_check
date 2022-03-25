@@ -8,7 +8,5 @@ dropout: 0.1
 input_type: "char"
 output_type: "tokenization_repair_plus_sed"
 
-num_input_layers: ${oc.env:GNN_LIB_NUM_INPUT_LAYERS,12}
+num_input_layers: ${oc.env:GNN_LIB_NUM_INPUT_LAYERS,6}
 num_word_layers: ${oc.env:GNN_LIB_NUM_WORD_LAYERS,6}
-
-num_sec_layers: ${oc.env:GNN_LIB_NUM_WORD_LAYERS,6}

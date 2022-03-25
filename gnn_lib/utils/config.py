@@ -28,7 +28,7 @@ class PreprocessConfig:
 
     # options for tokenization and neighbor index
     tokenizer: TokenizerConfig = MISSING
-    respect_leading_whitespaces: bool = False
+    respect_leading_whitespaces: bool = True
     index: Optional[str] = None
     index_num_neighbors: int = 20
 

@@ -9,5 +9,3 @@ output_type: "tokenization_repair_plus_sed"
 
 add_word_features: ${oc.env:GNN_LIB_ADD_WORD_FEATURES,true}
 dictionary_file: ${oc.env:GNN_LIB_DICTIONARY,${oc.env:GNN_LIB_DATA_DIR}/dictionaries/merged_train_100k.txt}
-
-sec_tokenizer: ${from_file:tokenizer/bpe_default.yaml}

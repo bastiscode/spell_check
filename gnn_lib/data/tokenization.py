@@ -90,7 +90,7 @@ def get_tokenizer_from_config(cfg: Union[TokenizerConfig, omegaconf.DictConfig])
 
 def get_tokenization_fn(
         tokenizer: Tokenizer,
-        respect_leading_whitespaces: bool = False
+        respect_leading_whitespaces: bool = True
 ) -> Callable[[Doc], List[List[int]]]:
     def tok(doc: Doc) -> List[List[int]]:
         if respect_leading_whitespaces:
@@ -296,17 +296,19 @@ class BPETokenizer(Tokenizer):
         self.unk_id = self.token_to_id(UNK)
 
     @staticmethod
-    def train(files: List[str], save_path: str, vocab_size: int, max_sequences: Optional[int] = None,
-              train_method: str = "default") -> None:
-        if train_method not in {"default", "words_with_whitespace", "words_without_whitespace"}:
-            raise ValueError(f"Unknown train method {train_method}")
-
+    def train(
+            files: List[str],
+            save_path: str,
+            vocab_size: int,
+            max_sequences: Optional[int] = None,
+            add_prefix_space: bool = False
+    ) -> None:
         tokenizer = tokenizers.Tokenizer(models.BPE(unk_token=UNK))
         tokenizer.normalizer = normalizers.Sequence([
             normalizers.NFD(),
             normalizers.StripAccents()
         ])
-        tokenizer.pre_tokenizer = pre_tokenizers.ByteLevel(add_prefix_space=train_method == "default")
+        tokenizer.pre_tokenizer = pre_tokenizers.ByteLevel(add_prefix_space=add_prefix_space)
         tokenizer.decoder = decoders.ByteLevel()
         tokenizer.add_special_tokens(SPECIAL_TOKENS)
         initial_alphabet = pre_tokenizers.ByteLevel.alphabet()
@@ -319,38 +321,38 @@ class BPETokenizer(Tokenizer):
         )
         if len(initial_alphabet) < vocab_size:
             tokenizer.train_from_iterator(
-                BPETokenizer._training_iterator(files, max_sequences, train_method),
+                BPETokenizer._training_iterator(files, max_sequences),
                 trainer
             )
         tokenizer.save(save_path)
 
     @staticmethod
-    def _training_iterator(files: List[str], max_sequences: Optional[int], train_method: str) -> Iterator[str]:
+    def _training_iterator(files: List[str], max_sequences: Optional[int]) -> Iterator[str]:
         num_sequences = 0
         for file in files:
             with open(file, "r", encoding="utf8") as in_f:
-                if train_method != "default":
-                    lines = [line.strip() for line in in_f.readlines()]
-                    docs = utils.tokenize_words_batch(
-                        lines,
-                        return_docs=True,
-                        batch_size=2048
-                    )
-                    for _, doc in docs:
-                        for i, token in enumerate(doc):
-                            # convert spacy trailing whitespace to bpe leading whitespaces
-                            if i == 0 or doc[i - 1].whitespace_ == "" or train_method == "words_without_whitespace":
-                                yield token.text
-                            else:
-                                yield " " + token.text
-                        num_sequences += 1
-                else:
-                    for line in in_f:
-                        yield line.strip()
-                        num_sequences += 1
+                # if train_method != "default":
+                #     lines = [line.strip() for line in in_f.readlines()]
+                #     docs = utils.tokenize_words_batch(
+                #         lines,
+                #         return_docs=True,
+                #         batch_size=2048
+                #     )
+                #     for _, doc in docs:
+                #         for i, token in enumerate(doc):
+                #             # convert spacy trailing whitespace to bpe leading whitespaces
+                #             if i == 0 or doc[i - 1].whitespace_ == "" or train_method == "words_without_whitespace":
+                #                 yield token.text
+                #             else:
+                #                 yield " " + token.text
+                #         num_sequences += 1
+                # else:
+                for line in in_f:
+                    yield line.strip()
+                    num_sequences += 1
 
-                if max_sequences is not None and num_sequences >= max_sequences:
-                    return
+                    if max_sequences is not None and num_sequences >= max_sequences:
+                        return
 
     @property
     def vocab_size(self) -> int:

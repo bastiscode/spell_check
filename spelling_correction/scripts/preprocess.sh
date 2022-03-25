@@ -34,7 +34,7 @@ fi
 
 config=${GNN_LIB_CONFIG?"GNN_LIB_CONFIG env variable not found"}
 
-export GNN_LIB_CONFIG_DIR=$(dirname $(realpath $config))
+export GNN_LIB_CONFIG_DIR=$workspace/spelling_correction/configs
 export GNN_LIB_DATA_DIR=$data_dir
 
 python gnn_lib/preprocess.py $config

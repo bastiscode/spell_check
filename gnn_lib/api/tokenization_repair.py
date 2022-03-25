@@ -1,11 +1,15 @@
-import os
+import functools
+import os.path
 import pprint
 import shutil
-from typing import List, Optional, Union, Any, Dict
+from typing import List, Union, Dict, Any, Optional
 
 import torch
 from tqdm import tqdm
 
+from gnn_lib.data.utils import clean_sequence
+from gnn_lib.modules import inference
+from gnn_lib.tasks import tokenization_repair
 from gnn_lib.api.utils import (
     ModelInfo,
     StringInputOutput,
@@ -16,53 +20,29 @@ from gnn_lib.api.utils import (
     get_string_dataset_and_loader,
     reorder_data, get_device_info
 )
-from gnn_lib.data import DatasetVariants
-from gnn_lib.modules import inference
-from gnn_lib.tasks import graph_sed_words, graph_sed_sequence, sed_words, sed_sequence
 from gnn_lib.utils import common
 
-__all__ = ["get_available_spelling_error_detection_models", "SpellingErrorDetector"]
-
-Detections = Union[str, List[int], List[List[int]]]
+__all__ = ["get_available_tokenization_repair_models", "TokenizationRepairer"]
 
 
-def get_available_spelling_error_detection_models() -> List[ModelInfo]:
+def get_available_tokenization_repair_models() -> List[ModelInfo]:
     return [
         ModelInfo(
-            task="sed_words",
-            name="gnn_default",
-            description="Graph Neural Network which extends the default Transformer fully connected graph "
-                        "with word nodes and word features"
-        ),
-        ModelInfo(
-            task="sed_words",
-            name="gnn_cliques_wfc",
-            description="Graph Neural Network which processes language graphs with fully connected word nodes "
-                        "and fully connected sub-word cliques for each word"
-        ),
-        ModelInfo(
-            task="sed_sequence",
-            name="gnn_default",
-            description="Graph Neural Network which extends the default Transformer fully connected graph "
-                        "with word nodes, word features and a sequence node"
-        ),
-        ModelInfo(
-            task="sed_sequence",
-            name="gnn_cliques_wfc",
-            description="Graph Neural Network which processes language graphs with fully connected word nodes, "
-                        "fully connected sub-word cliques for each word and a sequence node"
+            task="tokenization_repair",
+            name="transformer_eo_large",
+            description="Transformer model that repairs sequences by predicting repair tokens for each character"
         )
     ]
 
 
-class SpellingErrorDetector:
+class TokenizationRepairer:
     def __init__(
             self,
             model_dir: str,
             device: Union[str, int],
             **kwargs: Dict[str, Any]
     ) -> None:
-        self.logger = common.get_logger("SPELLING_ERROR_DETECTION")
+        self.logger = common.get_logger("TOKENIZATION_REPAIR")
 
         if device != "cpu" and not torch.cuda.is_available():
             self.logger.info(f"could not find a GPU, using CPU as fallback option")
@@ -78,14 +58,8 @@ class SpellingErrorDetector:
             kwargs.get("keep_existing_env_vars", False)
         )
 
-        assert (
-                isinstance(self.task, graph_sed_words.GraphSEDWords)
-                or isinstance(self.task, sed_words.SEDWords)
-                or isinstance(self.task, graph_sed_sequence.GraphSEDSequence)
-                or isinstance(self.task, sed_sequence.SEDSequence)
-        ), \
-            f"expected experiment to be of type SEDWords, GraphSEDWords, " \
-            f"SEDSequence or GraphSEDSequence, but got {type(self.task)}"
+        assert isinstance(self.task, tokenization_repair.TokenizationRepair), \
+            f"expected experiment to be of type TokenizationRepair, but got {type(self.task)}"
 
         self.model.eval()
         for param in self.model.parameters():
@@ -95,10 +69,7 @@ class SpellingErrorDetector:
 
     @property
     def task_name(self) -> str:
-        return (
-            "sed_words" if self.task.variant_cfg.type == DatasetVariants.SED_WORDS
-            else "sed_sequence"
-        )
+        return "tokenization_repair"
 
     @property
     def model_name(self) -> str:
@@ -106,22 +77,21 @@ class SpellingErrorDetector:
 
     @staticmethod
     def from_pretrained(
-            task: str = "sed_words",
-            model: str = "gnn_default",
+            model: str = "transformer_eo_large",
             device: Union[str, int] = "cuda",
             cache_dir: Optional[str] = None,
             force_download: bool = False
-    ) -> "SpellingErrorDetector":
-        assert any(model == m.name and task == m.task for m in get_available_spelling_error_detection_models()), \
-            f"task {task} and model {model} do not match any of the available models:\n" \
-            f"{pprint.pformat(get_available_spelling_error_detection_models())}"
+    ) -> "TokenizationRepairer":
+        assert any(model == m.name for m in get_available_tokenization_repair_models()), \
+            f"model {model} does not match any of the available models:\n" \
+            f"{pprint.pformat(get_available_tokenization_repair_models())}"
 
         logger = common.get_logger("DOWNLOAD")
 
         data_dir = download_data(force_download, logger, cache_dir)
 
         model_dir = download_model(
-            task=task,
+            task="tokenization_repair",
             name=model,
             cache_dir=cache_dir,
             force_download=force_download,
@@ -134,7 +104,7 @@ class SpellingErrorDetector:
         else:
             config_dir = download_configs(force_download, logger, cache_dir)
 
-        return SpellingErrorDetector(
+        return TokenizationRepairer(
             model_dir,
             device,
             **{
@@ -149,8 +119,8 @@ class SpellingErrorDetector:
     def from_experiment(
             experiment_dir: str,
             device: Union[str, int] = "cuda"
-    ) -> "SpellingErrorDetector":
-        return SpellingErrorDetector(
+    ) -> "TokenizationRepairer":
+        return TokenizationRepairer(
             experiment_dir,
             device,
             **{
@@ -159,10 +129,9 @@ class SpellingErrorDetector:
         )
 
     @torch.inference_mode()
-    def _detect_text_raw(
+    def _repair_text_raw(
             self,
             inputs: Union[str, List[str]],
-            threshold: float = 0.5,
             batch_size: int = 16,
             sort_by_length: bool = True,
             show_progress: bool = False
@@ -182,19 +151,15 @@ class SpellingErrorDetector:
             unit="char"
         )
 
-        inference_kwargs = {
-            "threshold": threshold
-        }
-
         all_outputs = []
         for i, (batch, info) in enumerate(pbar):
             batch_length = sum(info["lengths"])
             pbar.set_description(
-                f"[Batch {i + 1}] Detecting spelling errors in {len(batch):,} sequences "
+                f"[Batch {i + 1}] Repairing tokenization in {len(batch):,} sequences "
                 f"with {batch_length:,} characters in total"
             )
 
-            outputs = self.task.inference(self.model, batch, **inference_kwargs)
+            outputs = self.task.inference(self.model, batch)
             all_outputs.extend(outputs)
 
             pbar.update(batch_length)
@@ -202,10 +167,9 @@ class SpellingErrorDetector:
         pbar.close()
         return reorder_data(all_outputs, dataset.indices)
 
-    def detect_text(
+    def repair_text(
             self,
             inputs: StringInputOutput,
-            threshold: float = 0.5,
             batch_size: int = 16,
             sort_by_length: bool = True,
             show_progress: bool = False
@@ -216,26 +180,24 @@ class SpellingErrorDetector:
                 or (isinstance(inputs, list) and len(inputs) > 0 and isinstance(inputs[0], str))
         ), f"input needs to be a string or a non empty list of strings"
 
-        outputs = self._detect_text_raw(
+        outputs = self._repair_text_raw(
             [inputs] if input_is_string else inputs,
-            threshold,
             batch_size,
             sort_by_length,
             show_progress
         )
         return outputs[0] if input_is_string else outputs
 
-    def detect_file(
+    def repair_file(
             self,
             input_file_path: str,
             output_file_path: Optional[str] = None,
-            threshold: float = 0.5,
             batch_size: int = 16,
             sort_by_length: bool = True,
             show_progress: bool = True
     ) -> Optional[Union[List[int], List[List[int]]]]:
-        outputs = self._detect_text_raw(
-            input_file_path, threshold, batch_size, sort_by_length, show_progress
+        outputs = self._repair_text_raw(
+            input_file_path, batch_size, sort_by_length, show_progress
         )
         if output_file_path is not None:
             with open(output_file_path, "w", encoding="utf8") as out_file:
@@ -246,7 +208,7 @@ class SpellingErrorDetector:
         else:
             return outputs
 
-    def to(self, device: Union[str, int]) -> "SpellingErrorDetector":
+    def to(self, device: Union[str, int]) -> "TokenizationRepairer":
         self.device = torch.device(device)
         self.model.to(self.device)
         return self

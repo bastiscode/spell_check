@@ -124,7 +124,7 @@ class SEDSequence(DatasetVariant):
         self.eos_token_id = self.tokenizer.token_to_id(tokenization.EOS)
         self.unk_token_id = self.tokenizer.token_to_id(tokenization.UNK)
 
-        if cfg.dictionary_file is not None:
+        if cfg.dictionary_file:
             self.dictionary = io.dictionary_from_file(cfg.dictionary_file)
         else:
             self.dictionary = None
@@ -315,7 +315,7 @@ class SEDWords(DatasetVariant):
         self.eos_token_id = self.tokenizer.token_to_id(tokenization.EOS)
         self.unk_token_id = self.tokenizer.token_to_id(tokenization.UNK)
 
-        if cfg.dictionary_file is not None:
+        if cfg.dictionary_file:
             self.dictionary = io.dictionary_from_file(cfg.dictionary_file)
         else:
             self.dictionary = None
@@ -490,7 +490,8 @@ class TokenizationRepair(DatasetVariant):
         else:
             raise ValueError(f"unknown tokenization level {cfg.tokenization_level}, must be one of {{char, byte}}")
 
-        tok_fn = tokenization.get_tokenization_fn(self.tokenizer, True)
+        self.unk_token_id = self.tokenizer.token_to_id(tokenization.UNK)
+        tok_fn = tokenization.get_tokenization_fn(self.tokenizer)
 
         super().__init__(cfg, seed, tok_fn)
 
@@ -517,7 +518,7 @@ class TokenizationRepair(DatasetVariant):
         input_sample, target_sequence = self._get_inputs(sequence, target_sequence, is_inference)
         input_sample = utils.sanitize_sample(
             input_sample,
-            unk_token_id=self.tokenizer.token_to_id(tokenization.UNK)
+            unk_token_id=self.unk_token_id
         )
 
         info = {}
@@ -561,13 +562,11 @@ class SECWordsNMT(DatasetVariant):
         self.input_tokenizer = get_tokenizer_from_config(cfg.input_tokenizer)
         self.output_tokenizer = get_tokenizer_from_config(cfg.output_tokenizer)
 
-        self.input_bos_token_id = self.input_tokenizer.token_to_id(tokenization.BOS)
-        self.input_eos_token_id = self.input_tokenizer.token_to_id(tokenization.EOS)
         self.input_unk_token_id = self.input_tokenizer.token_to_id(tokenization.UNK)
 
         self.output_pad_token_id = self.output_tokenizer.token_to_id(tokenization.PAD)
 
-        if cfg.dictionary_file is not None:
+        if cfg.dictionary_file:
             self.dictionary = io.dictionary_from_file(cfg.dictionary_file)
         else:
             self.dictionary = None
@@ -656,6 +655,9 @@ class SECWordsNMT(DatasetVariant):
                 word_ws_idx += 1
         info["encoder_group_lengths"] = torch.tensor(encoder_group_lengths, dtype=torch.long)
 
+        # start = torch.cumsum(info["encoder_group_lengths"], dim=0)[-2].item() if len(input_words) > 1 else 0
+        # print(start + info["label_splits"][-1] - 1)
+
         return self.construct_input(input_sample), info
 
 
@@ -688,13 +690,11 @@ class SECNMT(DatasetVariant):
         self.input_tokenizer = get_tokenizer_from_config(cfg.input_tokenizer)
         self.output_tokenizer = get_tokenizer_from_config(cfg.output_tokenizer)
 
-        self.input_bos_token_id = self.input_tokenizer.token_to_id(tokenization.BOS)
-        self.input_eos_token_id = self.input_tokenizer.token_to_id(tokenization.EOS)
         self.input_unk_token_id = self.input_tokenizer.token_to_id(tokenization.UNK)
 
         self.output_pad_token_id = self.output_tokenizer.token_to_id(tokenization.PAD)
 
-        if cfg.dictionary_file is not None:
+        if cfg.dictionary_file:
             self.dictionary = io.dictionary_from_file(cfg.dictionary_file)
         else:
             self.dictionary = None
@@ -734,7 +734,7 @@ class SECNMT(DatasetVariant):
             ).to_heterograph()
         elif self.cfg.data_scheme == "tensor":
             return torch.tensor(
-                [self.input_bos_token_id] + utils.flatten(sample.tokens) + [self.input_eos_token_id],
+                utils.flatten(sample.tokens),
                 dtype=torch.long
             )
         else:
@@ -790,7 +790,7 @@ class TokenizationRepairPlus(TokenizationRepair):
         self.cfg: TokenizationRepairPlusConfig
         assert self.cfg.output_type in {"tokenization_repair_plus_sed", "tokenization_repair_plus_sed_plus_sec"}
 
-        if self.cfg.dictionary_file is not None:
+        if self.cfg.dictionary_file:
             self.dictionary = io.dictionary_from_file(self.cfg.dictionary_file)
         else:
             self.dictionary = None
@@ -815,7 +815,7 @@ class TokenizationRepairPlus(TokenizationRepair):
         input_sample, target_sequence = self._get_inputs(sequence, target_sequence, is_inference)
         input_sample = utils.sanitize_sample(
             input_sample,
-            unk_token_id=self.tokenizer.token_to_id(tokenization.UNK)
+            unk_token_id=self.unk_token_id
         )
 
         info = {}
@@ -833,16 +833,20 @@ class TokenizationRepairPlus(TokenizationRepair):
             assert len(target_words) == len(org_words)
 
             repaired_words, repaired_doc = utils.tokenize_words(target_sequence, return_doc=True)
-            info["word_groups"] = [
-                {
-                    "stage": "char_to_word",
-                    "groups": utils.get_character_groups_from_repaired_doc(list(str(input_sample)), repaired_doc)
-                }
-            ]
+            info["word_groups"] = {
+                "stage": "char_to_word",
+                "groups": utils.get_character_groups_from_repaired_doc(list(str(input_sample)), repaired_doc)
+            }
 
+            info["word_features"] = utils.get_word_features(repaired_doc, self.dictionary)
+
+            input_group_lengths = [0] * len(target_words)
+            word_group_lengths = [0] * len(target_words)
             word_ws_groups = []
             word_ws_idx = 0
             for word in repaired_doc:
+                input_group_lengths[word_ws_idx] += len(word.text)
+                word_group_lengths[word_ws_idx] += 1
                 word_ws_groups.append(word_ws_idx)
                 if word.whitespace_ == " ":
                     word_ws_idx += 1
@@ -850,10 +854,12 @@ class TokenizationRepairPlus(TokenizationRepair):
             info["word_ws_groups"] = [
                 {
                     "stage": "word_to_word_ws",
-                    "groups": torch.tensor(word_ws_groups, dtype=torch.long),
-                    "features": utils.get_word_features(repaired_doc, self.dictionary)
+                    "groups": torch.tensor(word_ws_groups, dtype=torch.long)
                 }
             ]
+
+            info["word_group_lengths"] = torch.tensor(word_group_lengths, dtype=torch.long)
+            info["input_group_lengths"] = torch.tensor(input_group_lengths, dtype=torch.long)
 
             info["sed_label"] = torch.tensor(
                 [

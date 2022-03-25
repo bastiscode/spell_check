@@ -1,6 +1,7 @@
 import dataclasses
 import os
 import pprint
+import shutil
 from typing import List, Optional, Union, Any, Dict
 
 import torch
@@ -13,8 +14,6 @@ from gnn_lib.api.utils import (
     download_configs,
     download_model,
     load_experiment,
-    get_cpu_info,
-    get_gpu_info,
     get_string_dataset_and_loader,
     reorder_data,
     load_text_file,
@@ -103,8 +102,8 @@ def inference_kwargs_from_search_and_score(search: Search, score: SpellingCorrec
     inference_kwargs["score_fn"] = inference.spelling_correction_score(
         score.mode,
         score.prefix_index,
-        score.normalize_by_length,
-        score.alpha
+        normalize_by_length=score.normalize_by_length,
+        alpha=score.alpha
     )
 
     return inference_kwargs
@@ -144,7 +143,7 @@ class SpellingErrorCorrector:
         for param in self.model.parameters():
             param.requires_grad = False
 
-        self.max_length = 512  # self.model.embedding.node_embedding.pos_emb["token"].max_len or float("inf")
+        self.max_length = self.model.cfg.max_length
 
     @property
     def task_name(self) -> str:
@@ -168,7 +167,7 @@ class SpellingErrorCorrector:
         logger = common.get_logger("DOWNLOAD")
 
         data_dir = download_data(force_download, logger, cache_dir)
-        config_dir = download_configs(force_download, logger, cache_dir)
+
         model_dir = download_model(
             task="sec",
             name=model,
@@ -176,6 +175,13 @@ class SpellingErrorCorrector:
             force_download=force_download,
             logger=logger
         )
+        # check if model comes with a configs.zip, if not download global configs
+        if os.path.exists(os.path.join(model_dir, "configs.zip")):
+            shutil.unpack_archive(os.path.join(model_dir, "configs.zip"), extract_dir=model_dir)
+            config_dir = os.path.join(model_dir, "configs")
+        else:
+            config_dir = download_configs(force_download, logger, cache_dir)
+
         return SpellingErrorCorrector(
             model_dir,
             device,

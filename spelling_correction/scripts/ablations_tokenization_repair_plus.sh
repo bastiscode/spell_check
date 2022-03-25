@@ -21,15 +21,27 @@ export GNN_LIB_MIXED_PRECISION=true
 approach=${APPROACH:-"APPROACH is not defined"}
 
 # architecture ablations
-if [[ $approach == "encoder_only" ]]; then
-  config="$config_dir/tokenization_repair.yaml"
+if [[ $approach == "plus_sed" ]]; then
+  config="$config_dir/tokenization_repair_plus_sed.yaml"
   rel_config=$(realpath "$config" --relative-to "$workspace")
   echo "Starting training with config $(realpath "$config" --relative-to "$config_dir")"
-  export GNN_LIB_EXPERIMENT_NAME="transformer_encoder_only"
+  export GNN_LIB_EXPERIMENT_NAME="tokenization_repair_plus_sed"
   export GNN_LIB_MASTER_PORT=$(python -c "import random; print(random.randrange(10000, 60000))")
   export GNN_LIB_BATCH_MAX_LENGTH=98304
   export GNN_LIB_CONFIG=$rel_config
   sbatch spelling_correction/scripts/train.sh
+
+elif [[ $approach == "plus_sed_plus_sec" ]]; then
+  config="$config_dir/tokenization_repair_plus_sed_plus_sec.yaml"
+  rel_config=$(realpath "$config" --relative-to "$workspace")
+  echo "Starting training with config $(realpath "$config" --relative-to "$config_dir")"
+  export GNN_LIB_EXPERIMENT_NAME="tokenization_repair_plus_sed_plus_sec"
+  export GNN_LIB_MASTER_PORT=$(python -c "import random; print(random.randrange(10000, 60000))")
+  export GNN_LIB_NUM_SEC_LAYERS=6
+  export GNN_LIB_BATCH_MAX_LENGTH=32768
+  export GNN_LIB_CONFIG=$rel_config
+  sbatch spelling_correction/scripts/train.sh
+
 else
   echo "Unknown approach $approach"
 fi

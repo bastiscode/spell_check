@@ -13,4 +13,4 @@ num_classes:
   word: 2
 
 tokenizers:
-  token: ${from_file:tokenizer/bpe_default.yaml}
+  token: ${from_file:tokenizer/bpe_no_prefix_space.yaml}

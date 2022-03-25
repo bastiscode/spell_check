@@ -9,16 +9,16 @@ cd "$workspace" || exit 1
 # some defaults which stay the same across ablations
 export GNN_LIB_EPOCHS=1
 export GNN_LIB_HIDDEN_DIM=512
-export GNN_LIB_EDGE_HIDDEN_DIM=256
+export GNN_LIB_EDGE_HIDDEN_DIM=128
 export GNN_LIB_NUM_LAYERS=6
 export GNN_LIB_LOG_PER_EPOCH=200
 export GNN_LIB_EVAL_PER_EPOCH=20
+export GNN_LIB_BATCH_MAX_LENGTH=98304
 export GNN_LIB_DATA_LIMIT=100000000
 export GNN_LIB_LR=0.0001
 export GNN_LIB_WEIGHT_DECAY=0.01
 export GNN_LIB_NUM_NEIGHBORS=3
 export GNN_LIB_MIXED_PRECISION=true
-export GNN_LIB_MASTER_PORT=$(python -c "import random; print(random.randrange(10000, 60000))")
 
 ablations_type=${ABLATIONS_TYPE:-"ABLATIONS_TYPE is not defined"}
 
@@ -39,9 +39,10 @@ if [[ $ablations_type == "gnn" ]]; then
 #    "false attention residual false true false false true null" # default
 #    "false attention residual false false false false true null" # default - word_features
 #    "false attention residual false true false true false null" # cliques + wfc - dictionary
-    "false attention residual false true false true false null" # cliques + wfc
+#    "false attention residual false true false true false null" # cliques + wfc
 #    "false attention residual false false false true false null" # cliques + wfc - word_features
-#    "true attention residual false true true true false null" # cliques + wfc + dep + message_gating
+    "true attention residual false true true true false null" # cliques + wfc + dep + message_gating
+#    "true message_passing residual false true true true false null" # message_passing + cliques + wfc + dep + message_gating
 #    "false convolution residual false true false false true null" # convolution
 #    "true attention residual false true true false false null" # cliques + message_gating + dep
 #    "true attention residual false true false true false data/spell_check_index/ctx_0_ned_string" # default + message_gating + cliques + neighbors
@@ -50,9 +51,10 @@ if [[ $ablations_type == "gnn" ]]; then
 #    "gnn_default"
 #    "gnn_default_no_features"
 #    "gnn_cliques_wfc_no_dict"
-    "gnn_cliques_wfc"
+#    "gnn_cliques_wfc"
 #    "gnn_cliques_wfc_no_features"
-#    "gnn_cliques_wfc_dep_gating"
+    "gnn_cliques_wfc_dep_gating"
+#    "gnn_message_passing_cliques_wfc_dep_gating"
 #    "gnn_convolution"
 #    "gnn_cliques_dependency"
 #    "gnn_neighbors"
@@ -61,7 +63,7 @@ if [[ $ablations_type == "gnn" ]]; then
   for ablation_idx in ${!ablations[@]}; do
     declare -a ablation=(${ablations[$ablation_idx]})
     export GNN_LIB_EXPERIMENT_NAME=${ablation_names[$ablation_idx]}
-    export GNN_LIB_BATCH_MAX_LENGTH=32768
+    export GNN_LIB_MASTER_PORT=$(python -c "import random; print(random.randrange(10000, 60000))")
 
     config="$config_dir/sed_words.yaml"
     rel_config=$(realpath "$config" --relative-to "$workspace")
@@ -83,13 +85,42 @@ if [[ $ablations_type == "gnn" ]]; then
   done
 
 elif [[ $ablations_type == "transformer" ]]; then
-  config="$config_dir/sed_words_transformer.yaml"
-  rel_config=$(realpath "$config" --relative-to "$workspace")
-  echo "Starting ablation with config $(realpath "$config" --relative-to "$config_dir")"
-  export GNN_LIB_EXPERIMENT_NAME="transformer"
-  export GNN_LIB_BATCH_MAX_LENGTH=32768
-  export GNN_LIB_CONFIG=$rel_config
-  sbatch spelling_correction/scripts/train.sh
+  declare -a ablation_env_vars=(
+    "GNN_LIB_ADD_WORD_FEATURES"
+    "GNN_LIB_DICTIONARY"
+  )
+  declare -a ablations=(
+    "true null"
+    "false null"
+  )
+  declare -a ablation_names=(
+    "transformer"
+    "transformer_no_feat"
+  )
+
+  for ablation_idx in ${!ablations[@]}; do
+    declare -a ablation=(${ablations[$ablation_idx]})
+    export GNN_LIB_EXPERIMENT_NAME=${ablation_names[$ablation_idx]}
+    export GNN_LIB_MASTER_PORT=$(python -c "import random; print(random.randrange(10000, 60000))")
+
+    config="$config_dir/sed_words_transformer.yaml"
+    rel_config=$(realpath "$config" --relative-to "$workspace")
+    export GNN_LIB_CONFIG=$rel_config
+    echo "Starting ablation with config $(realpath $config --relative-to $config_dir) and parameters:"
+
+    for idx in ${!ablation[@]}; do
+      env_var=${ablation_env_vars[$idx]}
+      val=${ablation[$idx]}
+      echo $env_var=$val
+      if [[ $val != "null" ]]; then
+        export $env_var=$val
+      fi
+    done
+
+    echo ""
+
+    sbatch spelling_correction/scripts/train.sh
+  done
 
 else
   echo "Unknown ablation type $ablations_type"

@@ -134,6 +134,6 @@ class Graph2Seq(tasks.Task):
             output_tokenizer=model.output_tokenizer,
             encoder_outputs=encoder_outputs,
             encoder_lengths=encoder_lengths,
-            max_length=512,
+            max_length=model.cfg.max_length,
             **kwargs
         )

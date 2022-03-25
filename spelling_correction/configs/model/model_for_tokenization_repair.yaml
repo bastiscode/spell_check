@@ -8,5 +8,5 @@ num_layers: ${oc.env:GNN_LIB_NUM_ENCODER_LAYERS,6}
 
 num_classes: 3
 
-input_tokenizer:
+tokenizer:
   type: CHAR

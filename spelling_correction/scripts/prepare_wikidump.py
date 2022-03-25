@@ -5,7 +5,6 @@ import os
 import re
 from typing import Tuple
 
-import ftfy
 from tqdm import tqdm
 
 from spacy.lang.en import English
@@ -35,12 +34,12 @@ def txt_file_to_jsonl(args: Tuple[str, str, bool]) -> None:
             if doc_tag_regex.match(line) is not None or not is_valid_sequence(line, min_length=1):
                 num_invalid += 1
                 continue
-            line = ftfy.fix_text(clean_sequence(line))
+            line = clean_sequence(line)
             samples.append({"sequence": line})
     else:
         for match in re.finditer(doc_regex, raw):
             doc_id = int(match.group(1))
-            g = ftfy.fix_text(clean_sequence(match.group(2)))
+            g = clean_sequence(match.group(2))
             docs = nlp.pipe([g])
             for doc in docs:
                 for s in doc.sents:

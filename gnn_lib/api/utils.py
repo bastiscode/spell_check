@@ -7,7 +7,7 @@ import platform
 import re
 import shutil
 import zipfile
-from typing import Optional, Union, List, Tuple, Dict
+from typing import Optional, Union, List, Tuple, Dict, Callable
 
 import requests
 import torch
@@ -268,14 +268,15 @@ def load_text_file(file_path: str) -> List[str]:
 def get_string_dataset_and_loader(
         file_or_list_of_strings: Union[str, List[str]],
         sort_by_length: bool,
-        batch_size: int
+        batch_size: int,
+        clean_fn: Callable[[str], str] = clean_sequence
 ) -> Tuple[StringDataset, DataLoader]:
     if isinstance(file_or_list_of_strings, list):
         text_data = file_or_list_of_strings
     else:
         text_data = load_text_file(file_or_list_of_strings)
 
-    text_data = [clean_sequence(line) for line in text_data]
+    text_data = [clean_fn(line) for line in text_data]
 
     dataset = StringDataset(text_data, sort_by_length=sort_by_length)
     loader = DataLoader(

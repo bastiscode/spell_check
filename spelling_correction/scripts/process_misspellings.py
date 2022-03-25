@@ -1,8 +1,8 @@
+import argparse
 import collections
 import glob
 import json
 import os
-import pickle
 from functools import partial
 from typing import Dict, List, Set, Callable, Tuple, Iterable, Optional
 
@@ -15,7 +15,6 @@ from tqdm import tqdm
 import gnn_lib.data.utils
 from gnn_lib.data import utils
 from gnn_lib.utils import common, io
-from spelling_correction import MISSPELLINGS_DIR, DATA_DIR, DICTIONARIES_DIR
 
 HUNSPELL = hunspell.HunSpell("/usr/share/hunspell/en_US.dic", "/usr/share/hunspell/en_US.aff")
 
@@ -265,11 +264,15 @@ def merge_values(*args: Dict, key: str) -> List[str]:
     return list(values)
 
 
-def filter_misspellings(misspellings: Dict[str, Iterable[str]],
-                        dictionary: Optional[Dict[str, int]] = None,
-                        min_freq: int = 2) -> Dict[str, List[str]]:
-    def in_dict_and_frequent_enough(w: str) -> bool:
-        return dictionary is not None and dictionary.get(w, -1) >= min_freq
+def filter_misspellings(
+        misspellings: Dict[str, Iterable[str]],
+        dictionary: Optional[Dict[str, int]] = None
+) -> Dict[str, List[str]]:
+    def in_dict(w: str) -> bool:
+        if dictionary is None:
+            return True
+        else:
+            return w in dictionary
 
     if len(misspellings) == 0:
         return {}
@@ -277,7 +280,7 @@ def filter_misspellings(misspellings: Dict[str, Iterable[str]],
     invalid_correct = 0
     invalid_missp = 0
     for correct, missp in misspellings.items():
-        if invalid_word(correct) or not in_dict_and_frequent_enough(correct):
+        if invalid_word(correct) or not in_dict(correct):
             invalid_correct += 1
             continue
         for m in missp:
@@ -313,69 +316,101 @@ def train_test_split_misspellings(
     return train_missp, test_missp
 
 
-if __name__ == "__main__":
-    logger = common.get_logger("PROCESS_MISSPELLINGS")
-    os.makedirs(MISSPELLINGS_DIR, exist_ok=True)
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--misspellings-dir", type=str, required=True)
+    parser.add_argument("--data-dir", type=str, required=True)
+    parser.add_argument("--dictionary", type=str, required=True)
+    parser.add_argument("--out-dir", type=str, required=True)
+    parser.add_argument("--no-neuspell", action="store_true")
+    parser.add_argument("--test-split", type=float, default=0.025)
+    parser.add_argument("--dev-split", type=float, default=0.025)
+    parser.add_argument("--filter-without-dict", action="store_true")
+    return parser.parse_args()
 
-    dictionary = io.dictionary_from_file(os.path.join(DICTIONARIES_DIR, "merged_train_100k.txt"))
-    out_file = os.path.join(MISSPELLINGS_DIR, "misspellings.json")
+
+if __name__ == "__main__":
+    args = parse_args()
+
+    logger = common.get_logger("PROCESS_MISSPELLINGS")
+    os.makedirs(args.out_dir, exist_ok=True)
+
+    dictionary = io.dictionary_from_file(args.dictionary)
+
+    out_file = os.path.join(args.out_dir, "misspellings.json")
     if os.path.exists(out_file):
         logger.info(f"Misspellings at {out_file} already exist")
         with open(out_file, "r", encoding="utf8") as inf:
             all_misspellings = json.load(inf)
     else:
-        tweet_misspellings = process_tweet(os.path.join(DATA_DIR, "raw", "misspellings", "tweet", "tweet.txt"))
+        tweet_misspellings = process_tweet(os.path.join(args.misspellings_dir, "tweet", "tweet.txt"))
 
         homophones_misspellings = process_homophones(
-            os.path.join(DATA_DIR, "raw", "misspellings", "homophones", "homofonz", "homophones-1.01.txt"))
+            os.path.join(args.misspellings_dir, "homophones", "homofonz", "homophones-1.01.txt")
+        )
 
         aspell_suggestions = get_suggestions_for_file(
-            os.path.join(DICTIONARIES_DIR, "merged_train_100k.txt"),
+            args.dictionary,
             suggestion_fn=suggest_top_k(aspell_suggest, 5),
             is_dictionary=True
         )
 
         hunspell_suggestions = get_suggestions_for_file(
-            os.path.join(DICTIONARIES_DIR, "merged_train_100k.txt"),
+            args.dictionary,
             suggestion_fn=suggest_top_k(hunspell_suggest, 5),
             is_dictionary=True
         )
 
-        birkbeck_misspellings = process_birkbeck(os.path.join(DATA_DIR, "raw", "misspellings", "birkbeck"))
+        birkbeck_misspellings = process_birkbeck(os.path.join(args.misspellings_dir, "birkbeck"))
 
         wikipedia_misspellings = process_wikipedia(
-            os.path.join(DATA_DIR, "raw", "misspellings", "wikipedia", "misspellings.txt"))
+            os.path.join(args.misspellings_dir, "wikipedia", "misspellings.txt")
+        )
 
         toefl_spell_misspellings = process_toefl_spell(
-            os.path.join(DATA_DIR, "raw", "misspellings", "toefl_spell", "Annotations.tsv"))
-
-        neuspell_misspellings = process_neuspell(os.path.join(DATA_DIR, "raw", "neuspell", "traintest", "wo_context"))
-
-        fce_m2_files = io.glob_safe(os.path.join(DATA_DIR, "raw", "fce_v2.1.bea19", "fce", "m2", "*.m2"))
-        lang8_m2_files = io.glob_safe(os.path.join(DATA_DIR, "raw", "lang8.bea19", "*.m2"))
-        nucle_m2_files = io.glob_safe(os.path.join(DATA_DIR, "raw", "release3.3", "bea2019", "*.m2"))
-        wi_locness_m2_files = io.glob_safe(
-            os.path.join(DATA_DIR, "raw", "wi+locness_v2.1.bea19", "wi+locness", "m2", "*.m2"))
-        bea_misspellings = process_bea(wi_locness_m2_files + fce_m2_files + lang8_m2_files + nucle_m2_files)
+            os.path.join(args.misspellings_dir, "toefl_spell", "Annotations.tsv")
+        )
 
         moe_misspellings = process_moe(
-            os.path.join(DATA_DIR, "raw", "misspellings", "moe", "moe_misspellings_train.tsv"))
+            os.path.join(args.misspellings_dir, "moe", "moe_misspellings_train.tsv")
+        )
 
-        all_misspellings = merge_dicts(
+        misspellings_list = [
             birkbeck_misspellings,
             wikipedia_misspellings,
             toefl_spell_misspellings,
-            neuspell_misspellings,
-            bea_misspellings,
             moe_misspellings,
             aspell_suggestions,
             hunspell_suggestions,
             tweet_misspellings,
             homophones_misspellings
-        )
+        ]
+
+        if not args.no_neuspell:
+            neuspell_misspellings = process_neuspell(
+                os.path.join(args.data_dir, "raw", "neuspell", "traintest", "wo_context")
+            )
+
+            fce_m2_files = io.glob_safe(os.path.join(args.data_dir, "raw", "fce_v2.1.bea19", "fce", "m2", "*.m2"))
+            lang8_m2_files = io.glob_safe(os.path.join(args.data_dir, "raw", "lang8.bea19", "*.m2"))
+            nucle_m2_files = io.glob_safe(os.path.join(args.data_dir, "raw", "release3.3", "bea2019", "*.m2"))
+            wi_locness_m2_files = io.glob_safe(
+                os.path.join(args.data_dir, "raw", "wi+locness_v2.1.bea19", "wi+locness", "m2", "*.m2")
+            )
+            bea_misspellings = process_bea(wi_locness_m2_files + fce_m2_files + lang8_m2_files + nucle_m2_files)
+
+            misspellings_list.extend([
+                neuspell_misspellings,
+                bea_misspellings
+            ])
+
+        all_misspellings = merge_dicts(*misspellings_list)
 
         # filter out invalid pairs
-        all_misspellings = filter_misspellings(all_misspellings, dictionary, min_freq=5)
+        all_misspellings = filter_misspellings(
+            all_misspellings,
+            None if args.filter_without_dict else dictionary
+        )
 
         with open(out_file, "w", encoding="utf8") as f:
             json.dump(all_misspellings, f)
@@ -383,9 +418,9 @@ if __name__ == "__main__":
     logger.info(f"Got {len(all_misspellings.keys())} misspelled words with "
                 f"{sum(len(v) for k, v in all_misspellings.items())} misspellings in total")
 
-    train_out_file = os.path.join(MISSPELLINGS_DIR, "train_misspellings.json")
-    dev_out_file = os.path.join(MISSPELLINGS_DIR, "dev_misspellings.json")
-    test_out_file = os.path.join(MISSPELLINGS_DIR, "test_misspellings.json")
+    train_out_file = os.path.join(args.out_dir, "train_misspellings.json")
+    dev_out_file = os.path.join(args.out_dir, "dev_misspellings.json")
+    test_out_file = os.path.join(args.out_dir, "test_misspellings.json")
 
     if os.path.exists(train_out_file) and os.path.exists(test_out_file):
         logger.info(f"Train, dev and test misspellings at {train_out_file}, {dev_out_file} and "
@@ -397,14 +432,17 @@ if __name__ == "__main__":
         with open(test_out_file, "r", encoding="utf8") as inf:
             test_misspellings = json.load(inf)
     else:
+        dev_and_test = args.dev_split + args.test_split
+        # split all into [train, dev_and_test]
         train_misspellings, dev_and_test_misspellings = train_test_split_misspellings(
             all_misspellings,
-            split=(0.95, 0.05),
+            split=(1 - dev_and_test, dev_and_test),
             seed=22
         )
+        # split dev_and_test into [dev, test]
         dev_misspellings, test_misspellings = train_test_split_misspellings(
             dev_and_test_misspellings,
-            split=(0.5, 0.5),
+            split=(args.dev_split / dev_and_test, args.test_split / dev_and_test),
             seed=22
         )
         with open(train_out_file, "w", encoding="utf8") as f:

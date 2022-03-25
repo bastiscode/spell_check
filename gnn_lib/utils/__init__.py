@@ -1,4 +1,3 @@
-import time
 from typing import List, Union, Dict, Any
 
 import dgl

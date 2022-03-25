@@ -45,20 +45,12 @@ download_misspellings:
 
 .PHONY: setup_datasets
 setup_datasets:
-	@echo "Setting up Bea2019"
-	python scripts/setup_data.py -i ../data/raw/ -o ../data/cleaned/ -d bea2019
-	@echo "Setting up Github Typo"
-	python scripts/setup_data.py -i ../data/raw/ -o ../data/cleaned/ -d github_typo
 	@echo "Setting up Wikidump"
-	python scripts/setup_data.py -i ../data/raw/ -o ../data/cleaned/ -d wikidump
+	python scripts/prepare_wikidump.py
 	@echo "Setting up Bookcorpus"
-	python scripts/setup_data.py -i ../data/raw/ -o ../data/cleaned/ -d bookcorpus
-	@echo "Setting up Multi30k"
-	python scripts/setup_data.py -i ../data/raw/ -o ../data/cleaned/ -d multi30k
-	@echo "Setting up Neuspell"
-	python scripts/setup_data.py -i ../data/raw/ -o ../data/cleaned/ -d neuspell
-	@echo "Precomputing LMDB files"
-	python scripts/process_lmdb.py
+	python scripts/prepare_bookcorpus.py
+	@echo "Setting up Arxiv"
+	python scripts/prepare_arxiv.py
 
 .PHONY: setup_misspellings
 setup_misspellings:
@@ -67,48 +59,27 @@ setup_misspellings:
 .PHONY: setup_tokenizers
 setup_tokenizers:
 	@echo "Training tokenizers"
-#	python ../gnn_lib/scripts/train_tokenizer.py --tokenizer WORD --vocab-size 100000 --in-file \
-#	../data/cleaned/wikidump/train_files.txt --out-file ../data/tokenizers/word/wikidump_100k.pkl \
-#	--max-sequences 20000000
-
 	python ../gnn_lib/scripts/train_tokenizer.py --tokenizer BPE --vocab-size 1000 \
 	--in-file ../data/cleaned/wikidump/train_files.txt ../data/cleaned/bookcorpus/train_files.txt \
-	--out-file ../data/tokenizers/bpe/wiki_bookcorpus_1k_default.pkl \
-	--bpe-method default --max-sequences 200000000
+	--out-file ../data/tokenizers/bpe/wiki_bookcorpus_1k_no_prefix_space.pkl \
+	--max-sequences 20000000
 
 	python ../gnn_lib/scripts/train_tokenizer.py --tokenizer BPE --vocab-size 10000 \
 	--in-file ../data/cleaned/wikidump/train_files.txt ../data/cleaned/bookcorpus/train_files.txt \
-	--out-file ../data/tokenizers/bpe/wiki_bookcorpus_10k_default.pkl \
-	--bpe-method default --max-sequences 200000000
-
-#	python ../gnn_lib/scripts/train_tokenizer.py --tokenizer BPE --vocab-size 10000 --in-file \
-#	../data/cleaned/wikidump/train_files.txt --out-file ../data/tokenizers/bpe/wikidump_10k_words_with_whitespace.pkl \
-#	--bpe-method words_with_whitespace --max-sequences 20000000
-
-	#python ../gnn_lib/scripts/train_tokenizer.py --tokenizer BPE --vocab-size 10000 --in-file \
-#	../data/cleaned/wikidump/train_files.txt --out-file ../data/tokenizers/bpe/wikidump_10k_words_without_whitespace.pkl \
-#	--bpe-method words_without_whitespace --max-sequences 1000000
+	--out-file ../data/tokenizers/bpe/wiki_bookcorpus_10k_no_prefix_space.pkl \
+	--max-sequences 20000000
 
 .PHONY: setup_dictionaries
 setup_dictionaries:
 	@echo "Creating Wikidump dictionary"
-	#python ../gnn_lib/scripts/create_dictionary.py --in-file ../data/cleaned/wikidump/train_files.txt \
-#	--out-file ../data/dictionaries/wikidump_train_500k.txt --top-k 500000 #--max-files 2000
-
 	python ../gnn_lib/scripts/create_dictionary.py --in-file ../data/cleaned/wikidump/train_files.txt \
-	--out-file ../data/dictionaries/wikidump_train_100k.txt --top-k 100000 --max-sequences 20000000 #--max-files 2000
+	--out-file ../data/dictionaries/wikidump_train_100k.txt --top-k 100000 --max-sequences 20000000
 
 	@echo "Creating Bookcorpus dictionary"
-	#python ../gnn_lib/scripts/create_dictionary.py --in-file ../data/cleaned/bookcorpus/train_files.txt \
-#	--out-file ../data/dictionaries/bookcorpus_train_500k.txt --top-k 500000 #--max-files 2000
-
 	python ../gnn_lib/scripts/create_dictionary.py --in-file ../data/cleaned/bookcorpus/train_files.txt \
-	--out-file ../data/dictionaries/bookcorpus_train_100k.txt --top-k 100000 --max-sequences 20000000 #--max-files 2000
+	--out-file ../data/dictionaries/bookcorpus_train_100k.txt --top-k 100000 --max-sequences 20000000
 
 	@echo "Creating merged dictionaries"
-	#python ../gnn_lib/scripts/merge_dictionaries.py --dictionaries ../data/dictionaries/*_train_500k.txt \
-#	--out-file ../data/dictionaries/merged_train_500k.txt --min-freq 0
-
 	python ../gnn_lib/scripts/merge_dictionaries.py --dictionaries ../data/dictionaries/*_train_100k.txt \
 	--out-file ../data/dictionaries/merged_train_100k.txt --min-freq 0
 

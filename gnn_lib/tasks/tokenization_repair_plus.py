@@ -82,7 +82,6 @@ class TokenizationRepairPlus(tasks.Task):
                 ignore_index=labels["sec_pad_token_id"]
             )
             loss = loss + sec_loss
-        # print(f"tok_rep: {tokenization_repair_loss.item()}, sed: {sed_loss.item()}")  # , sec: {sec_loss.item()}")
         return loss + sum(additional_losses.values())
 
     def _update_stats(

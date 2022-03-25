@@ -22,10 +22,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--vocab-size",
                         type=int,
                         default=10000)
-    parser.add_argument("--bpe-method",
-                        type=str,
-                        default="default",
-                        choices=["default", "words_with_whitespace", "words_without_whitespace"])
+    parser.add_argument("--bpe-prefix-space",
+                        action="store_true")
     return parser.parse_args()
 
 
@@ -66,7 +64,7 @@ def train_tokenizer(args: argparse.Namespace) -> None:
         ))
     elif args.tokenizer == Tokenizers.BPE.name:
         os.makedirs(os.path.dirname(args.out_file), exist_ok=True)
-        BPETokenizer.train(files, args.out_file, args.vocab_size, args.max_sequences, args.bpe_method)
+        BPETokenizer.train(files, args.out_file, args.vocab_size, args.max_sequences, args.bpe_prefix_space)
         tokenizer = BPETokenizer(TokenizerConfig(
             type=Tokenizers.BPE,
             file_path=args.out_file

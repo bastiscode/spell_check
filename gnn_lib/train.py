@@ -2,9 +2,11 @@ import argparse
 import datetime
 import os
 import pickle
+import shutil
 import signal
 import sys
 import time
+import zipfile
 from typing import Optional
 import resource
 
@@ -50,7 +52,7 @@ def train(args: argparse.Namespace, device: DistributedDevice) -> None:
         cfg = OmegaConf.merge(schema, cfg)
         resuming_training = False
     else:
-        # allow data dir to be overriden when resuming training, because you might train on a different node
+        # allow data dir to be overwritten when resuming training, because you might train on a different node
         # where the local temporary data directory is different
         override_env_vars = {}
         if "GNN_LIB_DATA_DIR" in os.environ:
@@ -102,6 +104,15 @@ def train(args: argparse.Namespace, device: DistributedDevice) -> None:
             }
             unresolved_cfg = OmegaConf.load(args.config)
             pickle.dump((unresolved_cfg, env), f)  # type: ignore
+
+        # save all configs if GNN_LIB_CONFIG_DIR is found
+        if "GNN_LIB_CONFIG_DIR" in os.environ:
+            shutil.make_archive(
+                os.path.join(experiment_dir, "configs"),
+                format="zip",
+                root_dir=os.environ["GNN_LIB_CONFIG_DIR"]
+            )
+
     elif resuming_training:
         experiment_dir = args.resume
     else:
@@ -404,8 +415,8 @@ def initialize() -> DistributedDevice:
     dist.init_process_group(
         backend=dist.Backend.NCCL,
         init_method="env://",
-        world_size=world_size,
-        rank=rank
+        rank=rank,
+        world_size=world_size
     )
 
     assert dist.is_initialized(), "failed to initialize process group"

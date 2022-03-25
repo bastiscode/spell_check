@@ -36,14 +36,14 @@ class TokenEmbedding(nn.Module):
 
 
 class LearnedPositionalEmbedding(TokenEmbedding):
-    def __init__(self, embedding_dim: int, max_len: int = 1024) -> None:
+    def __init__(self, embedding_dim: int, max_len: int) -> None:
         super().__init__(embedding_dim, max_len)
         self.embedding_dim = embedding_dim
         self.max_len = max_len
 
 
 class SinusoidalPositionalEmbedding(nn.Module):
-    def __init__(self, embedding_dim: int, max_len: int = 1024):
+    def __init__(self, embedding_dim: int, max_len: int):
         super().__init__()
         self.embedding_dim = embedding_dim
         self.max_len = max_len
@@ -96,6 +96,7 @@ class NodeEmbedding(nn.Module):
                  embedding_dim: int,
                  sample_g: dgl.DGLHeteroGraph,
                  num_token_embeddings: Dict[str, int],
+                 max_length: int,
                  dropout: float,
                  init_embeddings_along_edge_type: Optional[str] = None,
                  embed_node_types: bool = False,
@@ -120,8 +121,8 @@ class NodeEmbedding(nn.Module):
         )
         if embed_positions:
             self.pos_emb = nn.ModuleDict({
-                node_type: LearnedPositionalEmbedding(embedding_dim=embedding_dim)
-                if learned_position_embeddings else SinusoidalPositionalEmbedding(embedding_dim=embedding_dim)
+                node_type: LearnedPositionalEmbedding(embedding_dim, max_length)
+                if learned_position_embeddings else SinusoidalPositionalEmbedding(embedding_dim, max_length)
                 for node_type in num_token_embeddings.keys()
             })
         else:
@@ -316,6 +317,7 @@ class GraphEmbedding(nn.Module):
                  node_hidden_dim: int,
                  hidden_feature: str,
                  num_token_embeddings: Dict[str, int],
+                 max_length: int,
                  cfg: GraphEmbeddingConfig,
                  edge_hidden_dim: Optional[int] = None) -> None:
         super().__init__()
@@ -329,6 +331,7 @@ class GraphEmbedding(nn.Module):
             embedding_dim=self.node_hidden_dim,
             sample_g=sample_g,
             num_token_embeddings=num_token_embeddings,
+            max_length=max_length,
             dropout=cfg.dropout,
             init_embeddings_along_edge_type=cfg.init_embeddings_along_edge_type,
             embed_node_types=cfg.embed_node_types,
@@ -371,6 +374,7 @@ class TensorEmbedding(nn.Module):
     def __init__(self,
                  hidden_dim: int,
                  num_embeddings: int,
+                 max_length: int,
                  cfg: TensorEmbeddingConfig,
                  padding_idx: Optional[int] = None) -> None:
         super().__init__()
@@ -386,8 +390,8 @@ class TensorEmbedding(nn.Module):
 
         if self.cfg.embed_positions:
             self.pos_emb = (
-                LearnedPositionalEmbedding(hidden_dim) if self.cfg.learned_position_embedding
-                else SinusoidalPositionalEmbedding(hidden_dim)
+                LearnedPositionalEmbedding(hidden_dim, max_length) if self.cfg.learned_position_embedding
+                else SinusoidalPositionalEmbedding(hidden_dim, max_length)
             )
         else:
             self.pos_emb = None

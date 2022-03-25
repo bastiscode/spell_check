@@ -507,62 +507,78 @@ def transfer_features(from_g: dgl.DGLHeteroGraph, to_g: dgl.DGLHeteroGraph, feat
     return to_g
 
 
+def get_additional_features_and_aggregations_from_group_stages(
+        stages: List[Dict[str, Any]],
+        default_aggregation: str = "mean"
+) -> Tuple[Dict[str, int], Dict[str, str]]:
+    additional_features = {}
+    aggregation = {}
+    for stage in stages:
+        stage_name = stage["stage"]
+        if "features" in stage:
+            additional_features[stage_name] = stage["features"].shape[1]
+        aggregation[stage_name] = stage.get("aggregation", default_aggregation)
+
+    return additional_features, aggregation
+
+
 def group_features(
         grouped_feats: List[torch.Tensor],
-        groups: List[List[Dict[str, Any]]],
-        additional_feature_encoders: Dict[str, nn.Module],
-        aggregations: Dict[str, str] = None
-) -> List[torch.Tensor]:
-    stage_names = [stage["stage"] for stage in groups[0]]
+        groups: List[Dict[str, Any]],
+        additional_feature_encoder: Optional[nn.Module] = None,
+        aggregation: Optional[str] = None
+) -> List[Union[torch.Tensor, List[torch.Tensor]]]:
+    aggregation = aggregation or "mean"
 
-    # iterate through stages
-    for i, stage_name in enumerate(stage_names):
-        aggregation = aggregations.get(stage_name, "mean")
-
-        has_additional_features = stage_name in additional_feature_encoders
-        batch_groups = []
-        batch_group_lengths = []
-        stage_features = []
-        for group in groups:
-            batch_groups.append(group[i]["groups"])
-            batch_group_lengths.append(len(group[i]["groups"]))
-            if has_additional_features:
-                stage_features.append(group[i]["features"])
-
+    has_additional_features = additional_feature_encoder is not None
+    batch_groups = []
+    batch_group_lengths = []
+    stage_features = []
+    for group in groups:
+        batch_groups.append(group["groups"])
+        batch_group_lengths.append(len(group["groups"]))
         if has_additional_features:
-            all_grouped_feats = torch.cat(grouped_feats, dim=0)
-            grouped_feats = torch.split(
-                additional_feature_encoders[stage_name](
-                    torch.cat(
-                        [
-                            all_grouped_feats,
-                            to(torch.cat(stage_features, dim=0), all_grouped_feats.device)
-                        ], dim=1)
-                ),
-                batch_group_lengths
-            )
+            stage_features.append(group["features"])
 
-        assert all(
-            len(group_feat) == group_length for group_feat, group_length in zip(grouped_feats, batch_group_lengths)
+    if has_additional_features:
+        all_grouped_feats = torch.cat(grouped_feats, dim=0)
+        grouped_feats = torch.split(
+            additional_feature_encoder(
+                torch.cat(
+                    [
+                        all_grouped_feats,
+                        to(torch.cat(stage_features, dim=0), all_grouped_feats.device)
+                    ], dim=1)
+            ),
+            batch_group_lengths
         )
-        new_grouped_feats = []
-        for batch_group, batch_grouped_feat in zip(batch_groups, grouped_feats):
-            # filter out invalid groups (marked with -1 or anything else smaller zero)
-            valid_groups = batch_group >= 0
-            batch_group = batch_group[valid_groups]
-            batch_grouped_feat = batch_grouped_feat[valid_groups]
-            _, batch_group_splits = torch.unique(batch_group, return_counts=True, sorted=True)
-            new_batch_grouped_feat = []
-            for group_feat in torch.split(batch_grouped_feat, batch_group_splits.tolist()):
-                if aggregation == "mean":
-                    group_feat = torch.mean(group_feat, dim=0, keepdim=True)
-                elif aggregation == "max":
-                    group_feat = torch.max(group_feat, dim=0, keepdim=True).values
-                elif aggregation == "sum":
-                    group_feat = torch.sum(group_feat, dim=0, keepdim=True)
-                else:
-                    raise ValueError(f"unknown group aggregation {aggregation}")
-                new_batch_grouped_feat.append(group_feat)
+
+    assert all(
+        len(group_feat) == group_length for group_feat, group_length in zip(grouped_feats, batch_group_lengths)
+    )
+    new_grouped_feats = []
+    for batch_group, batch_grouped_feat in zip(batch_groups, grouped_feats):
+        # filter out invalid groups (marked with -1 or anything else smaller zero)
+        valid_groups = batch_group >= 0
+        batch_group = batch_group[valid_groups]
+        batch_grouped_feat = batch_grouped_feat[valid_groups]
+        _, batch_group_splits = torch.unique(batch_group, return_counts=True, sorted=True)
+        new_batch_grouped_feat = []
+        for group_feat in torch.split(batch_grouped_feat, batch_group_splits.tolist()):
+            if aggregation == "mean":
+                group_feat = torch.mean(group_feat, dim=0, keepdim=True)
+            elif aggregation == "max":
+                group_feat = torch.max(group_feat, dim=0, keepdim=True).values
+            elif aggregation == "sum":
+                group_feat = torch.sum(group_feat, dim=0, keepdim=True)
+            elif aggregation == "stack":
+                pass
+            else:
+                raise ValueError(f"unknown group aggregation {aggregation}")
+            new_batch_grouped_feat.append(group_feat)
+        if aggregation == "stack":
+            new_grouped_feats.append(new_batch_grouped_feat)
+        else:
             new_grouped_feats.append(torch.cat(new_batch_grouped_feat, dim=0))
-        grouped_feats = new_grouped_feats
-    return grouped_feats
+
+    return new_grouped_feats

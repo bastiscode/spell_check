@@ -185,7 +185,7 @@ class CharTransformer(CustomNeuralVectorizerModel):
         self.tok = tokenization.CharTokenizer()
         self.emb = embedding.TokenEmbedding(
             self.hidden_dim, self.tok.vocab_size, self.tok.token_to_id(tokenization.PAD))
-        self.pos_emb = embedding.SinusoidalPositionalEmbedding(self.hidden_dim)
+        self.pos_emb = embedding.SinusoidalPositionalEmbedding(self.hidden_dim, self.max_length)
         self.norm_emb = torch.nn.LayerNorm(self.hidden_dim)
         self.encoder = encoders.Transformer(in_dim=self.hidden_dim,
                                             hidden_dim=self.hidden_dim,

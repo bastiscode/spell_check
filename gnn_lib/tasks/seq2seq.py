@@ -7,6 +7,7 @@ from gnn_lib import models, tasks
 from gnn_lib.modules import inference, utils
 from gnn_lib.utils import data_containers, BATCH, to
 from gnn_lib.utils.distributed import DistributedDevice
+from gnn_lib.tasks import utils as task_utils
 
 
 class Seq2Seq(tasks.Task):
@@ -98,7 +99,7 @@ class Seq2Seq(tasks.Task):
         self._check_model(model)
         model = model.eval()
 
-        got_str_input = isinstance(inputs, list) and isinstance(inputs[0], str)
+        got_str_input = task_utils.is_string_input(inputs)
         if got_str_input:
             batch = self.variant.prepare_sequences_for_inference(inputs)
         else:
@@ -112,6 +113,6 @@ class Seq2Seq(tasks.Task):
             output_tokenizer=model.output_tokenizer,
             encoder_outputs={"encoder_outputs": encoder_outputs},
             encoder_lengths={"encoder_outputs": torch.tensor([len(t) for t in batch.data], dtype=torch.long)},
-            max_length=512,
+            max_length=model.cfg.max_length,
             **kwargs
         )

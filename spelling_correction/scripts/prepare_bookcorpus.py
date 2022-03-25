@@ -4,7 +4,6 @@ import multiprocessing as mp
 import os
 from typing import Tuple
 
-import ftfy
 from spacy.lang.en import English
 from tqdm import tqdm
 
@@ -30,10 +29,10 @@ def txt_file_to_jsonl(args: Tuple[str, str, bool]) -> None:
             if not is_valid_sequence(line, min_length=1):
                 num_invalid += 1
                 continue
-            line = ftfy.fix_text(clean_sequence(line))
+            line = clean_sequence(line)
             samples.append({"sequence": line})
     else:
-        g = ftfy.fix_text(clean_sequence(raw))
+        g = clean_sequence(raw)
         docs = nlp.pipe([g])
         for doc in docs:
             for s in doc.sents:

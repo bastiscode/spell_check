@@ -1,4 +1,5 @@
 import enum
+import time
 from dataclasses import dataclass
 from typing import Optional, Dict, Tuple, List, Any, Union
 
@@ -166,6 +167,8 @@ class GraphModelConfig(ModelConfig):
     edge_hidden_dim: Optional[int] = None
     hidden_feature: str = "h"
 
+    max_length: int = 512
+
     embedding: GraphEmbeddingConfig = MISSING
     gnn: GNNConfig = MISSING
 
@@ -186,12 +189,12 @@ class GraphModel(Model):
                 f"expected data input to be a dgl heterograph instance for a graph model, but got {type(data)}"
             )
 
-    def build_embedding(self, sample_g: dgl.DGLHeteroGraph) -> embedding.GraphEmbedding:
+    def build_embedding(self, sample_g: DATA_INPUT) -> embedding.GraphEmbedding:
         # embedding is also sometimes model specific, because of the use of tokenizers, so we override this
         # in the models
         raise NotImplementedError
 
-    def build_gnn(self, sample_g: dgl.DGLHeteroGraph) -> GNN:
+    def build_gnn(self, sample_g: DATA_INPUT) -> GNN:
         self.cfg: GraphModelConfig
         return get_gnn_from_config(
             self.cfg.gnn,
@@ -221,6 +224,7 @@ class GraphModel(Model):
 @dataclass
 class TensorModelConfig(ModelConfig):
     hidden_dim: int = MISSING
+    max_length: int = 512
 
 
 class TensorModel(Model):
@@ -329,6 +333,7 @@ class ModelForGraphClassification(GraphModel):
             node_hidden_dim=self.cfg.node_hidden_dim,
             hidden_feature=self.cfg.hidden_feature,
             num_token_embeddings=num_token_embeddings,
+            max_length=self.cfg.max_length,
             edge_hidden_dim=self.cfg.edge_hidden_dim
         )
 
@@ -359,7 +364,7 @@ class ModelForMultiNodeClassification(GraphModel):
         self.tokenizers: Dict[str, Tokenizer] = {k: get_tokenizer_from_config(cfg) for k, cfg in cfg.tokenizers.items()}
         super().__init__(sample_inputs, cfg, device)
 
-    def build_embedding(self, sample_g: dgl.DGLHeteroGraph) -> embedding.GraphEmbedding:
+    def build_embedding(self, sample_g: DATA_INPUT) -> embedding.GraphEmbedding:
         num_token_embeddings = {
             node_type: self.tokenizers[node_type].vocab_size
             for node_type in sample_g.ntypes
@@ -372,23 +377,32 @@ class ModelForMultiNodeClassification(GraphModel):
             node_hidden_dim=self.cfg.node_hidden_dim,
             hidden_feature=self.cfg.hidden_feature,
             num_token_embeddings=num_token_embeddings,
+            max_length=self.cfg.max_length,
             edge_hidden_dim=self.cfg.edge_hidden_dim
         )
 
-    def build_head(self, sample_inputs: BATCH) -> heads.MultiNodeClassificationGroupHead:
+    def build_head(self, sample_input: BATCH) -> heads.MultiNodeClassificationGroupHead:
         self.cfg: ModelForMultiNodeClassificationConfig
+
+        if "groups" in sample_input.info:
+            additional_features = {}
+            aggregation = {}
+            for node_type, stages in sample_input.info["groups"][0].items():
+                (
+                    additional_features[node_type],
+                    aggregation[node_type]
+                ) = utils.get_additional_features_and_aggregations_from_group_stages(
+                    stages=stages
+                )
+        else:
+            additional_features = aggregation = None
+
         return heads.MultiNodeClassificationGroupHead(
             feat=self.cfg.hidden_feature,
             num_features=self.cfg.node_hidden_dim,
             num_classes=self.cfg.num_classes,
-            num_additional_features={
-                node_type: {stage["stage"]: stage["features"].shape[1] for stage in stages if "features" in stage}
-                for node_type, stages in sample_inputs.info["groups"][0].items()
-            },
-            aggregation={
-                node_type: {stage["stage"]: stage.get("aggregation", "mean") for stage in stages}
-                for node_type, stages in sample_inputs.info["groups"][0].items()
-            }
+            num_additional_features=additional_features,
+            aggregation=aggregation
         )
 
 
@@ -399,6 +413,8 @@ class ModelForGraph2SeqConfig(GraphModelConfig):
     context_node_types: List[str] = MISSING
     input_tokenizers: Dict[str, TokenizerConfig] = MISSING
     output_tokenizer: TokenizerConfig = MISSING
+
+    max_output_length: int = 512
 
     decoder_dropout: float = 0.1
     num_decoder_layers: int = MISSING
@@ -431,6 +447,7 @@ class ModelForGraph2Seq(GraphModel, GraphEncoderMixin, DecoderMixin):
             node_hidden_dim=self.cfg.node_hidden_dim,
             hidden_feature=self.cfg.hidden_feature,
             num_token_embeddings=num_token_embeddings,
+            max_length=self.cfg.max_length,
             edge_hidden_dim=self.cfg.edge_hidden_dim
         )
 
@@ -439,7 +456,7 @@ class ModelForGraph2Seq(GraphModel, GraphEncoderMixin, DecoderMixin):
         return heads.TransformerDecoderHead(
             contexts=self.cfg.context_node_types,
             pad_token_id=self.pad_token_id,
-            max_length=512,
+            max_length=self.cfg.max_output_length,
             hidden_dim=self.cfg.node_hidden_dim,
             num_outputs=self.output_tokenizer.vocab_size,
             dropout=self.cfg.decoder_dropout,
@@ -486,6 +503,9 @@ class ModelForMultiNode2SeqConfig(GraphModelConfig):
     context_node_types: Dict[str, List[str]] = MISSING
     align_positions_with: Optional[Dict[str, str]] = None
     tokenizers: Dict[str, TokenizerConfig] = MISSING
+
+    max_output_length: int = 512
+
     decoder_dropout: float = 0.2
     decoder_num_layers: int = MISSING
     decoder_share_parameters: bool = False
@@ -521,6 +541,7 @@ class ModelForMultiNode2Seq(GraphModel, GraphEncoderMixin):
             node_hidden_dim=self.cfg.node_hidden_dim,
             hidden_feature=self.cfg.hidden_feature,
             num_token_embeddings=num_token_embeddings,
+            max_length=self.cfg.max_length,
             edge_hidden_dim=self.cfg.edge_hidden_dim
         )
 
@@ -531,7 +552,7 @@ class ModelForMultiNode2Seq(GraphModel, GraphEncoderMixin):
             node2seq_head[node_type] = heads.TransformerDecoderHead(
                 contexts=self.cfg.context_node_types[node_type] + [node_type],
                 pad_token_id=self.pad_token_ids[node_type],
-                max_length=512,
+                max_length=self.cfg.max_output_length,
                 hidden_dim=self.cfg.node_hidden_dim,
                 num_outputs=self.num_outputs[node_type],
                 dropout=self.cfg.decoder_dropout,
@@ -645,17 +666,7 @@ class ModelForToken2SeqConfig(TensorModelConfig):
     input_tokenizer: TokenizerConfig = MISSING
     output_tokenizer: TokenizerConfig = MISSING
 
-    embedding: TensorEmbeddingConfig = MISSING
-    dropout: float = 0.1
-    num_encoder_layers: int = MISSING
-    num_decoder_layers: int = MISSING
-
-
-@dataclass
-class ModelForToken2SeqConfig(TensorModelConfig):
-    type: Models = Models.MODEL_FOR_TOKEN2SEQ
-    input_tokenizer: TokenizerConfig = MISSING
-    output_tokenizer: TokenizerConfig = MISSING
+    max_output_length: int = 512
 
     embedding: TensorEmbeddingConfig = MISSING
     dropout: float = 0.1
@@ -677,17 +688,18 @@ class ModelForToken2Seq(TensorModel, TensorEncoderMixin, DecoderMixin):
         super().__init__(sample_inputs, cfg, device)
 
     def build_embedding(self, sample_input: DATA_INPUT) -> embedding.TensorEmbedding:
-        self.cfg: ModelForSeq2SeqConfig
+        self.cfg: ModelForToken2SeqConfig
         return embedding.get_embedding_from_config(
             cfg=self.cfg.embedding,
             sample_inputs=sample_input,
             hidden_dim=self.cfg.hidden_dim,
             num_embeddings=self.input_tokenizer.vocab_size,
+            max_length=self.cfg.max_length,
             padding_idx=self.input_pad_token_id
         )
 
     def build_encoder(self, sample_input: DATA_INPUT) -> nn.Module:
-        self.cfg: ModelForSeq2SeqConfig
+        self.cfg: ModelForToken2SeqConfig
         return encoders.get_feature_encoder(
             encoder=encoders.Encoders.TRANSFORMER,
             in_dim=self.cfg.hidden_dim,
@@ -697,11 +709,11 @@ class ModelForToken2Seq(TensorModel, TensorEncoderMixin, DecoderMixin):
         )
 
     def build_head(self, sample_input: BATCH) -> heads.TransformerDecoderHead:
-        self.cfg: ModelForSeq2SeqConfig
+        self.cfg: ModelForToken2SeqConfig
         return heads.TransformerDecoderHead(
             contexts=["encoder_outputs"],
             pad_token_id=self.output_pad_token_id,
-            max_length=512,
+            max_length=self.cfg.max_output_length,
             hidden_dim=self.cfg.hidden_dim,
             num_outputs=self.output_tokenizer.vocab_size,
             dropout=self.cfg.dropout,
@@ -794,6 +806,8 @@ class ModelForSeq2SeqConfig(TensorModelConfig):
     input_tokenizer: TokenizerConfig = MISSING
     output_tokenizer: TokenizerConfig = MISSING
 
+    max_output_length: int = 512
+
     embedding: TensorEmbeddingConfig = MISSING
     dropout: float = 0.1
     num_encoder_layers: int = MISSING
@@ -820,6 +834,7 @@ class ModelForSeq2Seq(TensorModel, TensorEncoderMixin, DecoderMixin):
             sample_inputs=sample_input,
             hidden_dim=self.cfg.hidden_dim,
             num_embeddings=self.input_tokenizer.vocab_size,
+            max_length=self.cfg.max_length,
             padding_idx=self.input_pad_token_id
         )
 
@@ -838,7 +853,7 @@ class ModelForSeq2Seq(TensorModel, TensorEncoderMixin, DecoderMixin):
         return heads.TransformerDecoderHead(
             contexts=["encoder_outputs"],
             pad_token_id=self.output_pad_token_id,
-            max_length=512,
+            max_length=self.cfg.max_output_length,
             hidden_dim=self.cfg.hidden_dim,
             num_outputs=self.output_tokenizer.vocab_size,
             dropout=self.cfg.dropout,
@@ -916,6 +931,7 @@ class ModelForSequenceClassification(TensorModel):
             sample_input,
             hidden_dim=self.cfg.hidden_dim,
             num_embeddings=self.tokenizer.vocab_size,
+            max_length=self.cfg.max_length,
             padding_idx=self.pad_token_id
         )
 
@@ -930,13 +946,14 @@ class ModelForSequenceClassification(TensorModel):
 
     def build_head(self, sample_input: BATCH) -> heads.TensorGroupHead:
         self.cfg: ModelForSequenceClassificationConfig
-        additional_features = {}
-        aggregation = {}
+
         if "groups" in sample_input.info:
-            for stage in sample_input.info["groups"][0]:
-                if "features" in stage:
-                    additional_features[stage["stage"]] = stage["features"].shape[1]
-                aggregation[stage["stage"]] = stage.get("aggregation", "mean")
+            additional_features, aggregation = utils.get_additional_features_and_aggregations_from_group_stages(
+                stages=sample_input.info["groups"][0]
+            )
+        else:
+            additional_features = aggregation = None
+
         return heads.TensorGroupHead(
             hidden_dim=self.cfg.hidden_dim,
             num_classes=self.cfg.num_classes,
@@ -992,6 +1009,7 @@ class ModelForTokenClassification(TensorModel):
             sample_input,
             hidden_dim=self.cfg.hidden_dim,
             num_embeddings=self.tokenizer.vocab_size,
+            max_length=self.cfg.max_length,
             padding_idx=self.pad_token_id
         )
 
@@ -1006,13 +1024,14 @@ class ModelForTokenClassification(TensorModel):
 
     def build_head(self, sample_input: BATCH) -> heads.TensorGroupHead:
         self.cfg: ModelForTokenClassificationConfig
-        additional_features = {}
-        aggregation = {}
+
         if "groups" in sample_input.info:
-            for stage in sample_input.info["groups"][0]:
-                if "features" in stage:
-                    additional_features[stage["stage"]] = stage["features"].shape[1]
-                aggregation[stage["stage"]] = stage.get("aggregation", "mean")
+            additional_features, aggregation = utils.get_additional_features_and_aggregations_from_group_stages(
+                stages=sample_input.info["groups"][0]
+            )
+        else:
+            additional_features = aggregation = None
+
         return heads.TensorGroupHead(
             hidden_dim=self.cfg.hidden_dim,
             num_classes=self.cfg.num_classes,
@@ -1054,6 +1073,7 @@ class ModelForTokenizationRepairPlusConfig(TensorModelConfig):
     # special args when output_type is tokenization_repair_plus_sed_plus_sec
     sec_tokenizer: Optional[TokenizerConfig] = None
     num_sec_layers: int = MISSING
+    sec_max_output_length: int = 512
 
 
 class ModelForTokenizationRepairPlus(TensorModel):
@@ -1064,7 +1084,6 @@ class ModelForTokenizationRepairPlus(TensorModel):
             device: torch.device
     ) -> None:
         assert cfg.output_type in {
-            "tokenization_repair",
             "tokenization_repair_plus_sed",
             "tokenization_repair_plus_sed_plus_sec"
         }
@@ -1085,6 +1104,8 @@ class ModelForTokenizationRepairPlus(TensorModel):
 
         super().__init__(sample_inputs, cfg, device)
 
+        self.word_encoder = self.build_word_encoder(sample_inputs)
+
     def build_embedding(self, sample_input: DATA_INPUT) -> embedding.TensorEmbedding:
         self.cfg: ModelForTokenClassificationConfig
         return embedding.get_embedding_from_config(
@@ -1092,49 +1113,52 @@ class ModelForTokenizationRepairPlus(TensorModel):
             sample_input,
             hidden_dim=self.cfg.hidden_dim,
             num_embeddings=self.input_tokenizer.vocab_size,
+            max_length=self.cfg.max_length,
             padding_idx=self.input_pad_token_id
         )
 
-    def build_encoder(self, sample_input: DATA_INPUT) -> nn.ModuleDict:
+    def build_encoder(self, sample_input: DATA_INPUT) -> nn.Module:
         self.cfg: ModelForTokenizationRepairPlusConfig
-        encoder_dict = nn.ModuleDict({
-            self.cfg.input_type: encoders.Transformer(
-                in_dim=self.cfg.hidden_dim,
-                hidden_dim=self.cfg.hidden_dim,
-                dropout=self.cfg.dropout,
-                num_layers=self.cfg.num_input_layers
-            ),
-            "word": encoders.Transformer(
-                in_dim=self.cfg.hidden_dim,
-                hidden_dim=self.cfg.hidden_dim,
-                dropout=self.cfg.dropout,
-                num_layers=self.cfg.num_word_layers
-            )
-        })
-        return encoder_dict
+
+        return encoders.Transformer(
+            in_dim=self.cfg.hidden_dim,
+            hidden_dim=self.cfg.hidden_dim,
+            dropout=self.cfg.dropout,
+            num_layers=self.cfg.num_input_layers
+        )
+
+    def build_word_encoder(self, sample_input: BATCH) -> nn.Module:
+        self.cfg: ModelForTokenizationRepairPlusConfig
+
+        word_features = sample_input.info.get("word_features")
+        if word_features is not None:
+            additional_word_features = word_features[0].shape[1]
+        else:
+            additional_word_features = 0
+
+        return encoders.Transformer(
+            in_dim=self.cfg.hidden_dim + additional_word_features,
+            hidden_dim=self.cfg.hidden_dim,
+            dropout=self.cfg.dropout,
+            num_layers=self.cfg.num_word_layers
+        )
 
     def build_head(self, sample_input: BATCH) -> nn.ModuleDict:
         self.cfg: ModelForTokenizationRepairPlusConfig
 
-        sed_additional_features = {}
-        sed_aggregation = {}
         assert "word_ws_groups" in sample_input.info
-        for stage in sample_input.info["word_ws_groups"][0]:
-            if "features" in stage:
-                sed_additional_features[stage["stage"]] = stage["features"].shape[1]
-            sed_aggregation[stage["stage"]] = stage.get("aggregation", "mean")
+        _, sed_aggregation = utils.get_additional_features_and_aggregations_from_group_stages(
+            stages=sample_input.info["word_ws_groups"][0]
+        )
 
         heads_dict = nn.ModuleDict({
             "tokenization_repair": heads.TensorGroupHead(
                 hidden_dim=self.cfg.hidden_dim,
-                num_classes=3,
-                num_additional_features={},
-                aggregation={}
+                num_classes=3
             ),
             "sed": heads.TensorGroupHead(
                 hidden_dim=self.cfg.hidden_dim,
                 num_classes=2,
-                num_additional_features=sed_additional_features,
                 aggregation=sed_aggregation
             )
         })
@@ -1142,7 +1166,7 @@ class ModelForTokenizationRepairPlus(TensorModel):
             heads_dict["sec"] = heads.TransformerDecoderHead(
                 contexts=[self.cfg.input_type, "word"],
                 pad_token_id=self.sec_pad_token_id,
-                max_length=512,
+                max_length=self.cfg.sec_max_output_length,
                 hidden_dim=self.cfg.hidden_dim,
                 num_outputs=self.sec_tokenizer.vocab_size,
                 dropout=self.cfg.dropout,
@@ -1153,38 +1177,152 @@ class ModelForTokenizationRepairPlus(TensorModel):
     def forward(
             self,
             x: DATA_INPUT,
-            word_groups: Optional[List[List[Dict[str, torch.Tensor]]]] = None,
+            char_groups: Optional[List[Dict[str, torch.Tensor]]] = None,
+            word_groups: Optional[List[Dict[str, torch.Tensor]]] = None,
+            word_features: Optional[List[torch.Tensor]] = None,
             word_ws_groups: Optional[List[List[Dict[str, torch.Tensor]]]] = None,
+            input_group_lengths: Optional[List[torch.Tensor]] = None,
+            word_group_lengths: Optional[List[torch.Tensor]] = None,
             sec_decoder_inputs: Optional[List[torch.Tensor]] = None,
             sec_decoder_group_lengths: Optional[List[torch.Tensor]] = None,
             **kwargs: Any
     ) -> Tuple[Dict[str, Any], Dict[str, torch.Tensor]]:
         self.cfg: ModelForTokenizationRepairPlusConfig
 
+        outputs = {}
+
         assert word_groups is not None and word_ws_groups is not None
         assert all(t.ndim == 1 for t in x)
 
         lengths = [len(t) for t in x]
         x = to(utils.pad(x, self.input_pad_token_id).long(), self.device)
-        padding_mask = utils.padding_mask(x, lengths)
 
+        # embed tokens and encode input representations
         x = self.embedding(x)
+        x = self.encoder(x, padding_mask=utils.padding_mask(x, lengths))
+        x = [x[i, :l] for i, l in enumerate(lengths)]
 
-        tok_feat = self.encoder[self.cfg.input_type](x, padding_mask=padding_mask)
-        tok_feat = [tok_feat[i, :l] for i, l in enumerate(lengths)]
+        if self.cfg.input_type == "byte":
+            assert char_groups is not None
+            # if we have bytes as inputs group bytes into characters, since tokenization repair output is on
+            # character level
+            x = utils.group_features(
+                x, char_groups, aggregation="mean"
+            )
 
-        word_feat = utils.group_features(
-            tok_feat, word_groups, {}, {}
+        # tokenization repair output
+        outputs["tokenization_repair"] = self.head["tokenization_repair"](x, groups=char_groups)
+
+        # group characters by word (leaving out whitespaces)
+        x = utils.group_features(
+            x, word_groups, aggregation="stack"
         )
-        padded_word_feat = to(utils.pad(word_feat), self.device)
-        lengths = [len(t) for t in word_feat]
-        padding_mask = utils.padding_mask(padded_word_feat, lengths)
-        padded_word_feat = self.encoder["word"](padded_word_feat, padding_mask=padding_mask)
-        word_feat = [padded_word_feat[i, :l, :] for i, l in enumerate(lengths)]
 
-        outputs = {
-            "tokenization_repair": self.head["tokenization_repair"](tok_feat, groups=None),
-            "sed": self.head["sed"](word_feat, groups=word_ws_groups)
-        }
+        # average character representations per word to get word representations
+        word_feat = [
+            torch.cat([torch.mean(t, dim=0, keepdim=True) for t in stacked_feat], dim=0)
+            for stacked_feat in x
+        ]
+
+        # add additional word features to word representations
+        if word_features is not None:
+            additional_word_features = to(word_features, self.device)
+            word_feat = [
+                torch.cat([w_feat, add_w_feat], dim=1)
+                for w_feat, add_w_feat in zip(word_feat, additional_word_features)
+            ]
+
+        # encode word representations
+        lengths = [len(t) for t in word_feat]
+        word_feat = to(utils.pad(word_feat), self.device)
+        word_padding_mask = utils.padding_mask(word_feat, lengths)
+        word_feat = self.word_encoder(word_feat, padding_mask=word_padding_mask)
+
+        outputs["sed"] = self.head["sed"]([word_feat[i, :l, :] for i, l in enumerate(lengths)], groups=word_ws_groups)
+
+        if self.cfg.output_type == "tokenization_repair_plus_sed_plus_sec":
+            assert sec_decoder_inputs is not None and sec_decoder_group_lengths is not None
+            sec_decoder_lengths = [len(t) for t in sec_decoder_inputs]
+            sec_decoder_inputs = to(utils.pad(sec_decoder_inputs, self.sec_pad_token_id).long(), self.device)
+
+            decoder_masks = []
+            input_encoder_masks = []
+            word_encoder_masks = []
+            decoder_positions = []
+
+            # flatten the stacked character representations per word into a single tensor
+            x = [
+                torch.cat([t.reshape(-1, self.cfg.hidden_dim) for t in stacked_feat])
+                for stacked_feat in x
+            ]
+            lengths = [len(t) for t in x]
+            x = utils.pad(x)
+
+            for input_lengths, word_lengths, dec_lengths in zip(
+                    input_group_lengths, word_group_lengths, sec_decoder_group_lengths
+            ):
+                # align decoder positions with words
+                decoder_positions.append(
+                    torch.cat(
+                        [
+                            torch.arange(word_position, word_position + dec_length)
+                            for word_position, dec_length
+                            in zip(torch.cat([torch.tensor([0]), torch.cumsum(word_lengths, dim=0)[:-1]]), dec_lengths)
+                        ]
+                    )
+                )
+                assert len(decoder_positions[-1]) == dec_lengths.sum()
+
+                decoder_masks.append(
+                    utils.square_causal_block_mask(
+                        sec_decoder_inputs.shape[1],
+                        dec_lengths,
+                        device=self.device
+                    )
+                )
+
+                input_encoder_masks.append(
+                    utils.rectangular_block_mask(
+                        sec_decoder_inputs.shape[1],
+                        x.shape[1],
+                        dec_lengths,
+                        input_lengths,
+                        device=self.device
+                    )
+                )
+
+                word_encoder_masks.append(
+                    utils.rectangular_block_mask(
+                        sec_decoder_inputs.shape[1],
+                        word_feat.shape[1],
+                        dec_lengths,
+                        word_lengths,
+                        device=self.device
+                    )
+                )
+
+            assert all(
+                len(positions) == length
+                for positions, length in zip(decoder_positions, sec_decoder_lengths)
+            )
+
+            outputs["sec"] = self.head["sec"](
+                decoder_inputs=sec_decoder_inputs,
+                decoder_lengths=sec_decoder_lengths,
+                encoder_outputs={
+                    self.cfg.input_type: x,
+                    "word": word_feat
+                },
+                encoder_padding_masks={
+                    self.cfg.input_type: utils.padding_mask(x, lengths),
+                    "word": word_padding_mask
+                },
+                encoder_masks={
+                    self.cfg.input_type: torch.stack(input_encoder_masks),
+                    "word": torch.stack(word_encoder_masks)
+                },
+                decoder_mask=torch.stack(decoder_masks),
+                decoder_positions=to(utils.pad(decoder_positions).long(), self.device)
+            )
 
         return outputs, {}

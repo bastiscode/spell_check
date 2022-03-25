@@ -1,5 +1,5 @@
-variant: ${from_file:variant/tokenization_repair_plus.yaml}
-model: ${from_file:model/model_for_tokenization_repair_plus.yaml}
+variant: ${from_file:variant/tokenization_repair_plus_sed_plus_sec.yaml}
+model: ${from_file:model/model_for_tokenization_repair_plus_sed_plus_sec.yaml}
 optimizer: ${from_file:optimizer/adamw.yaml}
 lr_scheduler: ${from_file:lr_scheduler/step_with_0.05_warmup.yaml}
 

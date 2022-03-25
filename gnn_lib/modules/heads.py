@@ -49,12 +49,14 @@ class GraphClassificationHead(GraphHead):
 
 
 class MultiNodeClassificationGroupHead(GraphHead):
-    def __init__(self,
-                 feat: str,
-                 num_features: int,
-                 num_classes: Dict[str, int],
-                 num_additional_features: Dict[str, Dict[str, int]],
-                 aggregation: Dict[str, Dict[str, str]]):
+    def __init__(
+            self,
+            feat: str,
+            num_features: int,
+            num_classes: Dict[str, int],
+            num_additional_features: Optional[Dict[str, Dict[str, int]]] = None,
+            aggregation: Optional[Dict[str, Dict[str, str]]] = None
+    ) -> None:
         super().__init__()
         self.feat = feat
         self.num_classes = num_classes
@@ -83,10 +85,10 @@ class MultiNodeClassificationGroupHead(GraphHead):
                 )
                 for stage, additional_features in num_additional_features[node_type].items()
             })
-            for node_type in num_additional_features
+            for node_type in (num_additional_features or {})
         })
 
-        self.aggregation = aggregation
+        self.aggregation = aggregation or {}
 
     def forward(
             self,
@@ -106,16 +108,30 @@ class MultiNodeClassificationGroupHead(GraphHead):
                 outputs[node_type] = self.clf[node_type](h[node_type])
                 continue
 
-            node_type_groups = [group[node_type] for group in groups]
-            grouped_feats = utils.group_features(
-                grouped_feats=torch.split(
-                    h[node_type],
-                    utils.tensor_to_python(g.batch_num_nodes(node_type), force_list=True)
-                ),
-                groups=node_type_groups,
-                additional_feature_encoders=self.additional_features[node_type],
-                aggregations=self.aggregation[node_type]
+            stages = [group["stage"] for group in groups[0][node_type]]
+            grouped_feats = torch.split(
+                h[node_type],
+                utils.tensor_to_python(g.batch_num_nodes(node_type), force_list=True)
             )
+
+            for i, stage in enumerate(stages):
+                feature_encoder = (
+                    self.additional_features[node_type][stage]
+                    if node_type in self.additional_features and stage in self.additional_features[node_type]
+                    else None
+                )
+                aggregation = (
+                    self.aggregation[node_type][stage]
+                    if node_type in self.aggregation and stage in self.aggregation[node_type]
+                    else "mean"
+                )
+                grouped_feats = utils.group_features(
+                    grouped_feats=grouped_feats,
+                    groups=[group[node_type][i] for group in groups],
+                    additional_feature_encoder=feature_encoder,
+                    aggregation=aggregation
+                )
+
             outputs[node_type] = self.clf[node_type](torch.cat(grouped_feats, dim=0))
 
         return outputs
@@ -126,8 +142,8 @@ class TensorGroupHead(nn.Module):
             self,
             hidden_dim: int,
             num_classes: int,
-            num_additional_features: Dict[str, int],
-            aggregation: Dict[str, str]
+            num_additional_features: Optional[Dict[str, int]] = None,
+            aggregation: Optional[Dict[str, str]] = None
     ) -> None:
         super().__init__()
         self.clf = nn.Sequential(
@@ -147,11 +163,11 @@ class TensorGroupHead(nn.Module):
                     nn.Linear(in_features=hidden_dim,
                               out_features=hidden_dim)
                 )
-                for stage, additional_features in num_additional_features.items()
+                for stage, additional_features in (num_additional_features or {}).items()
             }
         )
 
-        self.aggregation = aggregation
+        self.aggregation = aggregation or {}
 
     def forward(
             self,
@@ -161,12 +177,17 @@ class TensorGroupHead(nn.Module):
     ) -> List[torch.Tensor]:
         if groups is not None:
             assert len(groups) == len(x)
-            x = utils.group_features(
-                grouped_feats=x,
-                groups=groups,
-                additional_feature_encoders=self.additional_features,
-                aggregations=self.aggregation
-            )
+            stages = [group["stage"] for group in groups[0]]
+            # cycle through stages
+            for i, stage in enumerate(stages):
+                feature_encoder = self.additional_features[stage] if stage in self.additional_features else None
+                aggregation = self.aggregation[stage] if stage in self.aggregation else "mean"
+                x = utils.group_features(
+                    grouped_feats=x,
+                    groups=[group[i] for group in groups],
+                    additional_feature_encoder=feature_encoder,
+                    aggregation=aggregation
+                )
         return list(torch.split(self.clf(torch.cat(x, dim=0)), [len(t) for t in x]))
 
 
@@ -180,25 +201,15 @@ class SequenceDecoderHead(utils.DecoderMixin):
 
     def forward(self,
                 decoder_inputs: torch.Tensor,
-                decoder_lengths: Optional[torch.Tensor] = None,
-                encoder_outputs: Optional[Dict[str, torch.Tensor]] = None,
-                encoder_lengths: Optional[Dict[str, torch.Tensor]] = None,
                 **kwargs: Any) -> torch.Tensor:
-        assert (encoder_outputs is not None
-                and encoder_lengths is not None
-                and decoder_inputs is not None
-                and decoder_lengths is not None)
         return self.decode(
             decoder_inputs=decoder_inputs,
-            decoder_lengths=decoder_lengths,
-            encoder_outputs=encoder_outputs,
-            encoder_lengths=encoder_lengths,
             **kwargs
         )
 
 
 # modified version of standard pytorch nn.TransformerDecoderLayer for cross attention to multiple memories/contexts
-class MultiNodeTransformerDecoderLayer(nn.Module):
+class MultiContextTransformerDecoderLayer(nn.Module):
     def __init__(self,
                  contexts: List[str],
                  hidden_dim: int,
@@ -300,6 +311,10 @@ class MultiNodeTransformerDecoderLayer(nn.Module):
         return self.dropout3(x)
 
 
+# for legacy models
+MultiNodeTransformerDecoderLayer = MultiContextTransformerDecoderLayer
+
+
 class TransformerDecoderHead(SequenceDecoderHead):
     def __init__(self,
                  contexts: List[str],
@@ -324,6 +339,7 @@ class TransformerDecoderHead(SequenceDecoderHead):
         self.emb = embedding.TensorEmbedding(
             hidden_dim=self.hidden_dim,
             num_embeddings=num_outputs,
+            max_length=max_length,
             cfg=embedding.TensorEmbeddingConfig(dropout=dropout),
             padding_idx=pad_token_id
         )
@@ -332,7 +348,7 @@ class TransformerDecoderHead(SequenceDecoderHead):
         num_heads = num_heads if num_heads is not None else max(1, hidden_dim // 64)
 
         self.decoder_layers = nn.ModuleList(
-            MultiNodeTransformerDecoderLayer(
+            MultiContextTransformerDecoderLayer(
                 contexts=contexts,
                 hidden_dim=hidden_dim,
                 feed_forward_dim=feed_forward_dim,
