@@ -1,24 +1,20 @@
-import os
 import pprint
-import shutil
 from typing import List, Optional, Union, Any, Dict
 
 import torch
+from torch import autocast
 from tqdm import tqdm
 
 from gnn_lib.api.utils import (
     ModelInfo,
     StringInputOutput,
-    download_data,
-    download_configs,
-    download_model,
     load_experiment,
     get_string_dataset_and_loader,
-    reorder_data, get_device_info
+    reorder_data, get_device_info, _APIBase
 )
 from gnn_lib.data import DatasetVariants
 from gnn_lib.modules import inference
-from gnn_lib.tasks import graph_sed_words, graph_sed_sequence, sed_words, sed_sequence
+from gnn_lib.tasks import graph_sed_words, graph_sed_sequence, sed_words, sed_sequence, tokenization_repair_plus
 from gnn_lib.utils import common
 
 __all__ = ["get_available_spelling_error_detection_models", "SpellingErrorDetector"]
@@ -55,54 +51,49 @@ def get_available_spelling_error_detection_models() -> List[ModelInfo]:
     ]
 
 
-class SpellingErrorDetector:
+class SpellingErrorDetector(_APIBase):
     def __init__(
             self,
             model_dir: str,
             device: Union[str, int],
             **kwargs: Dict[str, Any]
     ) -> None:
-        self.logger = common.get_logger("SPELLING_ERROR_DETECTION")
+        logger = common.get_logger("SPELLING_ERROR_DETECTION")
 
         if device != "cpu" and not torch.cuda.is_available():
-            self.logger.info(f"could not find a GPU, using CPU as fallback option")
+            logger.info(f"could not find a GPU, using CPU as fallback option")
             device = "cpu"
 
-        self.device = torch.device(device)
-        self.logger.info(f"running spelling error detection on device {get_device_info(self.device)}")
+        device = torch.device(device)
+        logger.info(f"running spelling error detection on device {get_device_info(device)}")
 
-        self.cfg, self.task, self.model = load_experiment(
+        cfg, task, model = load_experiment(
             model_dir,
-            self.device,
+            device,
             kwargs.get("override_env_vars"),
             kwargs.get("keep_existing_env_vars", False)
         )
 
         assert (
-                isinstance(self.task, graph_sed_words.GraphSEDWords)
-                or isinstance(self.task, sed_words.SEDWords)
-                or isinstance(self.task, graph_sed_sequence.GraphSEDSequence)
-                or isinstance(self.task, sed_sequence.SEDSequence)
+                isinstance(task, graph_sed_words.GraphSEDWords)
+                or isinstance(task, sed_words.SEDWords)
+                or isinstance(task, graph_sed_sequence.GraphSEDSequence)
+                or isinstance(task, sed_sequence.SEDSequence)
+                or isinstance(task, tokenization_repair_plus.TokenizationRepairPlus)
         ), \
             f"expected experiment to be of type SEDWords, GraphSEDWords, " \
-            f"SEDSequence or GraphSEDSequence, but got {type(self.task)}"
+            f"SEDSequence, GraphSEDSequence or TokenizationRepairPlus, but got {type(task)}"
 
-        self.model.eval()
-        for param in self.model.parameters():
-            param.requires_grad = False
+        self.max_length = model.cfg.max_length
 
-        self.max_length = self.model.cfg.max_length
+        super().__init__(model, cfg, task, device, logger)
 
     @property
     def task_name(self) -> str:
         return (
-            "sed_words" if self.task.variant_cfg.type == DatasetVariants.SED_WORDS
-            else "sed_sequence"
+            "sed_sequence" if self.task.variant_cfg.type == DatasetVariants.SED_SEQUENCE
+            else "sed_words"
         )
-
-    @property
-    def model_name(self) -> str:
-        return self.cfg.experiment_name
 
     @staticmethod
     def from_pretrained(
@@ -116,23 +107,7 @@ class SpellingErrorDetector:
             f"task {task} and model {model} do not match any of the available models:\n" \
             f"{pprint.pformat(get_available_spelling_error_detection_models())}"
 
-        logger = common.get_logger("DOWNLOAD")
-
-        data_dir = download_data(force_download, logger, cache_dir)
-
-        model_dir = download_model(
-            task=task,
-            name=model,
-            cache_dir=cache_dir,
-            force_download=force_download,
-            logger=logger
-        )
-        # check if model comes with a configs.zip, if not download global configs
-        if os.path.exists(os.path.join(model_dir, "configs.zip")):
-            shutil.unpack_archive(os.path.join(model_dir, "configs.zip"), extract_dir=model_dir)
-            config_dir = os.path.join(model_dir, "configs")
-        else:
-            config_dir = download_configs(force_download, logger, cache_dir)
+        model_dir, data_dir, config_dir = super()._download(task, model, cache_dir, force_download)
 
         return SpellingErrorDetector(
             model_dir,
@@ -183,7 +158,9 @@ class SpellingErrorDetector:
         )
 
         inference_kwargs = {
-            "threshold": threshold
+            "threshold": threshold,
+            "tokenization_repair_plus_output_type": "sed",
+            "tokenization_repair_plus_no_repair": True
         }
 
         all_outputs = []
@@ -194,9 +171,18 @@ class SpellingErrorDetector:
                 f"with {batch_length:,} characters in total"
             )
 
-            outputs = self.task.inference(self.model, batch, **inference_kwargs)
-            all_outputs.extend(outputs)
+            # this is a slight hack for now, because fp32 on cpu throws an error even when enabled=False
+            if self.mixed_precision_enabled:
+                with autocast(
+                        device_type=self.device.type,
+                        dtype=self._mixed_precision_dtype,
+                        enabled=self.mixed_precision_enabled
+                ):
+                    outputs = self.task.inference(self.model, batch, **inference_kwargs)
+            else:
+                outputs = self.task.inference(self.model, batch, **inference_kwargs)
 
+            all_outputs.extend(outputs)
             pbar.update(batch_length)
 
         pbar.close()
@@ -245,8 +231,3 @@ class SpellingErrorDetector:
             return None
         else:
             return outputs
-
-    def to(self, device: Union[str, int]) -> "SpellingErrorDetector":
-        self.device = torch.device(device)
-        self.model.to(self.device)
-        return self

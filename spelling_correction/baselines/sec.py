@@ -151,7 +151,7 @@ class SECNeuspellBaseline(Baseline):
     def __init__(self, model_name: str, seed: Optional[int] = None):
         super().__init__(seed)
         import neuspell
-        device = "cpu" # "cuda" if torch.cuda.is_available() else "cpu"
+        device = "cuda" if torch.cuda.is_available() else "cpu"
         if model_name == "bert":
             self.spell_checker = neuspell.BertChecker(
                 pretrained=True,
@@ -196,10 +196,15 @@ class SECNeuspellBaseline(Baseline):
 
         match(0)
 
+        for i in range(len(whitespaces)):
+            if whitespaces[i] is None:
+                whitespaces[i] = False
+
         assert all(w is not None for w in whitespaces), f"{whitespaces}\n{a}\n{b}"
         return whitespaces
 
     def inference(self, sequences: List[str], **kwargs: Dict[str, Any]) -> List[str]:
+        sequences = [utils.clean_sequence(seq, fix_unicode_errors=True) for seq in sequences]
         tokenized_sequences, corrected_sequences = self.spell_checker.correct_strings(sequences, return_all=True)
 
         batch_detections = kwargs.get("detections", [[1] * len(seq.split()) for seq in sequences])
@@ -212,7 +217,7 @@ class SECNeuspellBaseline(Baseline):
             assert len(detections) == len(sequence_tokens)
             tokenized_tokens = tokenized.split()
             corrected_tokens = corrected.split()
-            assert len(sequence_tokens) <= len(tokenized_tokens) == len(corrected_tokens)
+            # assert len(sequence_tokens) <= len(tokenized_tokens) == len(corrected_tokens)
             # assert re.fullmatch(
             #     "".join(re.escape(tok) if tok != "[UNK]" else ".*" for tok in tokenized_tokens),
             #     "".join(sequence_tokens)

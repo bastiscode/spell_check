@@ -1,12 +1,15 @@
-from typing import List, Any, Dict, Tuple
+import collections
+import copy
+from typing import List, Any, Dict, Tuple, Union
 
 import torch
 from torch.nn import functional as F
 
 from gnn_lib import models, tasks
-from gnn_lib.modules import utils
-from gnn_lib.utils import data_containers, BATCH, to
-from gnn_lib.utils.distributed import DistributedDevice
+from gnn_lib.data import utils
+from gnn_lib.modules import utils as mod_utils
+from gnn_lib.utils import data_containers, BATCH, to, tokenization_repair
+from gnn_lib.tasks import utils as task_utils
 
 
 class TokenizationRepairPlus(tasks.Task):
@@ -23,11 +26,11 @@ class TokenizationRepairPlus(tasks.Task):
     def _prepare_inputs_and_labels(
             self,
             batch: BATCH,
-            device: DistributedDevice
+            device: torch.device
     ) -> Tuple[Dict[str, Any], Any]:
         label_dict = {
-            "tokenization_repair_labels": to(torch.cat(batch.info.pop("tokenization_repair_label")), device.device),
-            "sed_labels": to(torch.cat(batch.info.pop("sed_label")), device.device)
+            "tokenization_repair_labels": to(torch.cat(batch.info.pop("tokenization_repair_label")), device),
+            "sed_labels": to(torch.cat(batch.info.pop("sed_label")), device)
         }
 
         data_dict = {
@@ -51,7 +54,7 @@ class TokenizationRepairPlus(tasks.Task):
                 decoder_group_lengths.append(torch.tensor(word_decoder_lengths, dtype=torch.long))
 
             label_dict["sec_labels"] = to(
-                utils.pad(decoder_labels, val=batch.info["sec_pad_token_id"][0]).long(), device.device
+                mod_utils.pad(decoder_labels, val=batch.info["sec_pad_token_id"][0]).long(), device
             )
             label_dict["sec_pad_token_id"] = batch.info["sec_pad_token_id"][0]
             data_dict["sec_decoder_inputs"] = decoder_inputs
@@ -103,11 +106,144 @@ class TokenizationRepairPlus(tasks.Task):
             model: models.ModelForTokenizationRepairPlus,
             inputs: List[str],
             **kwargs: Any
-    ) -> List[List[str]]:
+    ) -> Union[Dict[str, Any], List[List[int]]]:
         self._check_model(model)
         model = model.eval()
+        model_cfg: models.ModelForTokenizationRepairPlusConfig = model.cfg
+        output_type = kwargs.get("tokenization_repair_plus_output_type", "all")
+        assert output_type in {"tokenization_repair", "sed", "sec", "all"}, \
+            f"unknown tokenization repair plus output type {output_type}, must be one of " \
+            f"{{tokenization_repair, sed, sec, all}}"
+        # this flag ensures that the input tokenization is not repaired, useful when you are sure that
+        # the input has no tokenization errors or when you want to evaluate on sed benchmarks
+        no_repair = kwargs.get("tokenization_repair_plus_no_repair", False)
 
-        assert all(isinstance(ipt, str) for ipt in inputs)
+        oversized = [len(ipt) > model_cfg.max_length for ipt in inputs]
+        if sum(oversized) == len(inputs):
+            return [
+                [0] * len(ipt.split()) for ipt in inputs
+            ]
+        org_inputs = copy.deepcopy(inputs)
+        inputs = [ipt for i, ipt in enumerate(inputs) if not oversized[i]]
+
+        assert task_utils.is_string_input(inputs)
         batch = self.variant.prepare_sequences_for_inference(inputs)
 
-        raise NotImplementedError
+        x, padding_mask, lengths = model.pad_inputs(batch.data, pad_val=model.input_pad_token_id)
+
+        # embed tokens and encode input representations
+        x = model.encode(x.long(), padding_mask=padding_mask)
+        x = [x[i, :l] for i, l in enumerate(lengths)]
+
+        if model_cfg.input_type == "byte":
+            assert batch.info["char_groups"] is not None
+            # if we have bytes as inputs group bytes into characters, since tokenization repair output is on
+            # character level
+            x = mod_utils.group_features(
+                x, batch.info["char_groups"], aggregation="mean"
+            )
+
+        outputs = {
+            "tokenization_repair": {
+                "repair_tokens": [],
+                "repaired_strings": []
+            },
+            "sed": [],
+            "sec": []
+        }
+
+        # tokenization repair output
+        tok_rep_logits = model.head["tokenization_repair"](x)
+        for repair_logits, input_str in zip(tok_rep_logits, inputs):
+            repair_tokens = task_utils.class_predictions(repair_logits).tolist()
+            if no_repair:
+                repaired_string = input_str
+            else:
+                repaired_string = tokenization_repair.repair_whitespace(input_str, repair_tokens)
+
+            outputs["tokenization_repair"]["repair_tokens"].append(repair_tokens)
+            outputs["tokenization_repair"]["repaired_strings"].append(repaired_string)
+
+        if output_type != "tokenization_repair":
+            word_groups = []
+            word_ws_groups = []
+            word_features = []
+
+            for input_string, repaired_string in zip(inputs, outputs["tokenization_repair"]["repaired_strings"]):
+                repaired_words, repaired_doc = utils.tokenize_words(repaired_string, return_doc=True)
+
+                word_groups.append({
+                    "stage": "char_to_word",
+                    "groups": utils.get_character_groups_from_repaired_doc(list(input_string), repaired_doc)
+                })
+
+                word_ws = []
+                word_ws_idx = 0
+                for word in repaired_doc:
+                    word_ws.append(word_ws_idx)
+                    if word.whitespace_ == " ":
+                        word_ws_idx += 1
+
+                word_ws_groups.append([{
+                    "stage": "word_to_word_ws",
+                    "groups": torch.tensor(word_ws, dtype=torch.long)
+                }])
+
+                word_features.append(
+                    utils.get_word_features(repaired_doc, self.variant.dictionary)
+                )
+
+            # group characters by word (leaving out whitespaces)
+            x = mod_utils.group_features(
+                x, word_groups, aggregation="stack"
+            )
+
+            # average character representations per word to get word representations
+            word_feat = [
+                torch.cat([torch.mean(t, dim=0, keepdim=True) for t in stacked_feat], dim=0)
+                for stacked_feat in x
+            ]
+
+            # add additional word features to word representations
+            if word_features is not None:
+                additional_word_features = to(word_features, model.device)
+                word_feat = [
+                    torch.cat([w_feat, add_w_feat], dim=1)
+                    for w_feat, add_w_feat in zip(word_feat, additional_word_features)
+                ]
+
+            # encode word representations
+            lengths = [len(t) for t in word_feat]
+            word_feat = to(mod_utils.pad(word_feat), model.device)
+            word_padding_mask = mod_utils.padding_mask(word_feat, lengths)
+            word_feat = model.word_encoder(word_feat, padding_mask=word_padding_mask)
+
+            if output_type in {"all", "sed"}:
+                sed_logits = model.head["sed"](
+                    [word_feat[i, :l, :] for i, l in enumerate(lengths)],
+                    groups=word_ws_groups
+                )
+                for logits in sed_logits:
+                    predictions = task_utils.class_predictions(logits).tolist()
+                    outputs["sed"].append(predictions)
+
+            if output_type in {"all", "sec"} and model_cfg.output_type.endswith("plus_sec"):
+                raise NotImplementedError("plus sec inference not yet implemented")
+
+        if output_type == "tokenization_repair":
+            return outputs["tokenization_repair"]["repair_tokens"]
+        elif output_type == "sed":
+            sed_outputs = []
+            prediction_idx = 0
+            for ipt, is_oversized in zip(org_inputs, oversized):
+                if is_oversized:
+                    sed_outputs.append([0] * len(ipt.split()))
+                else:
+                    sed_outputs.append(outputs["sed"][prediction_idx])
+                    prediction_idx += 1
+            assert prediction_idx == len(outputs["sed"])
+            return sed_outputs
+        elif output_type == "sec":
+            return outputs["sec"]
+        else:
+            return outputs

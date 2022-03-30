@@ -7,7 +7,6 @@ from gnn_lib import tasks, models
 from gnn_lib.modules import utils
 from gnn_lib.tasks import utils as task_utils
 from gnn_lib.utils import data_containers, BATCH, to
-from gnn_lib.utils.distributed import DistributedDevice
 
 
 class TokenClassification(tasks.Task):
@@ -23,11 +22,13 @@ class TokenClassification(tasks.Task):
         }
         return stats
 
-    def _prepare_inputs_and_labels(self,
-                                   batch: BATCH,
-                                   device: DistributedDevice) -> Tuple[Dict[str, Any], Any]:
+    def _prepare_inputs_and_labels(
+            self,
+            batch: BATCH,
+            device: torch.device
+    ) -> Tuple[Dict[str, Any], Any]:
         # extract labels from info dict
-        labels = to(torch.cat(batch.info.pop("label")), device.device)
+        labels = to(torch.cat(batch.info.pop("label")), device)
 
         return {"x": batch.data, **batch.info}, labels
 

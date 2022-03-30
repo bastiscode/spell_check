@@ -8,24 +8,23 @@ from torch.nn import functional as F
 from gnn_lib import models, tasks
 from gnn_lib.modules import utils, inference
 from gnn_lib.modules.utils import pad
-from gnn_lib.utils.distributed import DistributedDevice
+from gnn_lib.utils import BATCH
 
 
 class MultiNode2Seq(tasks.Task):
     expected_models = models.ModelForMultiNode2Seq  # type: ignore
 
-    def _prepare_inputs_and_labels(self,
-                                   batch: Tuple[dgl.DGLHeteroGraph, List[Dict[str, Any]]],
-                                   device: DistributedDevice) -> Tuple[Dict[str, Any], Any]:
-        g, info = batch
-        g = g.to(device.device)
-
+    def _prepare_inputs_and_labels(
+            self,
+            batch: BATCH,
+            device: torch.device
+    ) -> Tuple[Dict[str, Any], Any]:
         decoder_inputs = collections.defaultdict(list)
         decoder_labels = collections.defaultdict(list)
         decoder_lengths = collections.defaultdict(list)
 
-        for i in info:
-            for node_type, labels in i["label"].items():
+        for label_dict in batch.info.pop("label"):
+            for node_type, labels in label_dict.items():
                 graph_decoder_labels = []
                 graph_decoder_inputs = []
                 graph_decoder_lengths = []
@@ -34,16 +33,18 @@ class MultiNode2Seq(tasks.Task):
                     graph_decoder_labels.extend(label[1:])
                     graph_decoder_lengths.append(len(label) - 1)
                 decoder_inputs[node_type].append(
-                    torch.tensor(graph_decoder_inputs, device=device.device, dtype=torch.long)
+                    torch.tensor(graph_decoder_inputs, device=device, dtype=torch.long)
                 )
                 decoder_labels[node_type].append(
-                    torch.tensor(graph_decoder_labels, device=device.device, dtype=torch.long)
+                    torch.tensor(graph_decoder_labels, device=device, dtype=torch.long)
                 )
                 decoder_lengths[node_type].append(
-                    torch.tensor(graph_decoder_lengths, device=device.device, dtype=torch.long)
+                    torch.tensor(graph_decoder_lengths, device=device, dtype=torch.long)
                 )
 
-        pad_token_ids = {node_type: pad_token_id for node_type, pad_token_id in info[0]["pad_token_id"].items()}
+        pad_token_ids = {
+            node_type: pad_token_id for node_type, pad_token_id in batch.info["pad_token_id"][0].items()
+        }
 
         decoder_inputs = {
             node_type: pad(ipt, float(pad_token_ids[node_type])).long()
@@ -56,9 +57,10 @@ class MultiNode2Seq(tasks.Task):
 
         return (
             {
-                "g": g,
+                "g": batch.data,
                 "decoder_inputs": decoder_inputs,
-                "decoder_lengths": dict(decoder_lengths)
+                "decoder_lengths": dict(decoder_lengths),
+                **batch.info
             },
             {"labels": decoder_labels, "pad_token_id": pad_token_ids}
         )

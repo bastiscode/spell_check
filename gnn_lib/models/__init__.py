@@ -1076,7 +1076,7 @@ class ModelForTokenizationRepairPlusConfig(TensorModelConfig):
     sec_max_output_length: int = 512
 
 
-class ModelForTokenizationRepairPlus(TensorModel):
+class ModelForTokenizationRepairPlus(TensorModel, TensorEncoderMixin):
     def __init__(
             self,
             sample_inputs: BATCH,
@@ -1126,6 +1126,18 @@ class ModelForTokenizationRepairPlus(TensorModel):
             dropout=self.cfg.dropout,
             num_layers=self.cfg.num_input_layers
         )
+
+    def pad_inputs(self, x: DATA_INPUT, pad_val: float = 0) -> Tuple[torch.Tensor, torch.Tensor, List[int]]:
+        assert all(t.ndim == 1 for t in x)
+        lengths = [len(t) for t in x]
+        inputs = to(utils.pad(x, pad_val).long(), self.device)
+        padding_mask = utils.padding_mask(inputs, lengths)
+        return inputs, padding_mask, lengths
+
+    def encode(self, x: torch.Tensor, padding_mask: Optional[torch.Tensor] = None, **kwargs: Any) -> torch.Tensor:
+        assert padding_mask is not None
+        enc = self.embedding(x)
+        return self.encoder(enc, padding_mask=padding_mask)
 
     def build_word_encoder(self, sample_input: BATCH) -> nn.Module:
         self.cfg: ModelForTokenizationRepairPlusConfig
@@ -1194,12 +1206,10 @@ class ModelForTokenizationRepairPlus(TensorModel):
         assert word_groups is not None and word_ws_groups is not None
         assert all(t.ndim == 1 for t in x)
 
-        lengths = [len(t) for t in x]
-        x = to(utils.pad(x, self.input_pad_token_id).long(), self.device)
+        x, padding_mask, lengths = self.pad_inputs(x, pad_val=self.input_pad_token_id)
 
         # embed tokens and encode input representations
-        x = self.embedding(x)
-        x = self.encoder(x, padding_mask=utils.padding_mask(x, lengths))
+        x = self.encode(x.long(), padding_mask=padding_mask)
         x = [x[i, :l] for i, l in enumerate(lengths)]
 
         if self.cfg.input_type == "byte":
@@ -1211,7 +1221,7 @@ class ModelForTokenizationRepairPlus(TensorModel):
             )
 
         # tokenization repair output
-        outputs["tokenization_repair"] = self.head["tokenization_repair"](x, groups=char_groups)
+        outputs["tokenization_repair"] = self.head["tokenization_repair"](x)
 
         # group characters by word (leaving out whitespaces)
         x = utils.group_features(

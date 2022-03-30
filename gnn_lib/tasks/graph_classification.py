@@ -5,6 +5,7 @@ import torch
 from torch.nn import functional as F
 
 from gnn_lib import tasks, models
+from gnn_lib.data import utils as data_utils
 from gnn_lib.modules import utils
 from gnn_lib.tasks import utils as task_utils
 from gnn_lib.utils import data_containers, BATCH, to
@@ -63,12 +64,30 @@ class GraphClassification(tasks.Task):
         else:
             batch = inputs
 
+        oversized = (batch.data.batch_num_nodes("token") > model.cfg.max_length).tolist()
+
+        if sum(oversized):
+            # print(f"found {sum(oversized)} sequences that are too long: {batch.data.batch_num_nodes('token')}")
+            data = dgl.batch([graph for i, graph in enumerate(dgl.unbatch(batch.data)) if not oversized[i]])
+            info = {k: [v_ for i, v_ in enumerate(v) if not oversized[i]] for k, v in batch.info.items()}
+            batch = BATCH(data, info)
+
         outputs, _ = model(batch.data, **batch.info)
 
         return_logits = kwargs.get("return_logits", False)
         if return_logits:
             return utils.tensor_to_python(outputs, force_list=True)
         else:
-            return utils.tensor_to_python(
+            predictions = utils.tensor_to_python(
                 task_utils.class_predictions(outputs, threshold, temperature), force_list=True
             )
+            prediction_idx = 0
+            outputs = []
+            for is_oversized in oversized:
+                if not is_oversized:
+                    outputs.append(predictions[prediction_idx])
+                    prediction_idx += 1
+                else:
+                    outputs.append(0)
+            assert prediction_idx == len(predictions)
+            return outputs

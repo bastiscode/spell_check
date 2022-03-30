@@ -4,11 +4,9 @@ from typing import TextIO, List
 
 import torch
 from torch.backends import cudnn
-from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from gnn_lib.data import utils
-from gnn_lib.data.utils import StringDataset
+from gnn_lib.api.utils import get_string_dataset_and_loader, reorder_data
 from gnn_lib.modules import inference
 from gnn_lib.utils import common
 from spelling_correction import baselines, BENCHMARK_DIR
@@ -27,7 +25,7 @@ def parse_args() -> argparse.Namespace:
                         default="")
     parser.add_argument("--suffix", type=str, default=None)
     parser.add_argument("--overwrite", action="store_true")
-    parser.add_argument("--batch-size", type=int, default=32)
+    parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--sort-by-length", action="store_true")
     parser.add_argument("--detections-file", type=str, default=None)
     return parser.parse_args()
@@ -60,7 +58,7 @@ def run(args: argparse.Namespace) -> None:
                     f"({args.baseline})")
         return
 
-    dataset, loader = utils.get_string_dataset_and_loader(args.in_file, args.sort_by_length, args.batch_size)
+    dataset, loader = get_string_dataset_and_loader(args.in_file, args.sort_by_length, args.batch_size)
 
     detections = []
     if args.detections_file is not None:
@@ -83,7 +81,7 @@ def run(args: argparse.Namespace) -> None:
         outputs = baseline.inference(batch, **inference_kwargs)
         all_outputs.extend(outputs)
 
-    reordered_outputs = utils.reorder_data(all_outputs, dataset.indices)
+    reordered_outputs = reorder_data(all_outputs, dataset.indices)
 
     with open(out_path, "w", encoding="utf8") as of:
         for output in reordered_outputs:

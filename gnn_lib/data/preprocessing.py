@@ -2,8 +2,10 @@ import copy
 import enum
 import hashlib
 import json
+import re
+import string
 from dataclasses import dataclass
-from typing import Tuple, List, Dict, Optional, Union, Any
+from typing import Tuple, List, Dict, Optional, Union, Any, Set
 
 import numpy as np
 import omegaconf
@@ -14,10 +16,120 @@ from gnn_lib.data import utils
 from gnn_lib.data.utils import PREPROCESSING_FN, SAMPLE, TOKENIZATION_FN, NEIGHBOR_FN
 
 
+_INCLUDE_ALL = tuple(i for i in range(4))
+_EDIT_CHARS = tuple(string.ascii_letters)
+
+
+def edit_token(token: str,
+               rand: np.random.Generator,
+               include: Tuple[int, ...] = _INCLUDE_ALL,
+               edit_chars: Tuple[str, ...] = _EDIT_CHARS,
+               exclude_indices: Optional[Set[int]] = None) -> \
+        Tuple[str, List[int], Set[int]]:
+    """
+
+    Perform a random edit operation from
+    {insert, delete, swap, replace} with the token.
+
+    :param token: token string
+    :param rand: random state
+    :param include: list of integers that represent
+    edit operations from which should be chosen
+    :param edit_chars: list of strings to choose
+    from for inserting and replacing
+    :param exclude_indices: list of indices to not consider for editing,
+    useful if you want to prevent that indices are edited multiple times
+    :return: token with one random edit, list of ints
+    indicating the edits for the positions in the token, updated exclude indices
+    """
+    exclude_indices = set() if exclude_indices is None else exclude_indices
+    if len(token) == 0:
+        return token, [], set()
+
+    # edit methods: 0 -> insert, 1 -> delete, 2 -> swap, 3 -> replace
+    edit_method = rand.choice(include)
+    edits = [-1] * len(token)
+
+    if edit_method == 0:
+        insert_indices = set(range(len(token) + 1)) - exclude_indices
+        if len(insert_indices) > 0:
+            char_idx = rand.integers(len(edit_chars))
+            _insert_char = edit_chars[char_idx]
+            assert len(_insert_char) > 0, "dont insert empty string, this is equal to leaving the token unchanged"
+
+            token_idx = rand.choice(list(insert_indices))
+
+            token = token[:token_idx] + _insert_char + token[token_idx:]
+
+            edits.extend([-1] * len(_insert_char))
+            for i in range(len(_insert_char)):
+                edits[token_idx + i] = 0
+                exclude_indices.add(token_idx + i)
+
+    elif edit_method == 1 and len(token) > 1:
+        delete_indices = set(range(len(token))) - exclude_indices
+        if len(delete_indices) > 0:
+            token_idx = rand.choice(list(delete_indices))
+            token = token[:token_idx] + token[token_idx + 1:]
+
+            edits.pop()
+            edits[max(token_idx - 1, 0)] = 1
+            edits[min(token_idx, len(token) - 1)] = 1
+
+            # for delete we dont add anything to exclude indices
+
+    elif edit_method == 2 and len(token) > 1:
+        swap_indices = set()
+        for i in range(len(token) - 1):
+            if i in exclude_indices or i + 1 in exclude_indices:
+                continue
+            swap_indices.add(i)
+
+        if len(swap_indices) > 0:
+            token_idx = rand.choice(list(swap_indices))
+
+            token = token[:token_idx] + token[token_idx + 1] + token[token_idx] + token[token_idx + 2:]
+
+            edits[token_idx] = 2
+            edits[token_idx + 1] = 2
+            exclude_indices.add(token_idx)
+            exclude_indices.add(token_idx + 1)
+
+    else:
+        replace_indices = set(range(len(token))) - exclude_indices
+        if len(replace_indices) > 0:
+            token_idx = rand.choice(list(replace_indices))
+
+            new_char = token[token_idx]
+            while new_char == token[token_idx]:
+                new_char = edit_chars[rand.integers(len(edit_chars))]
+            assert len(new_char) > 0, "dont replace chars with empty strings, delete should be used for that"
+
+            token = token[:token_idx] + new_char + token[token_idx + 1:]
+
+            edits.extend([-1] * (len(new_char) - 1))
+            for i in range(len(new_char)):
+                edits[token_idx + i] = 3
+                exclude_indices.add(token_idx + i)
+
+    assert len(token) == len(edits)
+    return token, edits, exclude_indices
+
+
+def find_substring_ignoring_spaces(
+        substring: str,
+        search_str: str
+) -> Tuple[int, int]:
+    pattern = r"\s*".join(re.escape(char) for char in substring.replace(" ", ""))
+    match = re.search(pattern, search_str)
+    assert match is not None
+    return match.start(), match.end()
+
+
 def artificial_edits(word: str, num_edits: int, rand: np.random.Generator) -> str:
     exclude_indices = set()
     for _ in range(num_edits):
-        word, edits, exclude_indices = utils.edit_token(
+        word, edits, exclude_indices = edit_token(
             token=word,
             rand=rand,
             exclude_indices=exclude_indices
@@ -476,7 +588,7 @@ class Substring(Preprocessing):
         if is_inference:
             return (start_idx, end_idx), None
         else:
-            target_start_idx, target_end_idx = utils.find_substring_ignoring_spaces(
+            target_start_idx, target_end_idx = find_substring_ignoring_spaces(
                 sequence[start_idx: end_idx], target_sequence
             )
             return (start_idx, end_idx), (target_start_idx, target_end_idx)
@@ -585,7 +697,9 @@ def get_preprocessing_fn(
             for sequence, target_sequence in zip(sequences, target_sequences)
         ]
         infos = [dict()] * len(sequences)
-        sequences, target_sequences, infos = preprocessing.apply(sequences, target_sequences, infos, is_inference)
+
+        if not is_inference:
+            sequences, target_sequences, infos = preprocessing.apply(sequences, target_sequences, infos, is_inference)
 
         samples = utils.prepare_samples(
             sequences,

@@ -55,34 +55,18 @@ class Task:
             self.variant.prepare_sequence(utils.SAMPLE_SEQUENCE) for _ in range(num_samples)
         ])
 
-    def disable_unused_parameters(self,
-                                  model: DDP,
-                                  device: DistributedDevice,
-                                  grad_scaler: amp.GradScaler) -> Set[str]:
+    def disable_unused_parameters(
+            self,
+            model: DDP,
+            device: DistributedDevice
+    ) -> Set[str]:
         batch = self.generate_sample_inputs(num_samples=1)
-        inputs, _ = self._prepare_inputs_and_labels(batch, device)
+        inputs, _ = self._prepare_inputs_and_labels(batch, device.device)
 
-        def _sum(item: Union[torch.Tensor, List, Dict]) -> Union[torch.Tensor, List, Dict]:
-            if isinstance(item, torch.Tensor):
-                return item.sum()
-            elif isinstance(item, list):
-                return sum([_sum(i) for i in item])
-            elif isinstance(item, dict):
-                return sum(_sum(v) for v in item.values())
-            else:
-                raise RuntimeError("expected model output to be any nesting of dicts, lists and tensors, "
-                                   f"but got {type(item)}")
-
-        with amp.autocast(enabled=grad_scaler.is_enabled()):
-            outputs, _ = model(**inputs)
-            loss = _sum(outputs)
-
-        grad_scaler.scale(loss).backward()
-
-        unused_parameters = set()
+        unused_parameters = utils.get_unused_parameters(model, **inputs)
+        # disable unused parameters
         for name, p in model.named_parameters():
-            if p.grad is None and p.requires_grad:
-                unused_parameters.add(name)
+            if name in unused_parameters:
                 p.requires_grad = False
 
         if device.is_main_process:
@@ -113,10 +97,11 @@ class Task:
     def _get_additional_stats(self, model: models.Model) -> Dict[str, data_containers.DataContainer]:
         return {}
 
-    def _prepare_inputs_and_labels(self,
-                                   batch: BATCH,
-                                   device: DistributedDevice) \
-            -> Tuple[Dict[str, Any], Any]:
+    def _prepare_inputs_and_labels(
+            self,
+            batch: BATCH,
+            device: torch.device
+    ) -> Tuple[Dict[str, Any], Any]:
         raise NotImplementedError
 
     def _calc_loss(self,
@@ -194,7 +179,7 @@ class Task:
             iteration = i + 1 + steps_to_fast_forward
 
             self.step += 1
-            inputs, labels = self._prepare_inputs_and_labels(batch, device)
+            inputs, labels = self._prepare_inputs_and_labels(batch, device.device)
 
             with amp.autocast(enabled=grad_scaler.is_enabled()):
                 start_forward_pass = time.perf_counter()
@@ -327,8 +312,8 @@ class Task:
 
                     self.save_checkpoint(
                         (
-                          ema.ema_model if ema is not None and ema_start_at >= self.step
-                          else unwrapped_model
+                            ema.ema_model if ema is not None and ema_start_at >= self.step
+                            else unwrapped_model
                         ),
                         device,
                         val_loss,
@@ -373,7 +358,7 @@ class Task:
         ):
             assert not model.training
 
-            inputs, labels = self._prepare_inputs_and_labels(batch, device)
+            inputs, labels = self._prepare_inputs_and_labels(batch, device.device)
 
             with amp.autocast(enabled=grad_scaler.is_enabled()):
                 output, losses = model(**inputs)
@@ -398,6 +383,9 @@ class Task:
             self.best_val_loss = loss_stat.value
 
         return loss_stat.value, best
+
+    def prepare_inference_windows(self, inputs: List[str]) -> None:
+        raise NotImplementedError
 
     @torch.inference_mode()
     def inference(

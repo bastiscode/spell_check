@@ -14,6 +14,8 @@ import gnn_lib
 from gnn_lib import SpellingErrorDetector, get_available_spelling_error_detection_models
 from gnn_lib.api.utils import load_text_file, generate_report
 from gnn_lib.modules import inference
+from gnn_lib.tasks import utils as task_utils
+from gnn_lib.utils import common
 
 
 def parse_args() -> argparse.Namespace:
@@ -116,6 +118,13 @@ def parse_args() -> argparse.Namespace:
              "iterator)"
     )
     parser.add_argument(
+        "--precision",
+        choices=["fp32", "fp16", "bfp16"],
+        default="fp32",
+        help="Choose the precision for inference, fp16 or bfp16 can result in faster runtimes when running on a "
+             "new GPU that supports lower precision, but it can be slower on older GPUs."
+    )
+    parser.add_argument(
         "--progress",
         action="store_true",
         help="Show a progress bar (this flag is only respected when getting input from stdin, "
@@ -181,12 +190,20 @@ def run(args: argparse.Namespace) -> None:
             force_download=args.force_download
         )
 
+    detector.set_precision(args.precision)
+
     start = time.perf_counter()
+    num_sequences = -1
+    num_characters = -1
     if args.detect is not None:
         detection = detector.detect_text(args.detect, args.threshold, sort_by_length=False)
         print(format_output(detection, args.detect, args.sec_out))
+
     elif args.file is not None:
         inputs = load_text_file(args.file)
+        num_sequences = len(inputs)
+        num_characters = sum(len(ipt) for ipt in inputs)
+
         detections = detector.detect_text(
             inputs=inputs,
             threshold=args.threshold,
@@ -198,20 +215,11 @@ def run(args: argparse.Namespace) -> None:
             for detection, line in zip(detections, inputs):
                 print(format_output(detection, line, args.sec_out))
         else:
+            os.makedirs(os.path.dirname(args.out_path), exist_ok=True)
             with open(args.out_path, "w", encoding="utf8") as of:
                 for detection, line in zip(detections, inputs):
                     of.write(format_output(detection, line, args.sec_out) + "\n")
-        if args.report:
-            generate_report(
-                detector.task_name,
-                detector.model_name,
-                inputs,
-                time.perf_counter() - start,
-                args.batch_size,
-                not args.unsorted,
-                detector.device,
-                file_path=args.report
-            )
+
     elif args.interactive:
         while True:
             try:
@@ -220,6 +228,7 @@ def run(args: argparse.Namespace) -> None:
                 print(format_output(detection, line, args.sec_out))
             except KeyboardInterrupt:
                 return
+
     else:
         if sys.stdin.isatty():
             return
@@ -242,22 +251,35 @@ def run(args: argparse.Namespace) -> None:
                 for detection, line in zip(detections, lines):
                     print(format_output(detection, line, args.sec_out))
 
-                if args.report:
-                    generate_report(
-                        detector.task_name,
-                        detector.model_name,
-                        lines,
-                        time.perf_counter() - start,
-                        args.batch_size,
-                        not args.unsorted,
-                        detector.device,
-                        file_path=args.report
-                    )
+                num_sequences = len(lines)
+                num_characters = sum(len(line) for line in lines)
 
         except BrokenPipeError:
             return
         except Exception as e:
             raise e
+
+    if args.report and num_sequences >= 0 and num_characters >= 0:
+        end = time.perf_counter()
+
+        sample_inputs = detector.task.generate_sample_inputs(2)
+        inputs, _ = detector.task._prepare_inputs_and_labels(sample_inputs, detector.device)
+        unused_parameters = task_utils.get_unused_parameters(detector.model, **inputs)
+        parameter_dict = common.get_num_parameters(detector.model, unused_parameters)
+
+        generate_report(
+            detector.task_name,
+            detector.model_name,
+            parameter_dict["total"] - parameter_dict["unused"],
+            num_sequences,
+            num_characters,
+            end - start,
+            detector._mixed_precision_dtype,
+            args.batch_size,
+            not args.unsorted,
+            detector.device,
+            file_path=args.report
+        )
 
 
 if __name__ == "__main__":

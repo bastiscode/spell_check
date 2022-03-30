@@ -10,15 +10,19 @@ import zipfile
 from typing import Optional, Union, List, Tuple, Dict, Callable
 
 import requests
-import torch
 from omegaconf import OmegaConf
-from tabulate import tabulate
+import torch
+from spacy.tokens import Doc
+from torch import nn
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
 from gnn_lib import tasks, models
-from gnn_lib.data.utils import clean_sequence
-from gnn_lib.utils import config
+from gnn_lib.api import tables
+from gnn_lib.data import utils
+from gnn_lib.data.utils import clean_sequence, flatten
+from gnn_lib.data.variants import DatasetVariant
+from gnn_lib.utils import config, common
 
 _BASE_URL = "https://tokenization.cs.uni-freiburg.de/transformer"
 _CONFIGS_URL = f"{_BASE_URL}/configs.zip"
@@ -40,6 +44,98 @@ _TASK_AND_NAME_TO_URL = {
 
 ModelInfo = collections.namedtuple("ModelInfo", ["task", "name", "description"])
 StringInputOutput = Union[str, List[str]]
+
+
+class _APIBase:
+    def __init__(
+            self,
+            model: models.Model,
+            cfg: config.TrainConfig,
+            task: tasks.Task,
+            device: torch.device,
+            logger: logging.Logger
+    ) -> None:
+        self.model = model.eval()
+        for param in self.model.parameters():
+            param.requires_grad = False
+
+        self.cfg = cfg
+        self.task = task
+        self.device = device
+        self.logger = logger
+
+        self._mixed_precision_dtype = torch.float32
+
+    @staticmethod
+    def from_experiment(
+            experiment_dir: str,
+            device: Union[str, int]
+    ) -> "_APIBase":
+        raise NotImplementedError
+
+    @staticmethod
+    def from_pretrained(
+            model: str,
+            device: Union[str, int],
+            cache_dir: Optional[str],
+            force_download: bool
+    ) -> "_APIBase":
+        raise NotImplementedError
+
+    def set_precision(self, precision: str) -> None:
+        assert precision in {"fp32", "fp16", "bfp16"}
+
+        if precision == "fp32":
+            mixed_precision_dtype = torch.float32
+        elif precision == "fp16":
+            mixed_precision_dtype = torch.float16
+        else:
+            mixed_precision_dtype = torch.bfloat16
+
+        if self.device.type == "cpu" and precision == "fp16":
+            self.logger.info("Setting precision to bfp16 instead of fp16, because fp16 is not supported on CPU yet")
+            mixed_precision_dtype = torch.bfloat16
+
+        self._mixed_precision_dtype = mixed_precision_dtype
+
+    @property
+    def mixed_precision_enabled(self) -> bool:
+        return self._mixed_precision_dtype != torch.float32
+
+    def to(self, device: Union[str, int]) -> "_APIBase":
+        self.device = torch.device(device)
+        self.model.to(self.device)
+        return self
+
+    @property
+    def task_name(self) -> str:
+        raise NotImplementedError
+
+    @property
+    def model_name(self) -> str:
+        return self.cfg.experiment_name
+
+    @staticmethod
+    def _download(task: str, model: str, cache_dir: Optional[str], force_download: bool) -> Tuple[str, str, str]:
+        logger = common.get_logger("DOWNLOAD")
+
+        data_dir = download_data(force_download, logger, cache_dir)
+
+        model_dir = download_model(
+            task=task,
+            name=model,
+            cache_dir=cache_dir,
+            force_download=force_download,
+            logger=logger
+        )
+        # check if model comes with a configs.zip, if not download global configs
+        if os.path.exists(os.path.join(model_dir, "configs.zip")):
+            shutil.unpack_archive(os.path.join(model_dir, "configs.zip"), extract_dir=model_dir)
+            config_dir = os.path.join(model_dir, "configs")
+        else:
+            config_dir = download_configs(force_download, logger, cache_dir)
+
+        return model_dir, data_dir, config_dir
 
 
 def _download_and_unpack_zip(
@@ -227,34 +323,126 @@ def load_experiment(
     return cfg, task, model
 
 
+StringBatchElement = collections.namedtuple(
+    "StringBatchElement",
+    field_names=[
+        "left_context",
+        "window",
+        "right_context",
+        "num_tokens",
+        "index",
+        "position",
+        "start",
+        "end",
+    ]
+)
+
+
+def _batchify_string(
+        string: str,
+        index: int,
+        max_length: int,
+        tok_fn: Callable[[Doc], List[List[int]]],
+        clean_fn: Callable[[str], str],
+        respect_word_boundaries: bool,
+        context_length: int
+) -> List[StringBatchElement]:
+    string = clean_fn(string)
+    _, doc = utils.tokenize_words(string, return_doc=True)
+    tokens = tok_fn(doc)
+
+    if True or len(tokens) <= max_length:
+        return [
+            StringBatchElement(
+                left_context="",
+                window=string,
+                right_context="",
+                num_tokens=len(tokens),
+                index=index,
+                position=0,
+                start=0,
+                end=len(string)
+            )
+        ]
+    else:
+        batch_elements = []
+        windows = _generate_windows()
+        for (window_idx, (ctx_start, ctx_end, window_start, window_end, token_start, token_end)) in enumerate(windows):
+            ctx_string = string[ctx_start:ctx_end]
+            batch_elements.append(
+                StringBatchElement(
+                    left_context=...,
+                    string=...,
+                    num_tokens=token_end - token_start,
+                    index=index,
+                    position=window_idx,
+                    start=window_start - ctx_start,
+                    end=window_end - ctx_start
+                )
+            )
+
+
+def _batchify_strings(
+        strings: List[str],
+        max_length: int,
+        tok_fn: Callable,
+        clean_fn: Callable[[str], str],
+        respect_word_boundaries: bool,
+        context_length: Optional[int] = None,
+) -> List[StringBatchElement]:
+    assert "unit" in {"char", "word_ws"}
+    if context_length is None:
+        context_length = max_length // 8  # 1/4 context (1/8 left + 1/8 right) + 3/4 window
+
+    return flatten([
+        _batchify_string(string, i, max_length, tok_fn, clean_fn, respect_word_boundaries, context_length)
+        for i, string in enumerate(strings)
+    ])
+
+
 class StringDataset(Dataset):
-    def __init__(self, sequences: List[str], sort_by_length: bool = False):
-        self.sequences = sequences
+    def __init__(
+            self,
+            strings: List[str],
+            variant: DatasetVariant,
+            max_length: int,
+            clean_fn: Callable[[str], str] = None,
+            context_length: Optional[int] = None,
+            sort_by_length: bool = False
+    ) -> None:
+        self.batch_elements = _batchify_strings(
+            strings,
+            max_length,
+            lambda s: s,
+            clean_fn,
+            respect_borders=respect_borders,
+            context_length=context_length,
+        )
+
         self.sort_by_length = sort_by_length
         if not self.sort_by_length:
-            self.indices = list(range(len(self.sequences)))
+            self._indices = list(range(len(self.batch_elements)))
         else:
             indices_lengths = sorted(
-                [(i, len(s)) for i, s in enumerate(self.sequences)],
+                [(i, element.num_tokens) for i, element in enumerate(self.batch_elements)],
                 key=lambda item: -item[1]
             )
-            self.indices = [idx for idx, _ in indices_lengths]
+            self._indices = [idx for idx, _ in indices_lengths]
 
-    def __getitem__(self, idx: int) -> Tuple[str, int]:
-        return self.sequences[self.indices[idx]], self.indices[idx]
+    def __getitem__(self, idx: int) -> StringBatchElement:
+        return self.batches[self.indices[idx]]
 
     def __len__(self) -> int:
         return len(self.sequences)
 
-    def word_length(self) -> int:
+    def word_ws_length(self) -> int:
         return sum(len(s.split()) for s in self.sequences)
 
     def char_length(self) -> int:
         return sum(len(s) for s in self.sequences)
 
-    @staticmethod
-    def collate_fn(batch: List[Tuple[str, Dict]]) -> Tuple[List[str], Dict]:
-        return [b[0] for b in batch], {"indices": [b[1] for b in batch], "lengths": [len(b[0]) for b in batch]}
+    def token_length(self) -> int:
+        return sum(b[1] for b in self.batches)
 
 
 def load_text_file(file_path: str) -> List[str]:
@@ -269,20 +457,27 @@ def get_string_dataset_and_loader(
         file_or_list_of_strings: Union[str, List[str]],
         sort_by_length: bool,
         batch_size: int,
-        clean_fn: Callable[[str], str] = clean_sequence
+        max_length: int,
+        clean_fn: Callable[[str], str] = clean_sequence,
+        respect_borders: str = "char",
+        context_length: Optional[int] = None
 ) -> Tuple[StringDataset, DataLoader]:
     if isinstance(file_or_list_of_strings, list):
         text_data = file_or_list_of_strings
     else:
         text_data = load_text_file(file_or_list_of_strings)
 
-    text_data = [clean_fn(line) for line in text_data]
+    dataset = StringDataset(
+        text_data,
+        max_length,
+        respect_borders=respect_borders,
+        clean_fn=clean_fn,
+        sort_by_length=sort_by_length
+    )
 
-    dataset = StringDataset(text_data, sort_by_length=sort_by_length)
     loader = DataLoader(
         dataset=dataset,
-        batch_size=batch_size,
-        collate_fn=dataset.collate_fn
+        batch_size=batch_size
     )
 
     return dataset, loader
@@ -298,39 +493,63 @@ def reorder_data(items: List, original_indices: List[int]) -> List:
 
 def generate_report(
         task: str,
-        model: str,
-        inputs: List[str],
+        model_name: str,
+        num_parameters: int,
+        num_sequences: int,
+        num_characters: int,
         runtime: float,
+        precision: torch.dtype,
         batch_size: int,
         sort_by_length: bool,
         device: torch.device,
         file_path: Optional[str] = None
 ) -> Optional[str]:
-    input_size = len(inputs)
-    input_size_chars = sum(len(ipt) for ipt in inputs)
-    report = tabulate(
-        [
+    if precision == torch.float16:
+        precision_str = "fp16"
+    elif precision == torch.bfloat16:
+        precision_str = "bfp16"
+    elif precision == torch.float32:
+        precision_str = "fp32"
+    else:
+        raise ValueError(f"expected precision to be one of torch.float16, torch.bfloat16 or torch.float32")
+
+    report = tables.generate_table(
+        header=[
+            "Task",
+            "Model",
+            "Input size",
+            "Runtime in seconds",
+            "Seq/s",
+            "kChar/s",
+            "MiB GPU memory",
+            "Mio. parameters",
+            "Precision",
+            "Batch size",
+            "Sorted",
+            "Device"
+        ],
+        data=[
             [
                 task,
-                model,
-                f"{input_size:,} sequences, {input_size_chars:,} chars",
-                runtime,
-                input_size / runtime,
-                input_size_chars / runtime,
-                batch_size,
+                model_name,
+                f"{num_sequences:,} sequences, {num_characters:,} chars",
+                f"{runtime:.1f}",
+                f"{num_sequences / runtime:.1f}",
+                f"{num_characters / (runtime * 1000):.1f}",
+                f"{torch.cuda.max_memory_reserved(device) // (1024 ** 2):,}" if device.type == "cuda" else "-",
+                f"{num_parameters / 1e6:,.1f}",
+                precision_str,
+                str(batch_size),
                 "yes" if sort_by_length else "no",
                 f"{torch.cuda.get_device_name(device)}, {get_cpu_info()}" if device.type == "cuda" else get_cpu_info()
             ]
         ],
-        headers=[
-            "Task", "Model", "Input size", "Runtime in seconds", "Seq/s", "Char/s", "Batch size", "Sorted", "Device"
-        ],
-        floatfmt=[None, None, None, ".3f", ".2f", ".2f", None, None, None, None],
-        tablefmt="pipe"
+        fmt="markdown"
     )
     if file_path is not None:
         if os.path.dirname(file_path):
             os.makedirs(os.path.dirname(file_path), exist_ok=True)
+
         exists = os.path.exists(file_path)
         with open(file_path, "a" if exists else "w", encoding="utf8") as of:
             if exists:

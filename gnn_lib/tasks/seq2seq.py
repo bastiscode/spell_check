@@ -6,7 +6,6 @@ from torch.nn import functional as F
 from gnn_lib import models, tasks
 from gnn_lib.modules import inference, utils
 from gnn_lib.utils import data_containers, BATCH, to
-from gnn_lib.utils.distributed import DistributedDevice
 from gnn_lib.tasks import utils as task_utils
 
 
@@ -24,16 +23,18 @@ class Seq2Seq(tasks.Task):
             )
         }
 
-    def _prepare_inputs_and_labels(self,
-                                   batch: BATCH,
-                                   device: DistributedDevice) -> Tuple[Dict[str, Any], Any]:
+    def _prepare_inputs_and_labels(
+            self,
+            batch: BATCH,
+            device: torch.device
+    ) -> Tuple[Dict[str, Any], Any]:
         decoder_inputs = []
         decoder_labels = []
         for labels in batch.info.pop("label"):
             decoder_inputs.append(labels[:-1])
             decoder_labels.append(labels[1:])
 
-        decoder_labels = to(utils.pad(decoder_labels, val=batch.info["pad_token_id"][0]).long(), device.device)
+        decoder_labels = to(utils.pad(decoder_labels, val=batch.info["pad_token_id"][0]).long(), device)
 
         return (
             {

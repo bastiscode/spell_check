@@ -10,7 +10,6 @@ from gnn_lib.models import BATCH
 from gnn_lib.modules import utils
 from gnn_lib.tasks import utils as task_utils
 from gnn_lib.utils import data_containers, to
-from gnn_lib.utils.distributed import DistributedDevice
 
 
 class MultiNodeClassification(tasks.Task):
@@ -23,15 +22,17 @@ class MultiNodeClassification(tasks.Task):
             for node_type, num_classes in model.cfg.num_classes.items()
         }
 
-    def _prepare_inputs_and_labels(self,
-                                   batch: BATCH,
-                                   device: DistributedDevice) -> Tuple[Dict[str, Any], Any]:
+    def _prepare_inputs_and_labels(
+            self,
+            batch: BATCH,
+            device: torch.device
+    ) -> Tuple[Dict[str, Any], Any]:
         # extract labels from info dict
         label_dict = collections.defaultdict(list)
         for labels in batch.info.pop("label"):
             for node_type, label in labels.items():
                 label_dict[node_type].append(label)
-        label_dict = {k: to(torch.cat(v, dim=0), device.device) for k, v in label_dict.items()}
+        label_dict = {k: to(torch.cat(v, dim=0), device) for k, v in label_dict.items()}
 
         return {"g": batch.data, **batch.info}, label_dict
 
@@ -67,7 +68,7 @@ class MultiNodeClassification(tasks.Task):
         self._check_model(model)
         model = model.eval()
 
-        got_str_input = isinstance(inputs, list) and isinstance(inputs[0], str)
+        got_str_input = task_utils.is_string_input(inputs)
         if got_str_input:
             batch = self.variant.prepare_sequences_for_inference(inputs)
         else:

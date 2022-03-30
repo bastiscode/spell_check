@@ -1,3 +1,4 @@
+import collections
 import enum
 import hashlib
 import os
@@ -23,6 +24,17 @@ class DatasetVariants(enum.IntEnum):
     SEC_WORDS_NMT = 4
     SEC_NMT = 5
     TOKENIZATION_REPAIR_PLUS = 6
+
+
+SequenceSplit = collections.namedtuple(
+    "SequenceSplit",
+    field_names=[
+        "ctx_start",
+        "ctx_end",
+        "window_start",
+        "window_end"
+    ]
+)
 
 
 @dataclass
@@ -66,19 +78,15 @@ class DatasetVariant:
             self,
             sequence: Union[str, utils.SAMPLE],
             target_sequence: Optional[str] = None,
-            is_inference: bool = False
+            is_inference: bool = False,
+            unk_token_id: Optional[int] = None
     ) -> Tuple[utils.SAMPLE, Optional[str]]:
-        if is_inference:
-            assert target_sequence is None, "target sequence must be None during inference"
-            return (
-                (sequence, None) if isinstance(sequence, utils.SAMPLE)
-                else (self.preprocessing_fn([sequence], [None], is_inference)[0][0], None)
-            )
-        else:
-            if isinstance(sequence, utils.SAMPLE) and target_sequence is not None:
-                return sequence, target_sequence
-            else:
-                return self.preprocessing_fn([sequence], [target_sequence], is_inference)[0]
+        sequence_is_sample = isinstance(sequence, utils.SAMPLE)
+        if is_inference and not sequence_is_sample:
+            sequence = self.preprocessing_fn([sequence], [None], is_inference)[0][0]
+        elif not is_inference and (not sequence_is_sample or target_sequence is None):
+            input_sample, target_sequence = self.preprocessing_fn([str(sequence)], [target_sequence], is_inference)[0]
+        return utils.sanitize_sample(sequence, unk_token_id), target_sequence
 
     def prepare_sequence(
             self,
@@ -86,6 +94,14 @@ class DatasetVariant:
             target_sequence: Optional[str] = None,
             is_inference: bool = False
     ) -> Tuple[DATA_INPUT, Dict[str, Any]]:
+        raise NotImplementedError
+
+    def split_sequence_for_inference(
+            self,
+            sequence: str,
+            max_length: int,
+            context_length: int,
+    ) -> List[SequenceSplit]:
         raise NotImplementedError
 
     def prepare_sequences_for_inference(
@@ -184,6 +200,19 @@ class SEDSequence(DatasetVariant):
         else:
             raise ValueError(f"unknown data scheme {self.cfg.data_scheme}")
 
+    def split_sequence_for_inference(
+            self,
+            sequence: str,
+            max_length: int,
+            context_length: int
+    ) -> List[SequenceSplit]:
+        input_sample, _ = self._get_inputs(sequence, None, True, self.unk_token_id)
+
+        if len(utils.flatten(input_sample.tokens)) <= max_length:
+            return [SequenceSplit(0, len(sequence), 0, len(sequence))]
+
+
+
     def prepare_sequence(
             self,
             sequence: Union[str, utils.SAMPLE],
@@ -198,11 +227,8 @@ class SEDSequence(DatasetVariant):
         input_sample, target_sequence = self._get_inputs(
             sequence,
             target_sequence,
-            is_inference
-        )
-        input_sample = utils.sanitize_sample(
-            input_sample,
-            unk_token_id=self.unk_token_id
+            is_inference,
+            self.unk_token_id
         )
 
         info = {}
@@ -266,10 +292,10 @@ class SEDSequence(DatasetVariant):
                         "groups": word_groups
                     },
                     {
-                        "stage": "word_to_sequence",
-                        "groups": sequence_groups,
                         # features are added before grouping so this is the correct stage
-                        "features": utils.get_word_features(input_sample.doc, self.dictionary)
+                        "features": utils.get_word_features(input_sample.doc, self.dictionary),
+                        "stage": "word_to_sequence",
+                        "groups": sequence_groups
                     }
                 ]
             else:
@@ -374,11 +400,8 @@ class SEDWords(DatasetVariant):
         input_sample, target_sequence = self._get_inputs(
             sequence,
             target_sequence,
-            is_inference
-        )
-        input_sample = utils.sanitize_sample(
-            input_sample,
-            unk_token_id=self.unk_token_id
+            is_inference,
+            self.unk_token_id
         )
 
         info = {}
@@ -408,7 +431,7 @@ class SEDWords(DatasetVariant):
         elif self.cfg.data_scheme == "token_graph":
             if self.cfg.add_word_features:
                 # if we add word features, we first aggregate from tokens to words
-                # and then from word to whitespace_words
+                # and then from words to whitespace_words
                 # we need to do this because the features are on the word level and not on the whitespace word level
                 word_groups, word_whitespace_groups = utils.get_word_and_word_whitespace_groups(input_sample)
                 info["groups"] = {
@@ -448,10 +471,10 @@ class SEDWords(DatasetVariant):
                         "groups": word_groups
                     },
                     {
-                        "stage": "word_to_word_ws",
-                        "groups": word_ws_groups,
                         # features are added before grouping so this is the correct stage
-                        "features": utils.get_word_features(input_sample.doc, self.dictionary)
+                        "features": utils.get_word_features(input_sample.doc, self.dictionary),
+                        "stage": "word_to_word_ws",
+                        "groups": word_ws_groups
                     }
                 ]
             else:
@@ -515,10 +538,11 @@ class TokenizationRepair(DatasetVariant):
     ]:
         self.cfg: TokenizationRepairConfig
 
-        input_sample, target_sequence = self._get_inputs(sequence, target_sequence, is_inference)
-        input_sample = utils.sanitize_sample(
-            input_sample,
-            unk_token_id=self.unk_token_id
+        input_sample, target_sequence = self._get_inputs(
+            sequence,
+            target_sequence,
+            is_inference,
+            self.unk_token_id
         )
 
         info = {}
@@ -626,11 +650,8 @@ class SECWordsNMT(DatasetVariant):
         input_sample, target_sequence = self._get_inputs(
             sequence,
             target_sequence,
-            is_inference
-        )
-        input_sample = utils.sanitize_sample(
-            input_sample,
-            unk_token_id=self.input_unk_token_id
+            is_inference,
+            self.input_unk_token_id
         )
 
         info = {"pad_token_id": self.output_pad_token_id}
@@ -654,9 +675,6 @@ class SECWordsNMT(DatasetVariant):
             if word.whitespace_ == " ":
                 word_ws_idx += 1
         info["encoder_group_lengths"] = torch.tensor(encoder_group_lengths, dtype=torch.long)
-
-        # start = torch.cumsum(info["encoder_group_lengths"], dim=0)[-2].item() if len(input_words) > 1 else 0
-        # print(start + info["label_splits"][-1] - 1)
 
         return self.construct_input(input_sample), info
 
@@ -754,11 +772,8 @@ class SECNMT(DatasetVariant):
         input_sample, target_sequence = self._get_inputs(
             sequence,
             target_sequence,
-            is_inference
-        )
-        input_sample = utils.sanitize_sample(
-            input_sample,
-            unk_token_id=self.input_unk_token_id
+            is_inference,
+            self.input_unk_token_id
         )
 
         info = {"pad_token_id": self.output_pad_token_id}
@@ -812,10 +827,11 @@ class TokenizationRepairPlus(TokenizationRepair):
     ]:
         self.cfg: TokenizationRepairPlusConfig
 
-        input_sample, target_sequence = self._get_inputs(sequence, target_sequence, is_inference)
-        input_sample = utils.sanitize_sample(
-            input_sample,
-            unk_token_id=self.unk_token_id
+        input_sample, target_sequence = self._get_inputs(
+            sequence,
+            target_sequence,
+            is_inference,
+            self.unk_token_id
         )
 
         info = {}

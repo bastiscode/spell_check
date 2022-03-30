@@ -7,7 +7,6 @@ from gnn_lib import tasks, models
 from gnn_lib.modules import utils
 from gnn_lib.tasks import utils as task_utils
 from gnn_lib.utils import data_containers, BATCH, to
-from gnn_lib.utils.distributed import DistributedDevice
 
 
 class SequenceClassification(tasks.Task):
@@ -23,11 +22,13 @@ class SequenceClassification(tasks.Task):
         }
         return stats
 
-    def _prepare_inputs_and_labels(self,
-                                   batch: BATCH,
-                                   device: DistributedDevice) -> Tuple[Dict[str, Any], Any]:
+    def _prepare_inputs_and_labels(
+            self,
+            batch: BATCH,
+            device: torch.device
+    ) -> Tuple[Dict[str, Any], Any]:
         # extract labels from info dict
-        labels = to(torch.cat(batch.info.pop("label")), device.device)
+        labels = to(torch.cat(batch.info.pop("label")), device)
 
         return {"x": batch.data, **batch.info}, labels
 
@@ -61,43 +62,36 @@ class SequenceClassification(tasks.Task):
         self._check_model(model)
         model = model.eval()
 
-        got_str_input = isinstance(inputs, list) and isinstance(inputs[0], str)
-        if got_str_input:
-            g, infos = self.variant.prepare_sequences_for_inference(inputs)
-        else:
-            g, infos = inputs
+        threshold = kwargs.get("threshold", 0.5)
+        temperature = kwargs.get("temperature", 1.0)
 
-        outputs, _ = model(g, **infos)
+        got_str_input = task_utils.is_string_input(inputs)
+        if got_str_input:
+            batch = self.variant.prepare_sequences_for_inference(inputs)
+        else:
+            batch = inputs
+
+        oversized = [len(t) > model.cfg.max_length for t in batch.data]
+        if sum(oversized):
+            # print(f"found {sum(oversized)} sequences that are too long: {[len(t) for t in batch.data]}")
+            data = [t for i, t in enumerate(batch.data) if not oversized[i]]
+            info = {k: [v_ for i, v_ in enumerate(v) if not oversized[i]] for k, v in batch.info.items()}
+            batch = BATCH(data, info)
+
+        outputs, _ = model(batch.data, **batch.info)
 
         return_logits = kwargs.get("return_logits", False)
 
-        batch_predictions_dict = {}
-        for node_type in model.cfg.num_classes:
-            num_nodes = g.batch_num_nodes(node_type)
-            if "groups" in infos and node_type in infos["groups"][0]:
-                num_nodes = [max(group[node_type][-1]["groups"]) + 1 for group in infos["groups"]]
-
-            if return_logits:
-                predictions = utils.tensor_to_python(outputs[node_type], force_list=True)
+        predictions = utils.tensor_to_python(
+            task_utils.class_predictions(outputs, threshold, temperature), force_list=True
+        )
+        prediction_idx = 0
+        outputs = []
+        for is_oversized in oversized:
+            if not is_oversized:
+                outputs.append(predictions[prediction_idx])
+                prediction_idx += 1
             else:
-                threshold = kwargs.get(f"{node_type}_threshold", kwargs.get("threshold", 0.5))
-                temperature = kwargs.get(f"{node_type}_temperature", kwargs.get("temperature", 1.0))
-                predictions = utils.tensor_to_python(
-                    task_utils.class_predictions(
-                        outputs[node_type],
-                        threshold,
-                        temperature
-                    ),
-                    force_list=True
-                )
-
-            predictions = utils.split(
-                predictions,
-                num_nodes
-            )
-            batch_predictions_dict[node_type] = predictions
-
-        return [
-            {node_type: predictions[i] for node_type, predictions in batch_predictions_dict.items()}
-            for i in range(g.batch_size)
-        ]
+                outputs.append(0)
+        assert prediction_idx == len(predictions)
+        return outputs

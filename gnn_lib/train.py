@@ -300,9 +300,7 @@ def train(args: argparse.Namespace, device: DistributedDevice) -> None:
         if resuming_training and "lr_scheduler_state_dict" in last_checkpoint:
             lr_scheduler.load_state_dict(last_checkpoint["lr_scheduler_state_dict"])
 
-    unused_parameters = task.disable_unused_parameters(
-        model, device, grad_scaler
-    )
+    unused_parameters = task.disable_unused_parameters(model, device)
 
     start_epoch = 0
     steps_to_fast_forward = 0

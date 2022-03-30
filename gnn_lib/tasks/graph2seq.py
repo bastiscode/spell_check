@@ -8,8 +8,7 @@ from gnn_lib import models, tasks
 from gnn_lib.data import tokenization
 from gnn_lib.modules import inference, utils
 from gnn_lib.tasks import utils as task_utils
-from gnn_lib.utils import data_containers
-from gnn_lib.utils.distributed import DistributedDevice
+from gnn_lib.utils import data_containers, BATCH
 
 
 class Graph2Seq(tasks.Task):
@@ -25,40 +24,38 @@ class Graph2Seq(tasks.Task):
 
     def _prepare_inputs_and_labels(
             self,
-            batch: Tuple[dgl.DGLHeteroGraph, List[Dict[str, Any]]],
-            device: DistributedDevice
+            batch: BATCH,
+            device: torch.device
     ) -> Tuple[Dict[str, Any], Any]:
-        g, info = batch
-        g = g.to(device.device)
-
         decoder_inputs = []
         decoder_labels = []
         decoder_lengths = []
-        for i in info:
-            labels = i["label"]
-            decoder_inputs.append(torch.tensor(labels[:-1], device=device.device, dtype=torch.long))
-            decoder_labels.append(torch.tensor(labels[1:], device=device.device, dtype=torch.long))
+        for labels in batch.info.pop("label"):
+            decoder_inputs.append(torch.tensor(labels[:-1], device=device, dtype=torch.long))
+            decoder_labels.append(torch.tensor(labels[1:], device=device, dtype=torch.long))
             decoder_lengths.append(len(labels) - 1)
 
+        pad_token_id = float(batch.info["pad_token_id"][0])
         decoder_inputs = torch.nn.utils.rnn.pad_sequence(
             decoder_inputs,
-            padding_value=float(info[0]["pad_token_id"]),
+            padding_value=pad_token_id,
             batch_first=True
         ).long()
         decoder_labels = torch.nn.utils.rnn.pad_sequence(
             decoder_labels,
-            padding_value=float(info[0]["pad_token_id"]),
+            padding_value=pad_token_id,
             batch_first=True
         ).long()
-        decoder_lengths = torch.tensor(decoder_lengths, device=device.device, dtype=torch.long)
+        decoder_lengths = torch.tensor(decoder_lengths, device=device, dtype=torch.long)
 
         return (
             {
-                "g": g,
+                "g": batch.data,
                 "decoder_inputs": decoder_inputs,
-                "decoder_lengths": decoder_lengths
+                "decoder_lengths": decoder_lengths,
+                **batch.info
             },
-            {"labels": decoder_labels, "pad_token_id": info[0]["pad_token_id"]}
+            {"labels": decoder_labels, "pad_token_id": batch.info["pad_token_id"][0]}
         )
 
     def _calc_loss(self,

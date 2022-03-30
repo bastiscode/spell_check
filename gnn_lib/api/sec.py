@@ -1,18 +1,17 @@
 import dataclasses
 import os
 import pprint
-import shutil
 from typing import List, Optional, Union, Any, Dict
 
 import torch
+from torch import autocast
 from tqdm import tqdm
 
 from gnn_lib.api.utils import (
+    _APIBase,
     ModelInfo,
     StringInputOutput,
     download_data,
-    download_configs,
-    download_model,
     load_experiment,
     get_string_dataset_and_loader,
     reorder_data,
@@ -92,7 +91,7 @@ def inference_kwargs_from_search_and_score(search: Search, score: SpellingCorrec
 
     if score.mode != "log_likelihood" and score.prefix_index is None:
         logger = common.get_logger("DOWNLOAD")
-        logger.info(f"score mode is {score.mode}, but not prefix index is given, downloading data to use "
+        logger.info(f"score mode is {score.mode}, but no prefix index is given, downloading data to use "
                     f"pretrained prefix index")
         data_dir = download_data(False, logger)
         score.prefix_index = index.PrefixIndex(
@@ -109,49 +108,43 @@ def inference_kwargs_from_search_and_score(search: Search, score: SpellingCorrec
     return inference_kwargs
 
 
-class SpellingErrorCorrector:
+class SpellingErrorCorrector(_APIBase):
     def __init__(
             self,
             model_dir: str,
             device: Union[str, int],
             **kwargs: Dict[str, Any]
     ) -> None:
-        self.logger = common.get_logger("SPELLING_ERROR_CORRECTION")
+        logger = common.get_logger("SPELLING_ERROR_CORRECTION")
 
         if device != "cpu" and not torch.cuda.is_available():
-            self.logger.info(f"could not find a GPU, using CPU as fallback option")
+            logger.info(f"could not find a GPU, using CPU as fallback option")
             device = "cpu"
 
-        self.device = torch.device(device)
-        self.logger.info(f"running spelling error correction on device {get_device_info(self.device)}")
+        device = torch.device(device)
+        logger.info(f"running spelling error correction on device {get_device_info(device)}")
 
-        self.cfg, self.task, self.model = load_experiment(
+        cfg, task, model = load_experiment(
             model_dir,
-            self.device,
+            device,
             kwargs.get("override_env_vars"),
             kwargs.get("keep_existing_env_vars", False)
         )
 
         assert (
-                isinstance(self.task, graph_sec_nmt.GraphSECNMT)
-                or isinstance(self.task, sec_nmt.SECNMT)
-                or isinstance(self.task, graph_sec_words_nmt.GraphSECWordsNMT)
-                or isinstance(self.task, sec_words_nmt.SECWordsNMT)
-        ), f"expected experiment to be of type SECNMT or SECWordsNMT, but got {type(self.task)}"
+                isinstance(task, graph_sec_nmt.GraphSECNMT)
+                or isinstance(task, sec_nmt.SECNMT)
+                or isinstance(task, graph_sec_words_nmt.GraphSECWordsNMT)
+                or isinstance(task, sec_words_nmt.SECWordsNMT)
+        ), f"expected experiment to be of type SECNMT or SECWordsNMT, but got {type(task)}"
 
-        self.model.eval()
-        for param in self.model.parameters():
-            param.requires_grad = False
+        self.max_length = model.cfg.max_length
 
-        self.max_length = self.model.cfg.max_length
+        super().__init__(model, cfg, task, device, logger)
 
     @property
     def task_name(self) -> str:
         return "sec"
-
-    @property
-    def model_name(self) -> str:
-        return self.cfg.experiment_name
 
     @staticmethod
     def from_pretrained(
@@ -164,23 +157,7 @@ class SpellingErrorCorrector:
             f"model {model} does not match any of the available models:\n" \
             f"{pprint.pformat(get_available_spelling_error_correction_models())}"
 
-        logger = common.get_logger("DOWNLOAD")
-
-        data_dir = download_data(force_download, logger, cache_dir)
-
-        model_dir = download_model(
-            task="sec",
-            name=model,
-            cache_dir=cache_dir,
-            force_download=force_download,
-            logger=logger
-        )
-        # check if model comes with a configs.zip, if not download global configs
-        if os.path.exists(os.path.join(model_dir, "configs.zip")):
-            shutil.unpack_archive(os.path.join(model_dir, "configs.zip"), extract_dir=model_dir)
-            config_dir = os.path.join(model_dir, "configs")
-        else:
-            config_dir = download_configs(force_download, logger, cache_dir)
+        model_dir, data_dir, config_dir = super()._download("sec", model, cache_dir, force_download)
 
         return SpellingErrorCorrector(
             model_dir,
@@ -251,9 +228,18 @@ class SpellingErrorCorrector:
                 f"with {batch_length:,} characters in total"
             )
 
-            outputs = self.task.inference(self.model, batch, **inference_kwargs)
-            all_outputs.extend(outputs)
+            # this is a slight hack for now, because fp32 on cpu throws an error even when enabled=False
+            if self.mixed_precision_enabled:
+                with autocast(
+                        device_type=self.device.type,
+                        dtype=self._mixed_precision_dtype,
+                        enabled=self.mixed_precision_enabled
+                ):
+                    outputs = self.task.inference(self.model, batch, **inference_kwargs)
+            else:
+                outputs = self.task.inference(self.model, batch, **inference_kwargs)
 
+            all_outputs.extend(outputs)
             pbar.update(batch_length)
 
         pbar.close()
@@ -314,8 +300,3 @@ class SpellingErrorCorrector:
             return None
         else:
             return outputs
-
-    def to(self, device: Union[str, int]) -> "SpellingErrorCorrector":
-        self.device = torch.device(device)
-        self.model.to(self.device)
-        return self

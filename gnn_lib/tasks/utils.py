@@ -1,5 +1,6 @@
+import collections
 import copy
-from typing import List, Union, Optional
+from typing import List, Union, Optional, Set, Dict, Any
 
 import dgl
 import torch
@@ -96,3 +97,28 @@ def get_batch_size_from_data(data: DATA_INPUT) -> int:
 
 def is_string_input(inputs: Union[List[str], BATCH]):
     return isinstance(inputs, list) and all(isinstance(ipt, str) for ipt in inputs)
+
+
+def get_unused_parameters(model: nn.Module, **inputs: Any) -> Set[str]:
+    def _sum(item: Union[torch.Tensor, List, Dict]) -> Union[torch.Tensor, List, Dict]:
+        if isinstance(item, torch.Tensor):
+            return item.sum()
+        elif isinstance(item, list):
+            return sum([_sum(i) for i in item])
+        elif isinstance(item, dict):
+            return sum(_sum(v) for v in item.values())
+        else:
+            raise RuntimeError("expected model output to be any nesting of dicts, lists and tensors, "
+                               f"but got {type(item)}")
+
+    outputs, _ = model(**inputs)
+    loss = _sum(outputs)
+
+    loss.backward()
+
+    unused_parameters = set()
+    for name, p in model.named_parameters():
+        if p.grad is None and p.requires_grad:
+            unused_parameters.add(name)
+
+    return unused_parameters

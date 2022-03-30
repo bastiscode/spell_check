@@ -13,6 +13,8 @@ from torch.backends import cudnn
 import gnn_lib
 from gnn_lib import SpellingErrorCorrector, get_available_spelling_error_correction_models
 from gnn_lib.api.utils import load_text_file, generate_report
+from gnn_lib.utils import common
+from gnn_lib.tasks import utils as task_utils
 
 
 def parse_args() -> argparse.Namespace:
@@ -124,6 +126,13 @@ def parse_args() -> argparse.Namespace:
              "iterator)"
     )
     parser.add_argument(
+        "--precision",
+        choices=["fp32", "fp16", "bfp16"],
+        default="fp32",
+        help="Choose the precision for inference, fp16 or bfp16 can result in faster runtimes when running on a "
+             "new GPU that supports lower precision, but it can be slower on older GPUs."
+    )
+    parser.add_argument(
         "--progress",
         action="store_true",
         help="Show a progress bar (this flag is only respected when getting input from stdin, "
@@ -189,16 +198,25 @@ def run(args: argparse.Namespace) -> None:
             force_download=args.force_download
         )
 
+    corrector.set_precision(args.precision)
+
     start = time.perf_counter()
+    num_sequences = -1
+    num_characters = -1
     if args.correct is not None:
         line, detection = process_input(args.correct, args.sed_in)
         print(corrector.correct_text(line, detection, sort_by_length=False))
     elif args.file is not None:
         lines = load_text_file(args.file)
+
+        num_characters = 0
         inputs = []
         for line in lines:
             line, detection = process_input(line, False)
             inputs.append(line)
+            num_characters += len(line)
+
+        num_sequences = len(inputs)
 
         if args.detection_file:
             detections = load_text_file(args.detection_file)
@@ -218,21 +236,10 @@ def run(args: argparse.Namespace) -> None:
             for correction in corrections:
                 print(correction)
         else:
+            os.makedirs(os.path.dirname(args.out_path), exist_ok=True)
             with open(args.out_path, "w", encoding="utf8") as of:
                 for correction in corrections:
                     of.write(correction + "\n")
-
-        if args.report:
-            generate_report(
-                corrector.task_name,
-                corrector.model_name,
-                inputs,
-                time.perf_counter() - start,
-                args.batch_size,
-                not args.unsorted,
-                corrector.device,
-                file_path=args.report
-            )
 
     elif args.interactive:
         while True:
@@ -260,10 +267,14 @@ def run(args: argparse.Namespace) -> None:
             else:
                 inputs = []
                 detections = []
+                num_characters = 0
                 for line in sys.stdin:
                     line, detection = process_input(line, args.sed_in)
                     inputs.append(line)
                     detections.append(detection)
+                    num_characters += len(line)
+
+                num_sequences = len(inputs)
 
                 for corrected_line in corrector.correct_text(
                         inputs=inputs,
@@ -274,22 +285,32 @@ def run(args: argparse.Namespace) -> None:
                 ):
                     print(corrected_line)
 
-                if args.report:
-                    generate_report(
-                        corrector.task_name,
-                        corrector.model_name,
-                        inputs,
-                        time.perf_counter() - start,
-                        args.batch_size,
-                        not args.unsorted,
-                        corrector.device,
-                        file_path=args.report
-                    )
-
         except BrokenPipeError:
             return
         except Exception as e:
             raise e
+
+    if args.report and num_sequences >= 0 and num_characters >= 0:
+        end = time.perf_counter()
+
+        sample_inputs = corrector.task.generate_sample_inputs(2)
+        inputs, _ = corrector.task._prepare_inputs_and_labels(sample_inputs, corrector.device)
+        unused_parameters = task_utils.get_unused_parameters(corrector.model, **inputs)
+        parameter_dict = common.get_num_parameters(corrector.model, unused_parameters)
+
+        generate_report(
+            corrector.task_name,
+            corrector.model_name,
+            parameter_dict["total"] - parameter_dict["unused"],
+            num_sequences,
+            num_characters,
+            end - start,
+            corrector._mixed_precision_dtype,
+            args.batch_size,
+            not args.unsorted,
+            corrector.device,
+            file_path=args.report
+        )
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 import re
 from enum import Enum
-from typing import List, Tuple
+from typing import List
 
 
 class TokenizationRepairTokens(Enum):
@@ -37,16 +37,17 @@ def get_whitespace_operations(
         the whitespace operations to the from_sequence
     :return: list of repair tokens
     """
+    assert from_sequence.replace(" ", "") == to_sequence.replace(" ", ""), \
+        f"make sure from_sequence and to_sequence only differ in whitespaces:\n{from_sequence}\n{to_sequence}"
 
     from_sequence_ptr = 0
     to_sequence_ptr = 0
 
     repair_tokens = []
 
-    while from_sequence_ptr < len(from_sequence) \
-            and to_sequence_ptr < len(to_sequence):
+    while from_sequence_ptr < len(from_sequence):  # and to_sequence_ptr < len(to_sequence):
         from_char = from_sequence[from_sequence_ptr]
-        to_char = to_sequence[to_sequence_ptr]
+        to_char = to_sequence[to_sequence_ptr] if to_sequence_ptr < len(to_sequence) else ""
 
         if from_char == to_char:
             repair_tokens.append(0)
@@ -60,19 +61,13 @@ def get_whitespace_operations(
 
         elif from_char == " ":
             repair_tokens.append(2)
-            repair_tokens.append(0)
-            from_sequence_ptr += 2
-            to_sequence_ptr += 1
+            from_sequence_ptr += 1
 
         else:
-            raise ValueError(
-                f"Should not happen, from_char is {from_char} "
-                f"and to_char is {to_char}. Make sure the"
-                f" input sequences only differ in whitespaces: "
-                f"{from_sequence} --> {to_sequence}"
-            )
+            raise ValueError("should not happen")
 
-    assert len(repair_tokens) == len(from_sequence)
+    assert len(repair_tokens) == len(from_sequence), \
+        f"{''.join(str(r) for r in repair_tokens)}\n'{from_sequence}'\n'{to_sequence}'"
 
     return repair_tokens
 
@@ -168,7 +163,7 @@ def repair_whitespace_from_groups(
     while sequence_ptr < len(sequence):
         char = sequence[sequence_ptr]
         prev_char = sequence[sequence_ptr - 1] if sequence_ptr > 0 else " "
-        # print(f"char: {char}, prev: {prev_char}, ({sequence_ptr}, {whitespace_token_ptr}, {char_token_ptr})")
+
         if char == " ":
             token = whitespace_repair_tokens[whitespace_token_ptr]
             whitespace_token_ptr += 1
