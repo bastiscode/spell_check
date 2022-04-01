@@ -14,7 +14,7 @@ from gnn_lib.data.tokenization import TokenizerConfig, get_tokenizer_from_config
 from gnn_lib.modules import heads, embedding, utils, encoders
 from gnn_lib.modules.embedding import GraphEmbeddingConfig, TensorEmbeddingConfig
 from gnn_lib.modules.utils import GraphEncoderMixin, TensorEncoderMixin, DecoderMixin, pad
-from gnn_lib.utils import TENSOR_INPUT, BATCH, DATA_INPUT, to
+from gnn_lib.utils import TensorInput, Batch, DataInput, to
 
 
 class Models(enum.IntEnum):
@@ -157,7 +157,7 @@ class Model(nn.Module):
         self.device = device
 
     @staticmethod
-    def _check_input(data: DATA_INPUT) -> None:
+    def _check_input(data: DataInput) -> None:
         raise NotImplementedError
 
 
@@ -174,7 +174,7 @@ class GraphModelConfig(ModelConfig):
 
 
 class GraphModel(Model):
-    def __init__(self, sample_inputs: BATCH, cfg: GraphModelConfig, device: torch.device) -> None:
+    def __init__(self, sample_inputs: Batch, cfg: GraphModelConfig, device: torch.device) -> None:
         super().__init__(cfg, device)
         self._check_input(sample_inputs.data)
 
@@ -183,18 +183,18 @@ class GraphModel(Model):
         self.head = self.build_head(sample_inputs)
 
     @staticmethod
-    def _check_input(data: DATA_INPUT) -> None:
+    def _check_input(data: DataInput) -> None:
         if not isinstance(data, dgl.DGLHeteroGraph):
             raise RuntimeError(
                 f"expected data input to be a dgl heterograph instance for a graph model, but got {type(data)}"
             )
 
-    def build_embedding(self, sample_g: DATA_INPUT) -> embedding.GraphEmbedding:
+    def build_embedding(self, sample_g: DataInput) -> embedding.GraphEmbedding:
         # embedding is also sometimes model specific, because of the use of tokenizers, so we override this
         # in the models
         raise NotImplementedError
 
-    def build_gnn(self, sample_g: DATA_INPUT) -> GNN:
+    def build_gnn(self, sample_g: DataInput) -> GNN:
         self.cfg: GraphModelConfig
         return get_gnn_from_config(
             self.cfg.gnn,
@@ -204,12 +204,12 @@ class GraphModel(Model):
             self.cfg.hidden_feature
         )
 
-    def build_head(self, sample_inputs: BATCH) -> nn.Module:
+    def build_head(self, sample_inputs: Batch) -> nn.Module:
         # head is mostly model specific, so we override this in the models
         raise NotImplementedError
 
     def forward(self,
-                g: DATA_INPUT,
+                g: DataInput,
                 **kwargs: Any) -> \
             Tuple[Any, Dict[str, torch.Tensor]]:
         g = to(g, self.device)
@@ -228,7 +228,7 @@ class TensorModelConfig(ModelConfig):
 
 
 class TensorModel(Model):
-    def __init__(self, sample_inputs: BATCH, cfg: TensorModelConfig, device: torch.device) -> None:
+    def __init__(self, sample_inputs: Batch, cfg: TensorModelConfig, device: torch.device) -> None:
         super().__init__(cfg, device)
         self._check_input(sample_inputs.data)
 
@@ -237,7 +237,7 @@ class TensorModel(Model):
         self.head = self.build_head(sample_inputs)
 
     @staticmethod
-    def _check_input(data: DATA_INPUT) -> None:
+    def _check_input(data: DataInput) -> None:
         if (
                 # check for non empty tensor list
                 isinstance(data, list)
@@ -248,20 +248,20 @@ class TensorModel(Model):
             f"expected data input to be a non empty tensor list, but got {type(data)}"
         )
 
-    def build_embedding(self, sample_input: DATA_INPUT) -> embedding.TokenEmbedding:
+    def build_embedding(self, sample_input: DataInput) -> embedding.TokenEmbedding:
         # embedding is also sometimes model specific, because of the use of tokenizers, so we override this
         # in the models
         raise NotImplementedError
 
-    def build_encoder(self, sample_input: DATA_INPUT) -> nn.Module:
+    def build_encoder(self, sample_input: DataInput) -> nn.Module:
         raise NotImplementedError
 
-    def build_head(self, sample_input: BATCH) -> nn.Module:
+    def build_head(self, sample_input: Batch) -> nn.Module:
         # head is mostly model specific, so we override this in the models
         raise NotImplementedError
 
     def forward(self,
-                x: TENSOR_INPUT,
+                x: TensorInput,
                 **kwargs: Any) -> \
             Tuple[Any, Dict[str, torch.Tensor]]:
         raise NotImplementedError
@@ -269,7 +269,7 @@ class TensorModel(Model):
 
 def get_model_from_config(
         cfg: omegaconf.DictConfig,
-        sample_inputs: BATCH,
+        sample_inputs: Batch,
         device: torch.device) -> Model:
     model_type = Models[cfg.type]
     if model_type == Models.MODEL_FOR_GRAPH_CLASSIFICATION:
@@ -314,7 +314,7 @@ class ModelForGraphClassificationConfig(GraphModelConfig):
 
 class ModelForGraphClassification(GraphModel):
     def __init__(self,
-                 sample_inputs: BATCH,
+                 sample_inputs: Batch,
                  cfg: ModelForGraphClassificationConfig,
                  device: torch.device) -> None:
         self.tokenizers = {k: get_tokenizer_from_config(cfg) for k, cfg in cfg.tokenizers.items()}
@@ -337,7 +337,7 @@ class ModelForGraphClassification(GraphModel):
             edge_hidden_dim=self.cfg.edge_hidden_dim
         )
 
-    def build_head(self, sample_inputs: BATCH) -> heads.GraphClassificationHead:
+    def build_head(self, sample_inputs: Batch) -> heads.GraphClassificationHead:
         self.cfg: ModelForGraphClassificationConfig
         return heads.GraphClassificationHead(
             feat=self.cfg.hidden_feature,
@@ -358,13 +358,13 @@ class ModelForMultiNodeClassificationConfig(GraphModelConfig):
 
 class ModelForMultiNodeClassification(GraphModel):
     def __init__(self,
-                 sample_inputs: BATCH,
+                 sample_inputs: Batch,
                  cfg: ModelForMultiNodeClassificationConfig,
                  device: torch.device) -> None:
         self.tokenizers: Dict[str, Tokenizer] = {k: get_tokenizer_from_config(cfg) for k, cfg in cfg.tokenizers.items()}
         super().__init__(sample_inputs, cfg, device)
 
-    def build_embedding(self, sample_g: DATA_INPUT) -> embedding.GraphEmbedding:
+    def build_embedding(self, sample_g: DataInput) -> embedding.GraphEmbedding:
         num_token_embeddings = {
             node_type: self.tokenizers[node_type].vocab_size
             for node_type in sample_g.ntypes
@@ -381,7 +381,7 @@ class ModelForMultiNodeClassification(GraphModel):
             edge_hidden_dim=self.cfg.edge_hidden_dim
         )
 
-    def build_head(self, sample_input: BATCH) -> heads.MultiNodeClassificationGroupHead:
+    def build_head(self, sample_input: Batch) -> heads.MultiNodeClassificationGroupHead:
         self.cfg: ModelForMultiNodeClassificationConfig
 
         if "groups" in sample_input.info:
@@ -422,7 +422,7 @@ class ModelForGraph2SeqConfig(GraphModelConfig):
 
 
 class ModelForGraph2Seq(GraphModel, GraphEncoderMixin, DecoderMixin):
-    def __init__(self, sample_inputs: BATCH, cfg: ModelForGraph2SeqConfig, device: torch.device) -> None:
+    def __init__(self, sample_inputs: Batch, cfg: ModelForGraph2SeqConfig, device: torch.device) -> None:
         self.input_tokenizers: Dict[str, Tokenizer] = {
             k: get_tokenizer_from_config(cfg) for k, cfg in cfg.input_tokenizers.items()
         }
@@ -451,7 +451,7 @@ class ModelForGraph2Seq(GraphModel, GraphEncoderMixin, DecoderMixin):
             edge_hidden_dim=self.cfg.edge_hidden_dim
         )
 
-    def build_head(self, sample_inputs: BATCH) -> utils.DecoderMixin:
+    def build_head(self, sample_inputs: Batch) -> utils.DecoderMixin:
         self.cfg: ModelForGraph2SeqConfig
         return heads.TransformerDecoderHead(
             contexts=self.cfg.context_node_types,
@@ -513,7 +513,7 @@ class ModelForMultiNode2SeqConfig(GraphModelConfig):
 
 
 class ModelForMultiNode2Seq(GraphModel, GraphEncoderMixin):
-    def __init__(self, sample_inputs: BATCH, cfg: ModelForMultiNode2SeqConfig, device: torch.device) -> None:
+    def __init__(self, sample_inputs: Batch, cfg: ModelForMultiNode2SeqConfig, device: torch.device) -> None:
         self.tokenizers: Dict[str, Tokenizer] = {
             k: get_tokenizer_from_config(cfg) for k, cfg in cfg.tokenizers.items()
         }
@@ -545,7 +545,7 @@ class ModelForMultiNode2Seq(GraphModel, GraphEncoderMixin):
             edge_hidden_dim=self.cfg.edge_hidden_dim
         )
 
-    def build_head(self, sample_inputs: BATCH) -> nn.ModuleDict:
+    def build_head(self, sample_inputs: Batch) -> nn.ModuleDict:
         self.cfg: ModelForMultiNode2SeqConfig
         node2seq_head = nn.ModuleDict()
         for node_type in self.cfg.decoder_node_types:
@@ -676,7 +676,7 @@ class ModelForToken2SeqConfig(TensorModelConfig):
 
 class ModelForToken2Seq(TensorModel, TensorEncoderMixin, DecoderMixin):
     def __init__(self,
-                 sample_inputs: BATCH,
+                 sample_inputs: Batch,
                  cfg: ModelForToken2SeqConfig,
                  device: torch.device) -> None:
         self.input_tokenizer = get_tokenizer_from_config(cfg.input_tokenizer)
@@ -687,7 +687,7 @@ class ModelForToken2Seq(TensorModel, TensorEncoderMixin, DecoderMixin):
 
         super().__init__(sample_inputs, cfg, device)
 
-    def build_embedding(self, sample_input: DATA_INPUT) -> embedding.TensorEmbedding:
+    def build_embedding(self, sample_input: DataInput) -> embedding.TensorEmbedding:
         self.cfg: ModelForToken2SeqConfig
         return embedding.get_embedding_from_config(
             cfg=self.cfg.embedding,
@@ -698,7 +698,7 @@ class ModelForToken2Seq(TensorModel, TensorEncoderMixin, DecoderMixin):
             padding_idx=self.input_pad_token_id
         )
 
-    def build_encoder(self, sample_input: DATA_INPUT) -> nn.Module:
+    def build_encoder(self, sample_input: DataInput) -> nn.Module:
         self.cfg: ModelForToken2SeqConfig
         return encoders.get_feature_encoder(
             encoder=encoders.Encoders.TRANSFORMER,
@@ -708,7 +708,7 @@ class ModelForToken2Seq(TensorModel, TensorEncoderMixin, DecoderMixin):
             num_layers=self.cfg.num_encoder_layers
         )
 
-    def build_head(self, sample_input: BATCH) -> heads.TransformerDecoderHead:
+    def build_head(self, sample_input: Batch) -> heads.TransformerDecoderHead:
         self.cfg: ModelForToken2SeqConfig
         return heads.TransformerDecoderHead(
             contexts=["encoder_outputs"],
@@ -720,7 +720,7 @@ class ModelForToken2Seq(TensorModel, TensorEncoderMixin, DecoderMixin):
             num_layers=self.cfg.num_decoder_layers
         )
 
-    def pad_inputs(self, x: DATA_INPUT) -> Tuple[torch.Tensor, torch.Tensor]:
+    def pad_inputs(self, x: DataInput) -> Tuple[torch.Tensor, torch.Tensor]:
         assert all(t.ndim == 1 for t in x)
         encoder_lengths = [len(t) for t in x]
         encoder_inputs = to(utils.pad(x, self.input_pad_token_id).long(), self.device)
@@ -729,7 +729,7 @@ class ModelForToken2Seq(TensorModel, TensorEncoderMixin, DecoderMixin):
 
     def forward(
             self,
-            x: DATA_INPUT,
+            x: DataInput,
             decoder_inputs: Optional[List[torch.Tensor]] = None,
             decoder_group_lengths: Optional[List[torch.Tensor]] = None,
             encoder_group_lengths: Optional[List[torch.Tensor]] = None,
@@ -816,7 +816,7 @@ class ModelForSeq2SeqConfig(TensorModelConfig):
 
 class ModelForSeq2Seq(TensorModel, TensorEncoderMixin, DecoderMixin):
     def __init__(self,
-                 sample_inputs: BATCH,
+                 sample_inputs: Batch,
                  cfg: ModelForSeq2SeqConfig,
                  device: torch.device) -> None:
         self.input_tokenizer = get_tokenizer_from_config(cfg.input_tokenizer)
@@ -827,7 +827,7 @@ class ModelForSeq2Seq(TensorModel, TensorEncoderMixin, DecoderMixin):
 
         super().__init__(sample_inputs, cfg, device)
 
-    def build_embedding(self, sample_input: DATA_INPUT) -> embedding.TensorEmbedding:
+    def build_embedding(self, sample_input: DataInput) -> embedding.TensorEmbedding:
         self.cfg: ModelForSeq2SeqConfig
         return embedding.get_embedding_from_config(
             cfg=self.cfg.embedding,
@@ -838,7 +838,7 @@ class ModelForSeq2Seq(TensorModel, TensorEncoderMixin, DecoderMixin):
             padding_idx=self.input_pad_token_id
         )
 
-    def build_encoder(self, sample_input: DATA_INPUT) -> nn.Module:
+    def build_encoder(self, sample_input: DataInput) -> nn.Module:
         self.cfg: ModelForSeq2SeqConfig
         return encoders.get_feature_encoder(
             encoder=encoders.Encoders.TRANSFORMER,
@@ -848,7 +848,7 @@ class ModelForSeq2Seq(TensorModel, TensorEncoderMixin, DecoderMixin):
             num_layers=self.cfg.num_encoder_layers
         )
 
-    def build_head(self, sample_input: BATCH) -> heads.TransformerDecoderHead:
+    def build_head(self, sample_input: Batch) -> heads.TransformerDecoderHead:
         self.cfg: ModelForSeq2SeqConfig
         return heads.TransformerDecoderHead(
             contexts=["encoder_outputs"],
@@ -860,7 +860,7 @@ class ModelForSeq2Seq(TensorModel, TensorEncoderMixin, DecoderMixin):
             num_layers=self.cfg.num_decoder_layers
         )
 
-    def pad_inputs(self, x: DATA_INPUT) -> Tuple[torch.Tensor, torch.Tensor]:
+    def pad_inputs(self, x: DataInput) -> Tuple[torch.Tensor, torch.Tensor]:
         assert all(t.ndim == 1 for t in x)
         encoder_lengths = [len(t) for t in x]
         encoder_inputs = to(utils.pad(x, self.input_pad_token_id).long(), self.device)
@@ -869,8 +869,8 @@ class ModelForSeq2Seq(TensorModel, TensorEncoderMixin, DecoderMixin):
 
     def forward(
             self,
-            x: DATA_INPUT,
-            decoder_inputs: Optional[DATA_INPUT] = None,
+            x: DataInput,
+            decoder_inputs: Optional[DataInput] = None,
             **kwargs: Any
     ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
         assert decoder_inputs is not None
@@ -915,7 +915,7 @@ class ModelForSequenceClassificationConfig(TensorModelConfig):
 class ModelForSequenceClassification(TensorModel):
     def __init__(
             self,
-            sample_inputs: BATCH,
+            sample_inputs: Batch,
             cfg: ModelForSequenceClassificationConfig,
             device: torch.device
     ) -> None:
@@ -924,7 +924,7 @@ class ModelForSequenceClassification(TensorModel):
 
         super().__init__(sample_inputs, cfg, device)
 
-    def build_embedding(self, sample_input: DATA_INPUT) -> embedding.TensorEmbedding:
+    def build_embedding(self, sample_input: DataInput) -> embedding.TensorEmbedding:
         self.cfg: ModelForSequenceClassificationConfig
         return embedding.get_embedding_from_config(
             self.cfg.embedding,
@@ -935,7 +935,7 @@ class ModelForSequenceClassification(TensorModel):
             padding_idx=self.pad_token_id
         )
 
-    def build_encoder(self, sample_input: DATA_INPUT) -> nn.Module:
+    def build_encoder(self, sample_input: DataInput) -> nn.Module:
         self.cfg: ModelForSequenceClassificationConfig
         return encoders.Transformer(
             in_dim=self.cfg.hidden_dim,
@@ -944,7 +944,7 @@ class ModelForSequenceClassification(TensorModel):
             num_layers=self.cfg.num_layers
         )
 
-    def build_head(self, sample_input: BATCH) -> heads.TensorGroupHead:
+    def build_head(self, sample_input: Batch) -> heads.TensorGroupHead:
         self.cfg: ModelForSequenceClassificationConfig
 
         if "groups" in sample_input.info:
@@ -963,7 +963,7 @@ class ModelForSequenceClassification(TensorModel):
 
     def forward(
             self,
-            x: DATA_INPUT,
+            x: DataInput,
             **kwargs: Any
     ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
         assert all(t.ndim == 1 for t in x)
@@ -993,7 +993,7 @@ class ModelForTokenClassificationConfig(TensorModelConfig):
 class ModelForTokenClassification(TensorModel):
     def __init__(
             self,
-            sample_inputs: BATCH,
+            sample_inputs: Batch,
             cfg: ModelForTokenClassificationConfig,
             device: torch.device
     ) -> None:
@@ -1002,7 +1002,7 @@ class ModelForTokenClassification(TensorModel):
 
         super().__init__(sample_inputs, cfg, device)
 
-    def build_embedding(self, sample_input: DATA_INPUT) -> embedding.TensorEmbedding:
+    def build_embedding(self, sample_input: DataInput) -> embedding.TensorEmbedding:
         self.cfg: ModelForTokenClassificationConfig
         return embedding.get_embedding_from_config(
             self.cfg.embedding,
@@ -1013,7 +1013,7 @@ class ModelForTokenClassification(TensorModel):
             padding_idx=self.pad_token_id
         )
 
-    def build_encoder(self, sample_input: DATA_INPUT) -> nn.Module:
+    def build_encoder(self, sample_input: DataInput) -> nn.Module:
         self.cfg: ModelForTokenClassificationConfig
         return encoders.Transformer(
             in_dim=self.cfg.hidden_dim,
@@ -1022,7 +1022,7 @@ class ModelForTokenClassification(TensorModel):
             num_layers=self.cfg.num_layers
         )
 
-    def build_head(self, sample_input: BATCH) -> heads.TensorGroupHead:
+    def build_head(self, sample_input: Batch) -> heads.TensorGroupHead:
         self.cfg: ModelForTokenClassificationConfig
 
         if "groups" in sample_input.info:
@@ -1041,7 +1041,7 @@ class ModelForTokenClassification(TensorModel):
 
     def forward(
             self,
-            x: DATA_INPUT,
+            x: DataInput,
             **kwargs: Any
     ) -> Tuple[List[torch.Tensor], Dict[str, torch.Tensor]]:
         assert all(t.ndim == 1 for t in x)
@@ -1079,7 +1079,7 @@ class ModelForTokenizationRepairPlusConfig(TensorModelConfig):
 class ModelForTokenizationRepairPlus(TensorModel, TensorEncoderMixin):
     def __init__(
             self,
-            sample_inputs: BATCH,
+            sample_inputs: Batch,
             cfg: ModelForTokenizationRepairPlusConfig,
             device: torch.device
     ) -> None:
@@ -1106,7 +1106,7 @@ class ModelForTokenizationRepairPlus(TensorModel, TensorEncoderMixin):
 
         self.word_encoder = self.build_word_encoder(sample_inputs)
 
-    def build_embedding(self, sample_input: DATA_INPUT) -> embedding.TensorEmbedding:
+    def build_embedding(self, sample_input: DataInput) -> embedding.TensorEmbedding:
         self.cfg: ModelForTokenClassificationConfig
         return embedding.get_embedding_from_config(
             self.cfg.embedding,
@@ -1117,7 +1117,7 @@ class ModelForTokenizationRepairPlus(TensorModel, TensorEncoderMixin):
             padding_idx=self.input_pad_token_id
         )
 
-    def build_encoder(self, sample_input: DATA_INPUT) -> nn.Module:
+    def build_encoder(self, sample_input: DataInput) -> nn.Module:
         self.cfg: ModelForTokenizationRepairPlusConfig
 
         return encoders.Transformer(
@@ -1127,7 +1127,7 @@ class ModelForTokenizationRepairPlus(TensorModel, TensorEncoderMixin):
             num_layers=self.cfg.num_input_layers
         )
 
-    def pad_inputs(self, x: DATA_INPUT, pad_val: float = 0) -> Tuple[torch.Tensor, torch.Tensor, List[int]]:
+    def pad_inputs(self, x: DataInput, pad_val: float = 0) -> Tuple[torch.Tensor, torch.Tensor, List[int]]:
         assert all(t.ndim == 1 for t in x)
         lengths = [len(t) for t in x]
         inputs = to(utils.pad(x, pad_val).long(), self.device)
@@ -1139,7 +1139,7 @@ class ModelForTokenizationRepairPlus(TensorModel, TensorEncoderMixin):
         enc = self.embedding(x)
         return self.encoder(enc, padding_mask=padding_mask)
 
-    def build_word_encoder(self, sample_input: BATCH) -> nn.Module:
+    def build_word_encoder(self, sample_input: Batch) -> nn.Module:
         self.cfg: ModelForTokenizationRepairPlusConfig
 
         word_features = sample_input.info.get("word_features")
@@ -1155,7 +1155,7 @@ class ModelForTokenizationRepairPlus(TensorModel, TensorEncoderMixin):
             num_layers=self.cfg.num_word_layers
         )
 
-    def build_head(self, sample_input: BATCH) -> nn.ModuleDict:
+    def build_head(self, sample_input: Batch) -> nn.ModuleDict:
         self.cfg: ModelForTokenizationRepairPlusConfig
 
         assert "word_ws_groups" in sample_input.info
@@ -1188,7 +1188,7 @@ class ModelForTokenizationRepairPlus(TensorModel, TensorEncoderMixin):
 
     def forward(
             self,
-            x: DATA_INPUT,
+            x: DataInput,
             char_groups: Optional[List[Dict[str, torch.Tensor]]] = None,
             word_groups: Optional[List[Dict[str, torch.Tensor]]] = None,
             word_features: Optional[List[torch.Tensor]] = None,

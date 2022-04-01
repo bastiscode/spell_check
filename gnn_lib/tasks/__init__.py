@@ -20,7 +20,7 @@ from gnn_lib.data import variants, utils as data_utils
 from gnn_lib.data.variants import get_variant_from_config, DatasetVariants
 from gnn_lib.models import Model
 from gnn_lib.tasks import utils
-from gnn_lib.utils import io, common, data_containers, BATCH
+from gnn_lib.utils import io, common, data_containers, Batch
 from gnn_lib.utils.distributed import DistributedDevice, unwrap_ddp
 
 
@@ -50,9 +50,11 @@ class Task:
 
         self.logger = common.get_logger("TASK")
 
-    def generate_sample_inputs(self, num_samples: int) -> BATCH:
+    def generate_sample_inputs(self, num_samples: int) -> Batch:
         return data_utils.collate([
-            self.variant.prepare_sequence(utils.SAMPLE_SEQUENCE) for _ in range(num_samples)
+            self.variant.get_inputs(
+                utils.SAMPLE_SEQUENCE
+            ) for _ in range(num_samples)
         ])
 
     def disable_unused_parameters(
@@ -99,7 +101,7 @@ class Task:
 
     def _prepare_inputs_and_labels(
             self,
-            batch: BATCH,
+            batch: Batch,
             device: torch.device
     ) -> Tuple[Dict[str, Any], Any]:
         raise NotImplementedError
@@ -397,7 +399,7 @@ class Task:
         raise NotImplementedError
 
     def get_model(self,
-                  sample_inputs: BATCH,
+                  sample_inputs: Batch,
                   cfg: omegaconf.DictConfig,
                   device: torch.device) -> Model:
         model = models.get_model_from_config(cfg, sample_inputs, device).to(device)

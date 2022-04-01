@@ -1,7 +1,5 @@
-import collections
 import enum
 import hashlib
-import os
 from dataclasses import dataclass
 from typing import Tuple, List, Union, Optional, Dict, Any
 
@@ -14,7 +12,7 @@ from omegaconf import MISSING, OmegaConf
 from gnn_lib.data import graph, tokenization, utils, index
 from gnn_lib.data.preprocessing import get_preprocessing_from_config, PreprocessingConfig, get_preprocessing_fn
 from gnn_lib.data.tokenization import TokenizerConfig, get_tokenizer_from_config
-from gnn_lib.utils import tokenization_repair, io, BATCH, DATA_INPUT
+from gnn_lib.utils import tokenization_repair, io, Batch, DataInput
 
 
 class DatasetVariants(enum.IntEnum):
@@ -24,17 +22,6 @@ class DatasetVariants(enum.IntEnum):
     SEC_WORDS_NMT = 4
     SEC_NMT = 5
     TOKENIZATION_REPAIR_PLUS = 6
-
-
-SequenceSplit = collections.namedtuple(
-    "SequenceSplit",
-    field_names=[
-        "ctx_start",
-        "ctx_end",
-        "window_start",
-        "window_end"
-    ]
-)
 
 
 @dataclass
@@ -49,8 +36,8 @@ class DatasetVariant:
             self,
             cfg: DatasetVariantConfig,
             seed: int,
-            tokenization_fn: utils.TOKENIZATION_FN,
-            neighbor_fn: Optional[utils.NEIGHBOR_FN] = None,
+            tokenization_fn: utils.TokenizationFn,
+            neighbor_fn: Optional[utils.NeighborFn] = None,
             **preprocessing_kwargs: Dict[str, Any]
     ):
         self.cfg = cfg
@@ -58,7 +45,7 @@ class DatasetVariant:
         self.rand = np.random.default_rng(seed)
 
         preprocessing = get_preprocessing_from_config(self.cfg.preprocessing, self.seed)
-        self.preprocessing_fn: utils.PREPROCESSING_FN = get_preprocessing_fn(
+        self.preprocessing_fn: utils.PreprocessingFn = get_preprocessing_fn(
             preprocessing,
             tokenization_fn,
             neighbor_fn,
@@ -74,42 +61,81 @@ class DatasetVariant:
         cfg_yaml = OmegaConf.to_yaml(self.cfg, resolve=True, sort_keys=True)
         return str(hashlib.sha1(f"{cfg_yaml}_{self.seed}".encode("utf8")).hexdigest())
 
-    def _get_inputs(
+    def _get_sample(
             self,
-            sequence: Union[str, utils.SAMPLE],
+            sequence: Union[str, utils.Sample],
             target_sequence: Optional[str] = None,
             is_inference: bool = False,
             unk_token_id: Optional[int] = None
-    ) -> Tuple[utils.SAMPLE, Optional[str]]:
-        sequence_is_sample = isinstance(sequence, utils.SAMPLE)
+    ) -> Tuple[utils.Sample, Optional[str]]:
+        sequence_is_sample = isinstance(sequence, utils.Sample)
         if is_inference and not sequence_is_sample:
             sequence = self.preprocessing_fn([sequence], [None], is_inference)[0][0]
         elif not is_inference and (not sequence_is_sample or target_sequence is None):
-            input_sample, target_sequence = self.preprocessing_fn([str(sequence)], [target_sequence], is_inference)[0]
+            sequence, target_sequence = self.preprocessing_fn([str(sequence)], [target_sequence], is_inference)[0]
         return utils.sanitize_sample(sequence, unk_token_id), target_sequence
 
-    def prepare_sequence(
+    def get_inputs(
             self,
-            sequence: Union[str, utils.SAMPLE],
+            sequence: Union[str, utils.Sample],
             target_sequence: Optional[str] = None,
             is_inference: bool = False
-    ) -> Tuple[DATA_INPUT, Dict[str, Any]]:
+    ) -> Tuple[DataInput, Dict[str, Any]]:
         raise NotImplementedError
 
-    def split_sequence_for_inference(
+    def _split_sample_for_inference(
             self,
-            sequence: str,
+            sample: utils.Sample,
             max_length: int,
-            context_length: int,
-    ) -> List[SequenceSplit]:
+            context_length: int
+    ) -> Tuple[List[utils.Sample], List[utils.InferenceInfo]]:
         raise NotImplementedError
 
     def prepare_sequences_for_inference(
             self,
-            sequences: List[str]
-    ) -> BATCH:
-        items = [self.prepare_sequence(s, is_inference=True) for s in sequences]
+            sequences: List[str],
+            max_length: int,
+            context_length: int,
+            **kwargs: Any
+    ) -> Tuple[List[utils.Sample], List[utils.InferenceInfo]]:
+        samples, _ = zip(*self.preprocessing_fn(sequences, [None] * len(sequences), True))
+        all_samples = []
+        all_infos = []
+        for sample in samples:
+            sequence = str(sample)
+            token_lengths = [len(tokens) for tokens in sample.tokens]
+            length = sum(token_lengths)
+            if length <= max_length:
+                all_samples.append(sample)
+                all_infos.append(utils.InferenceInfo(
+                    ctx_start=0,
+                    ctx_end=len(sequence),
+                    window_start=0,
+                    window_end=0,
+                    window_idx=0,
+                    length=length
+                ))
+            else:
+                samples, infos = self._split_sample_for_inference(sample, max_length, context_length)
+                all_samples.extend(samples)
+                all_infos.extend(infos)
+        return all_samples, all_infos
+
+    def batch_sequences_for_inference(
+            self,
+            sequences: List[Union[str, utils.Sample]]
+    ) -> Batch:
+        items = [self.get_inputs(s, is_inference=True) for s in sequences]
         return utils.collate(items)
+
+    def postprocess_inference_outputs(
+            self,
+            sequences: List[str],
+            infos: List[utils.InferenceInfo],
+            predictions: List[Any],
+            **kwargs: Any
+    ) -> List[Any]:
+        raise NotImplementedError
 
 
 @dataclass
@@ -157,7 +183,7 @@ class SEDSequence(DatasetVariant):
 
         super().__init__(cfg, seed, tok_fn, neighbor_fn, **preprocessing_sample_kwargs)
 
-    def construct_input(self, sample: utils.SAMPLE) -> Union[torch.Tensor, dgl.DGLHeteroGraph]:
+    def _construct_input(self, sample: utils.Sample) -> Union[torch.Tensor, dgl.DGLHeteroGraph]:
         self.cfg: SEDSequenceConfig
         if self.cfg.data_scheme == "token_graph":
             return graph.sequence_to_token_graph(
@@ -200,23 +226,10 @@ class SEDSequence(DatasetVariant):
         else:
             raise ValueError(f"unknown data scheme {self.cfg.data_scheme}")
 
-    def split_sequence_for_inference(
+    def get_inputs(
             self,
-            sequence: str,
-            max_length: int,
-            context_length: int
-    ) -> List[SequenceSplit]:
-        input_sample, _ = self._get_inputs(sequence, None, True, self.unk_token_id)
-
-        if len(utils.flatten(input_sample.tokens)) <= max_length:
-            return [SequenceSplit(0, len(sequence), 0, len(sequence))]
-
-
-
-    def prepare_sequence(
-            self,
-            sequence: Union[str, utils.SAMPLE],
-            target_sequence: Optional[Union[str, utils.SAMPLE]] = None,
+            sequence: Union[str, utils.Sample],
+            target_sequence: Optional[Union[str, utils.Sample]] = None,
             is_inference: bool = False
     ) -> Tuple[
         Union[dgl.DGLHeteroGraph, graph.HeterogeneousDGLData],
@@ -224,7 +237,7 @@ class SEDSequence(DatasetVariant):
     ]:
         self.cfg: SEDSequenceConfig
 
-        input_sample, target_sequence = self._get_inputs(
+        input_sample, target_sequence = self._get_sample(
             sequence,
             target_sequence,
             is_inference,
@@ -310,7 +323,57 @@ class SEDSequence(DatasetVariant):
         else:
             raise RuntimeError(f"unknown data scheme {self.cfg.data_scheme}")
 
-        return self.construct_input(input_sample), info
+        return self._construct_input(input_sample), info
+
+    def _split_sample_for_inference(
+            self,
+            sample: utils.Sample,
+            max_length: int,
+            context_length: int
+    ) -> Tuple[List[utils.Sample], List[utils.InferenceInfo]]:
+        sequence = str(sample)
+        samples = []
+        infos = []
+        windows = utils.get_words_windows(sample, max_length, context_length)
+        for i, (ctx_start, ctx_end, window_start, window_end) in enumerate(windows):
+            sample, _ = self._get_sample(sequence[ctx_start:ctx_end], is_inference=True)
+            samples.append(sample)
+            infos.append(utils.InferenceInfo(
+                ctx_start=ctx_start,
+                ctx_end=ctx_end,
+                window_start=window_start,
+                window_end=window_end,
+                window_idx=i,
+                length=sum(len(tokens) for tokens in sample.tokens)
+            ))
+        return samples, infos
+
+    def postprocess_inference_outputs(
+            self,
+            sequences: List[str],
+            infos: List[utils.InferenceInfo],
+            predictions: List[int],
+            **kwargs: Any
+    ) -> List[int]:
+        grouped_predictions: List[List[int]] = []
+        prev_info = None
+        for info, prediction in zip(infos, predictions):
+            if info.window_idx == 0:
+                grouped_predictions.append([prediction])
+            elif info.window_idx == prev_info.window_idx + 1:
+                grouped_predictions[-1].append(prediction)
+            else:
+                raise RuntimeError("should not happen")
+
+            prev_info = info
+
+        assert len(sequences) == len(grouped_predictions)
+
+        merged_predictions = []
+        for predictions in grouped_predictions:
+            assert all(p in {0, 1} for p in predictions)
+            merged_predictions.append(int(any(p for p in predictions)))
+        return merged_predictions
 
 
 @dataclass
@@ -358,7 +421,7 @@ class SEDWords(DatasetVariant):
 
         super().__init__(cfg, seed, tok_fn, neighbor_fn, **preprocessing_sample_kwargs)
 
-    def construct_input(self, sample: utils.SAMPLE) -> Union[torch.Tensor, dgl.DGLHeteroGraph]:
+    def _construct_input(self, sample: utils.Sample) -> Union[torch.Tensor, dgl.DGLHeteroGraph]:
         self.cfg: SEDWordsConfig
         if self.cfg.data_scheme == "token_graph":
             return graph.sequence_to_token_graph(
@@ -386,10 +449,10 @@ class SEDWords(DatasetVariant):
         else:
             raise ValueError(f"unknown data scheme {self.cfg.data_scheme}")
 
-    def prepare_sequence(
+    def get_inputs(
             self,
-            sequence: Union[str, utils.SAMPLE],
-            target_sequence: Optional[Union[str, utils.SAMPLE]] = None,
+            sequence: Union[str, utils.Sample],
+            target_sequence: Optional[Union[str, utils.Sample]] = None,
             is_inference: bool = False
     ) -> Tuple[
         Union[dgl.DGLHeteroGraph, graph.HeterogeneousDGLData],
@@ -397,7 +460,7 @@ class SEDWords(DatasetVariant):
     ]:
         self.cfg: SEDWordsConfig
 
-        input_sample, target_sequence = self._get_inputs(
+        input_sample, target_sequence = self._get_sample(
             sequence,
             target_sequence,
             is_inference,
@@ -490,7 +553,70 @@ class SEDWords(DatasetVariant):
         else:
             raise RuntimeError(f"unknown data scheme {self.cfg.data_scheme}")
 
-        return self.construct_input(input_sample), info
+        return self._construct_input(input_sample), info
+
+    def _split_sample_for_inference(
+            self,
+            sample: utils.Sample,
+            max_length: int,
+            context_length: int
+    ) -> Tuple[List[utils.Sample], List[utils.InferenceInfo]]:
+        sequence = str(sample)
+        samples = []
+        infos = []
+        windows = utils.get_words_windows(sample, max_length, context_length)
+        for i, (ctx_start, ctx_end, window_start, window_end) in enumerate(windows):
+            sample, _ = self._get_sample(sequence[ctx_start:ctx_end], is_inference=True)
+            samples.append(sample)
+            infos.append(utils.InferenceInfo(
+                ctx_start=ctx_start,
+                ctx_end=ctx_end,
+                window_start=window_start,
+                window_end=window_end,
+                window_idx=i,
+                length=sum(len(tokens) for tokens in sample.tokens)
+            ))
+        return samples, infos
+
+    def postprocess_inference_outputs(
+            self,
+            sequences: List[str],
+            infos: List[utils.InferenceInfo],
+            predictions: List[List[int]],
+            **kwargs: Any
+    ) -> List[List[int]]:
+        grouped_predictions: List[List[List[int]]] = []
+        grouped_infos: List[List[utils.InferenceInfo]] = []
+        prev_info = None
+        for info, prediction in zip(infos, predictions):
+            if info.window_idx == 0:
+                grouped_predictions.append([prediction])
+                grouped_infos.append([info])
+            elif info.window_idx == prev_info.window_idx + 1:
+                grouped_predictions[-1].append(prediction)
+                grouped_infos[-1].append(info)
+            else:
+                raise RuntimeError("should not happen")
+
+            prev_info = info
+
+        assert len(sequences) == len(grouped_predictions)
+
+        merged_predictions = []
+        for sequence, infos, predictions in zip(sequences, grouped_infos, grouped_predictions):
+            assert all(p in {0, 1} for prediction in predictions for p in prediction)
+            if len(predictions) == 1:
+                merged_predictions.append(predictions[0])
+                continue
+            merged_prediction = []
+            for info, prediction in zip(infos, predictions):
+                assert len(sequence[info.ctx_start:info.ctx_end].split()) == len(prediction)
+                num_left_context_words = len(sequence[info.ctx_start:info.window_start].split())
+                num_window_words = len(sequence[info.window_start:info.window_end].split())
+                merged_prediction.extend(prediction[num_left_context_words:num_left_context_words + num_window_words])
+            assert len(merged_prediction) == len(sequence.split())
+            merged_predictions.append(merged_prediction)
+        return merged_predictions
 
 
 @dataclass
@@ -518,7 +644,7 @@ class TokenizationRepair(DatasetVariant):
 
         super().__init__(cfg, seed, tok_fn)
 
-    def construct_input(self, sample: utils.SAMPLE) -> Union[dgl.DGLHeteroGraph, torch.Tensor]:
+    def _construct_input(self, sample: utils.Sample) -> Union[dgl.DGLHeteroGraph, torch.Tensor]:
         self.cfg: TokenizationRepairConfig
         if self.cfg.data_scheme == "tensor":
             return torch.tensor(
@@ -527,9 +653,9 @@ class TokenizationRepair(DatasetVariant):
         else:
             raise ValueError(f"Unknown data scheme {self.cfg.data_scheme}")
 
-    def prepare_sequence(
+    def get_inputs(
             self,
-            sequence: Union[str, utils.SAMPLE],
+            sequence: Union[str, utils.Sample],
             target_sequence: Optional[str] = None,
             is_inference: bool = False
     ) -> Tuple[
@@ -538,7 +664,7 @@ class TokenizationRepair(DatasetVariant):
     ]:
         self.cfg: TokenizationRepairConfig
 
-        input_sample, target_sequence = self._get_inputs(
+        input_sample, target_sequence = self._get_sample(
             sequence,
             target_sequence,
             is_inference,
@@ -554,7 +680,7 @@ class TokenizationRepair(DatasetVariant):
             )
             info["label"] = torch.tensor(label, dtype=torch.long)
 
-        return self.construct_input(input_sample), info
+        return self._construct_input(input_sample), info
 
 
 @dataclass
@@ -607,9 +733,9 @@ class SECWordsNMT(DatasetVariant):
 
         super().__init__(cfg, seed, tok_fn, neighbor_fn, **preprocessing_sample_kwargs)
 
-    def construct_input(
+    def _construct_input(
             self,
-            sample: utils.SAMPLE
+            sample: utils.Sample
     ) -> Union[torch.Tensor, dgl.DGLHeteroGraph]:
         self.cfg: SECNMTConfig
         if self.cfg.data_scheme == "token_graph":
@@ -636,7 +762,7 @@ class SECWordsNMT(DatasetVariant):
         else:
             raise ValueError(f"unknown data scheme {self.cfg.data_scheme}")
 
-    def prepare_sequence(
+    def get_inputs(
             self,
             sequence: str,
             target_sequence: Optional[str] = None,
@@ -647,7 +773,7 @@ class SECWordsNMT(DatasetVariant):
     ]:
         self.cfg: SECWordsNMTConfig
 
-        input_sample, target_sequence = self._get_inputs(
+        input_sample, target_sequence = self._get_sample(
             sequence,
             target_sequence,
             is_inference,
@@ -676,7 +802,7 @@ class SECWordsNMT(DatasetVariant):
                 word_ws_idx += 1
         info["encoder_group_lengths"] = torch.tensor(encoder_group_lengths, dtype=torch.long)
 
-        return self.construct_input(input_sample), info
+        return self._construct_input(input_sample), info
 
 
 @dataclass
@@ -729,9 +855,9 @@ class SECNMT(DatasetVariant):
 
         super().__init__(cfg, seed, tok_fn, neighbor_fn, **preprocessing_sample_kwargs)
 
-    def construct_input(
+    def _construct_input(
             self,
-            sample: utils.SAMPLE
+            sample: utils.Sample
     ) -> Union[torch.Tensor, dgl.DGLHeteroGraph]:
         self.cfg: SECNMTConfig
         if self.cfg.data_scheme == "token_graph":
@@ -758,7 +884,7 @@ class SECNMT(DatasetVariant):
         else:
             raise ValueError(f"unknown data scheme {self.cfg.data_scheme}")
 
-    def prepare_sequence(
+    def get_inputs(
             self,
             sequence: str,
             target_sequence: Optional[str] = None,
@@ -769,7 +895,7 @@ class SECNMT(DatasetVariant):
     ]:
         self.cfg: SECNMTConfig
 
-        input_sample, target_sequence = self._get_inputs(
+        input_sample, target_sequence = self._get_sample(
             sequence,
             target_sequence,
             is_inference,
@@ -782,7 +908,7 @@ class SECNMT(DatasetVariant):
             label = torch.tensor(self.output_tokenizer.tokenize(target_sequence, add_bos_eos=True), dtype=torch.long)
             info["label"] = label
 
-        return self.construct_input(input_sample), info
+        return self._construct_input(input_sample), info
 
 
 @dataclass
@@ -816,9 +942,9 @@ class TokenizationRepairPlus(TokenizationRepair):
         else:
             self.sec_tokenizer = None
 
-    def prepare_sequence(
+    def get_inputs(
             self,
-            sequence: Union[str, utils.SAMPLE],
+            sequence: Union[str, utils.Sample],
             target_sequence: Optional[str] = None,
             is_inference: bool = False
     ) -> Tuple[
@@ -827,7 +953,7 @@ class TokenizationRepairPlus(TokenizationRepair):
     ]:
         self.cfg: TokenizationRepairPlusConfig
 
-        input_sample, target_sequence = self._get_inputs(
+        input_sample, target_sequence = self._get_sample(
             sequence,
             target_sequence,
             is_inference,
@@ -895,7 +1021,47 @@ class TokenizationRepairPlus(TokenizationRepair):
                 info["sec_label_splits"] = label_splits
                 info["sec_pad_token_id"] = self.sec_pad_token_id
 
-        return self.construct_input(input_sample), info
+        return self._construct_input(input_sample), info
+
+    def _split_sample_for_inference(
+            self,
+            sample: utils.Sample,
+            max_length: int,
+            context_length: int
+    ) -> Tuple[List[utils.Sample], List[utils.InferenceInfo]]:
+        return [sample], [utils.InferenceInfo(
+                ctx_start=0,
+                ctx_end=len(str(sample)),
+                window_start=0,
+                window_end=len(str(sample)),
+                window_idx=0,
+                length=sum(len(tokens) for tokens in sample.tokens)
+            )]
+        # sequence = str(sample)
+        # samples = []
+        # infos = []
+        # windows = utils.get_words_windows(sample, max_length, context_length)
+        # for i, (ctx_start, ctx_end, window_start, window_end) in enumerate(windows):
+        #     sample, _ = self._get_sample(sequence[ctx_start:ctx_end], is_inference=True)
+        #     samples.append(sample)
+        #     infos.append(utils.InferenceInfo(
+        #         ctx_start=ctx_start,
+        #         ctx_end=ctx_end,
+        #         window_start=window_start,
+        #         window_end=window_end,
+        #         window_idx=i,
+        #         length=sum(len(tokens) for tokens in sample.tokens)
+        #     ))
+        # return samples, infos
+
+    def postprocess_inference_outputs(
+            self,
+            sequences: List[str],
+            infos: List[utils.InferenceInfo],
+            predictions: List[Any],
+            **kwargs: Any
+    ) -> List[Any]:
+        return predictions
 
 
 def get_variant_from_config(

@@ -1,14 +1,15 @@
 import copy
-from typing import List, Any
+from typing import List, Any, Union
 
 import torch
 from gnn_lib import models
+from gnn_lib.data.utils import Sample
 from gnn_lib.modules import inference
 from gnn_lib.tasks.token2seq import Token2Seq
 from gnn_lib.data import utils
 from gnn_lib.tasks import utils as task_utils
 from gnn_lib.modules import utils as mod_utils
-from gnn_lib.utils import BATCH
+from gnn_lib.utils import Batch
 
 
 class SECWordsNMT(Token2Seq):
@@ -16,7 +17,7 @@ class SECWordsNMT(Token2Seq):
     def inference(
             self,
             model: models.ModelForToken2Seq,
-            inputs: List[str],
+            inputs: List[Union[str, Sample]],
             **kwargs: Any
     ) -> List[List[str]]:
         self._check_model(model)
@@ -25,15 +26,14 @@ class SECWordsNMT(Token2Seq):
 
         org_inputs = copy.deepcopy(inputs)
 
-        assert task_utils.is_string_input(inputs), "sec words nmt input must be a list of strings"
-        batch = self.variant.prepare_sequences_for_inference(inputs)
+        batch = self.variant.batch_sequences_for_inference(inputs)
 
         oversized = [len(t) > model_cfg.max_length for t in batch.data]
         if sum(oversized):
             # print(f"found {sum(oversized)} sequences that are too long: {[len(t) for t in batch.data]}")
             data = [t for i, t in enumerate(batch.data) if not oversized[i]]
             info = {k: [v_ for i, v_ in enumerate(v) if not oversized[i]] for k, v in batch.info.items()}
-            batch = BATCH(data, info)
+            batch = Batch(data, info)
             inputs = [ipt for i, ipt in enumerate(inputs) if not oversized[i]]
 
         encoder_lengths = [len(t) for t in batch.data]

@@ -5,7 +5,7 @@ from torch.nn import functional as F
 
 from gnn_lib import models, tasks
 from gnn_lib.modules import utils
-from gnn_lib.utils import data_containers, BATCH, to
+from gnn_lib.utils import data_containers, Batch, to
 
 
 class Token2Seq(tasks.Task):
@@ -20,7 +20,7 @@ class Token2Seq(tasks.Task):
 
     def _prepare_inputs_and_labels(
             self,
-            batch: BATCH,
+            batch: Batch,
             device: torch.device
     ) -> Tuple[Dict[str, Any], Any]:
         decoder_inputs = []
@@ -74,6 +74,6 @@ class Token2Seq(tasks.Task):
     @torch.inference_mode()
     def inference(self,
                   model: models.ModelForToken2Seq,
-                  inputs: Union[List[str], BATCH],
+                  inputs: Union[List[str], Batch],
                   **kwargs: Any) -> List[List[str]]:
         raise NotImplementedError

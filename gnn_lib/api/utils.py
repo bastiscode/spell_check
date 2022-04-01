@@ -6,6 +6,7 @@ import pickle
 import platform
 import re
 import shutil
+import time
 import zipfile
 from typing import Optional, Union, List, Tuple, Dict, Callable
 
@@ -323,126 +324,38 @@ def load_experiment(
     return cfg, task, model
 
 
-StringBatchElement = collections.namedtuple(
-    "StringBatchElement",
-    field_names=[
-        "left_context",
-        "window",
-        "right_context",
-        "num_tokens",
-        "index",
-        "position",
-        "start",
-        "end",
-    ]
-)
-
-
-def _batchify_string(
-        string: str,
-        index: int,
-        max_length: int,
-        tok_fn: Callable[[Doc], List[List[int]]],
-        clean_fn: Callable[[str], str],
-        respect_word_boundaries: bool,
-        context_length: int
-) -> List[StringBatchElement]:
-    string = clean_fn(string)
-    _, doc = utils.tokenize_words(string, return_doc=True)
-    tokens = tok_fn(doc)
-
-    if True or len(tokens) <= max_length:
-        return [
-            StringBatchElement(
-                left_context="",
-                window=string,
-                right_context="",
-                num_tokens=len(tokens),
-                index=index,
-                position=0,
-                start=0,
-                end=len(string)
-            )
-        ]
-    else:
-        batch_elements = []
-        windows = _generate_windows()
-        for (window_idx, (ctx_start, ctx_end, window_start, window_end, token_start, token_end)) in enumerate(windows):
-            ctx_string = string[ctx_start:ctx_end]
-            batch_elements.append(
-                StringBatchElement(
-                    left_context=...,
-                    string=...,
-                    num_tokens=token_end - token_start,
-                    index=index,
-                    position=window_idx,
-                    start=window_start - ctx_start,
-                    end=window_end - ctx_start
-                )
-            )
-
-
-def _batchify_strings(
-        strings: List[str],
-        max_length: int,
-        tok_fn: Callable,
-        clean_fn: Callable[[str], str],
-        respect_word_boundaries: bool,
-        context_length: Optional[int] = None,
-) -> List[StringBatchElement]:
-    assert "unit" in {"char", "word_ws"}
-    if context_length is None:
-        context_length = max_length // 8  # 1/4 context (1/8 left + 1/8 right) + 3/4 window
-
-    return flatten([
-        _batchify_string(string, i, max_length, tok_fn, clean_fn, respect_word_boundaries, context_length)
-        for i, string in enumerate(strings)
-    ])
-
-
 class StringDataset(Dataset):
     def __init__(
             self,
             strings: List[str],
-            variant: DatasetVariant,
-            max_length: int,
-            clean_fn: Callable[[str], str] = None,
-            context_length: Optional[int] = None,
             sort_by_length: bool = False
     ) -> None:
-        self.batch_elements = _batchify_strings(
-            strings,
-            max_length,
-            lambda s: s,
-            clean_fn,
-            respect_borders=respect_borders,
-            context_length=context_length,
-        )
-
+        self.strings = strings
         self.sort_by_length = sort_by_length
         if not self.sort_by_length:
-            self._indices = list(range(len(self.batch_elements)))
+            self.indices = list(range(len(self.strings)))
         else:
             indices_lengths = sorted(
-                [(i, element.num_tokens) for i, element in enumerate(self.batch_elements)],
+                [(i, len(s)) for i, s in enumerate(self.strings)],
                 key=lambda item: -item[1]
             )
-            self._indices = [idx for idx, _ in indices_lengths]
+            self.indices = [idx for idx, _ in indices_lengths]
 
-    def __getitem__(self, idx: int) -> StringBatchElement:
-        return self.batches[self.indices[idx]]
+    def __getitem__(self, idx: int) -> Tuple[str, int]:
+        return self.batches[self.indices[idx]], self.indices[idx]
 
     def __len__(self) -> int:
         return len(self.sequences)
 
     def word_ws_length(self) -> int:
-        return sum(len(s.split()) for s in self.sequences)
+        return sum(len(s.split()) for s in self.strings)
 
     def char_length(self) -> int:
-        return sum(len(s) for s in self.sequences)
+        return sum(len(s) for s in self.strings)
 
-    def token_length(self) -> int:
-        return sum(b[1] for b in self.batches)
+    @staticmethod
+    def collate_fn(items: List[Tuple[str, int]]) -> Tuple[List[str], List[int]]:
+        return zip(*items)  # type: ignore
 
 
 def load_text_file(file_path: str) -> List[str]:
@@ -456,11 +369,7 @@ def load_text_file(file_path: str) -> List[str]:
 def get_string_dataset_and_loader(
         file_or_list_of_strings: Union[str, List[str]],
         sort_by_length: bool,
-        batch_size: int,
-        max_length: int,
-        clean_fn: Callable[[str], str] = clean_sequence,
-        respect_borders: str = "char",
-        context_length: Optional[int] = None
+        batch_size: int
 ) -> Tuple[StringDataset, DataLoader]:
     if isinstance(file_or_list_of_strings, list):
         text_data = file_or_list_of_strings
@@ -469,15 +378,86 @@ def get_string_dataset_and_loader(
 
     dataset = StringDataset(
         text_data,
-        max_length,
-        respect_borders=respect_borders,
-        clean_fn=clean_fn,
         sort_by_length=sort_by_length
     )
 
     loader = DataLoader(
         dataset=dataset,
-        batch_size=batch_size
+        batch_size=batch_size,
+        collate_fn=dataset.collate_fn
+    )
+
+    return dataset, loader
+
+
+class InferenceDataset(Dataset):
+    def __init__(
+            self,
+            strings: List[str],
+            variant: DatasetVariant,
+            max_length: int,
+            context_length: Optional[int] = None,
+            sort_by_length: bool = False
+    ) -> None:
+        self.strings = strings
+        self.variant = variant
+        self.max_length = max_length
+        self.context_length = context_length
+        if self.context_length is None:
+            self.context_length = self.max_length // 8
+        self.sort_by_length = sort_by_length
+
+        self.samples, self.sample_infos = variant.prepare_sequences_for_inference(
+            self.strings, self.max_length, self.context_length
+        )
+
+        if not self.sort_by_length:
+            self.indices = list(range(len(self.samples)))
+        else:
+            indices_lengths = sorted(
+                [(i, info.length) for i, info in enumerate(self.sample_infos)],
+                key=lambda item: -item[1]
+            )
+            self.indices = [idx for idx, _ in indices_lengths]
+
+    def __getitem__(self, idx: int) -> Tuple[Union[str, utils.Sample], utils.InferenceInfo, int]:
+        return self.samples[self.indices[idx]], self.sample_infos[self.indices[idx]], self.indices[idx]
+
+    def __len__(self) -> int:
+        return len(self.samples)
+
+    def char_length(self) -> int:
+        return sum(info.ctx_end - info.ctx_start for info in self.sample_infos)
+
+    def token_length(self) -> int:
+        return sum(info.length for info in self.sample_infos)
+
+    @staticmethod
+    def collate_fn(items: List[Tuple[Union[str, utils.Sample], utils.InferenceInfo, int]]) \
+            -> Tuple[List[Union[str, utils.Sample]], List[utils.InferenceInfo], List[int]]:
+        return zip(*items)  # type: ignore
+
+
+def get_inference_dataset_and_loader(
+        sequences: List[str],
+        variant: DatasetVariant,
+        max_length: int,
+        sort_by_length: bool,
+        batch_size: int,
+        context_length: Optional[int] = None
+) -> Tuple[InferenceDataset, DataLoader]:
+    dataset = InferenceDataset(
+        sequences,
+        variant,
+        max_length,
+        context_length=context_length,
+        sort_by_length=sort_by_length
+    )
+
+    loader = DataLoader(
+        dataset=dataset,
+        batch_size=batch_size,
+        collate_fn=dataset.collate_fn
     )
 
     return dataset, loader

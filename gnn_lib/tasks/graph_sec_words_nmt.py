@@ -22,7 +22,7 @@ class GraphSECWordsNMT(MultiNode2Seq):
         decoder_node_type = model.cfg.decoder_node_types[0]
 
         assert isinstance(inputs, list) and isinstance(inputs[0], str)
-        g, infos = self.variant.prepare_sequences_for_inference(inputs)
+        g, infos = self.variant.batch_sequences_for_inference(inputs)
 
         model_cfg: models.ModelForMultiNode2SeqConfig = model.cfg
         g = model.encode(g)

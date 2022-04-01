@@ -48,7 +48,7 @@ class TokenizationRepair(TokenClassification):
             **kwargs: Any
     ) -> Union[List[str], List[List[int]]]:
         assert task_utils.is_string_input(inputs)
-        batch = self.variant.prepare_sequences_for_inference(inputs)
+        batch = self.variant.batch_sequences_for_inference(inputs)
 
         repair_tokens_list = super().inference(model, batch, **kwargs)
 

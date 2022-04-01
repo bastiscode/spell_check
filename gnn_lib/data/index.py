@@ -412,7 +412,7 @@ class NNIndex:
             outputs.append((word, left_context, right_context))
         return outputs
 
-    def batch_retrieve(self, words_batch: List[Tuple[str, str, str]], n_neighbors: int) -> List[utils.NEIGHBORS]:
+    def batch_retrieve(self, words_batch: List[Tuple[str, str, str]], n_neighbors: int) -> List[utils.Neighbors]:
         vectors_batch = self.vectorizer.vectorize_batch(words_batch)
 
         neighbors_batch = self.index.knnQueryBatch(
@@ -420,7 +420,7 @@ class NNIndex:
 
         return [self._to_neighbors(neighbors, distances) for neighbors, distances in neighbors_batch]
 
-    def batch_retrieve_from_docs(self, doc_batch: List[Doc], n_neighbors: int) -> List[List[utils.NEIGHBORS]]:
+    def batch_retrieve_from_docs(self, doc_batch: List[Doc], n_neighbors: int) -> List[List[utils.Neighbors]]:
         all_words_batch = []
         lengths = []
         for doc in doc_batch:
@@ -440,7 +440,7 @@ class NNIndex:
         data = pickle.loads(data)
         return data
 
-    def _to_neighbors(self, neighbors: List[int], distances: List[float]) -> utils.NEIGHBORS:
+    def _to_neighbors(self, neighbors: List[int], distances: List[float]) -> utils.Neighbors:
         words = []
         left_contexts = []
         right_contexts = []
@@ -449,21 +449,21 @@ class NNIndex:
             words.append(data["word"])
             left_contexts.append(data["left_context"])
             right_contexts.append(data["right_context"])
-        return utils.NEIGHBORS(
+        return utils.Neighbors(
             words=words,
             left_contexts=left_contexts,
             right_contexts=right_contexts,
             distances=distances
         )
 
-    def retrieve(self, words: Tuple[str, str, str], n_neighbors: int) -> utils.NEIGHBORS:
+    def retrieve(self, words: Tuple[str, str, str], n_neighbors: int) -> utils.Neighbors:
         context_vec = self.vectorizer.vectorize(*words)
         neighbors, distances = self.index.knnQuery(context_vec, k=n_neighbors)
         return self._to_neighbors(neighbors, distances)
 
 
-def get_neighbor_fn(index: NNIndex, num_neighbors: int) -> Callable[[List[Doc]], List[List[utils.NEIGHBORS]]]:
-    def neigh(docs: List[Doc]) -> List[List[utils.NEIGHBORS]]:
+def get_neighbor_fn(index: NNIndex, num_neighbors: int) -> Callable[[List[Doc]], List[List[utils.Neighbors]]]:
+    def neigh(docs: List[Doc]) -> List[List[utils.Neighbors]]:
         return index.batch_retrieve_from_docs(docs, num_neighbors)
 
     return neigh

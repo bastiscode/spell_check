@@ -10,7 +10,7 @@ from dgl import function as dfn
 from dgl.udf import EdgeBatch, NodeBatch
 from torch import nn
 
-from gnn_lib.utils import DATA_INPUT
+from gnn_lib.utils import DataInput
 
 
 class TokenEmbedding(nn.Module):
@@ -414,7 +414,7 @@ class TensorEmbedding(nn.Module):
 
 
 def get_embedding_from_config(cfg: omegaconf.DictConfig,
-                              sample_inputs: DATA_INPUT,
+                              sample_inputs: DataInput,
                               **kwargs: Any) -> Union[GraphEmbedding, TensorEmbedding]:
     if isinstance(sample_inputs, dgl.DGLHeteroGraph):
         cfg = omegaconf.OmegaConf.structured(GraphEmbeddingConfig(**cfg))

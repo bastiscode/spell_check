@@ -4,9 +4,10 @@ import torch
 from torch.nn import functional as F
 
 from gnn_lib import tasks, models
+from gnn_lib.data.utils import Sample
 from gnn_lib.modules import utils
 from gnn_lib.tasks import utils as task_utils
-from gnn_lib.utils import data_containers, BATCH, to
+from gnn_lib.utils import data_containers, Batch, to
 
 
 class TokenClassification(tasks.Task):
@@ -24,7 +25,7 @@ class TokenClassification(tasks.Task):
 
     def _prepare_inputs_and_labels(
             self,
-            batch: BATCH,
+            batch: Batch,
             device: torch.device
     ) -> Tuple[Dict[str, Any], Any]:
         # extract labels from info dict
@@ -56,18 +57,13 @@ class TokenClassification(tasks.Task):
     def inference(
             self,
             model: models.ModelForTokenClassification,
-            inputs: Union[List[str], BATCH],
+            inputs: List[Union[str, Sample]],
             **kwargs: Any
     ) -> List[List]:
         self._check_model(model)
         model = model.eval()
 
-        got_str_input = isinstance(inputs, list) and isinstance(inputs[0], str)
-        if got_str_input:
-            batch = self.variant.prepare_sequences_for_inference(inputs)
-        else:
-            batch = inputs
-
+        batch = self.variant.batch_sequences_for_inference(inputs)
         outputs, _ = model(batch.data, **batch.info)
 
         return_logits = kwargs.get("return_logits", False)

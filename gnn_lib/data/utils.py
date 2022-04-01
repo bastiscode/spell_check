@@ -2,9 +2,8 @@ import collections
 import json
 import random
 import re
-import string
 from collections import Counter
-from typing import Union, List, Tuple, Optional, Iterator, Any, Dict, Iterable, Set, Callable
+from typing import Union, List, Tuple, Optional, Iterator, Any, Dict, Iterable, Callable
 
 import dgl
 import ftfy
@@ -17,26 +16,33 @@ from spacy.tokens import Token, Doc
 from torch import distributed as dist
 from torch.utils.data import Sampler, DistributedSampler, Dataset
 
-from gnn_lib.utils import DATA_INPUT, BATCH
+from gnn_lib.utils import DataInput, Batch
 from gnn_lib.utils import common
 from gnn_lib.utils.distributed import DistributedDevice
 
 
-class NEIGHBORS(collections.namedtuple("NEIGHBORS", ["words", "left_contexts", "right_contexts", "distances"])):
+class Neighbors(collections.namedtuple("NEIGHBORS", ["words", "left_contexts", "right_contexts", "distances"])):
     __slots__ = ()
 
     def __str__(self) -> str:
         return "\n".join(l + w + r for l, w, r in zip(self.left_contexts, self.words, self.right_contexts))
 
 
-class SAMPLE(collections.namedtuple("SAMPLE", ["tokens", "doc", "neighbors_list", "info"])):
+class Sample(collections.namedtuple("SAMPLE", ["tokens", "doc", "neighbors_list", "info"])):
     __slots__ = ()
 
     def __str__(self) -> str:
         return str(self.doc)
 
 
-PREPROCESSING_FN = Callable[[List[str], List[Optional[str]], bool], List[Tuple[SAMPLE, str]]]
+class InferenceInfo(collections.namedtuple(
+    "INFERENCE_INFO",
+    ["ctx_start", "ctx_end", "window_start", "window_end", "window_idx", "length"]
+)):
+    __slots__ = ()
+
+
+PreprocessingFn = Callable[[List[str], List[Optional[str]], bool], List[Tuple[Sample, str]]]
 
 
 def tokenize_words_regex(sequence: str) -> Tuple[List[str], List[bool]]:
@@ -144,18 +150,17 @@ def tokenize_words(
     )[0]
 
 
-TOKENIZATION_FN = Callable[[Doc], List[List[int]]]
-NEIGHBOR_FN = Callable[[List[Doc]], List[List[NEIGHBORS]]]
-NOISE_FN = Callable[[Union[str, SAMPLE]], Tuple[str, str]]
+TokenizationFn = Callable[[Doc], List[List[int]]]
+NeighborFn = Callable[[List[Doc]], List[List[Neighbors]]]
 
 
 def prepare_samples(
         sequences: List[str],
         infos: List[Dict[str, Any]],
-        tokenization_fn: TOKENIZATION_FN,
-        neighbor_fn: Optional[NEIGHBOR_FN] = None,
+        tokenization_fn: TokenizationFn,
+        neighbor_fn: Optional[NeighborFn] = None,
         **tokenize_words_kwargs: Any,
-) -> List[SAMPLE]:
+) -> List[Sample]:
     outputs = tokenize_words_batch(sequences, return_docs=True, **tokenize_words_kwargs)
     docs: List[Doc] = [doc for _, doc in outputs]
     if neighbor_fn is not None:
@@ -165,7 +170,7 @@ def prepare_samples(
     samples = []
     for doc, neighbors_list, info in zip(docs, neighbors_lists, infos):
         tokens = tokenization_fn(doc)
-        sample = SAMPLE(
+        sample = Sample(
             tokens=tokens,
             doc=doc,
             neighbors_list=None if neighbors_list is None else neighbors_list,
@@ -176,7 +181,7 @@ def prepare_samples(
 
 
 def serialize_samples(
-        samples: List[SAMPLE]
+        samples: List[Sample]
 ) -> List[bytes]:
     import pickle
     import lz4.frame
@@ -194,7 +199,7 @@ def serialize_samples(
     return outputs
 
 
-def deserialize_samples(inputs: List[bytes]) -> List[SAMPLE]:
+def deserialize_samples(inputs: List[bytes]) -> List[Sample]:
     import pickle
     import lz4.frame
     from spacy.tokens import DocBin
@@ -205,14 +210,16 @@ def deserialize_samples(inputs: List[bytes]) -> List[SAMPLE]:
         doc_bin = DocBin().from_bytes(doc_bin_bytes)
         docs = list(doc_bin.get_docs(SPACY_TOKENIZER_REGEX.vocab))
         assert len(docs) == 1
-        outputs.append(SAMPLE(tokens=tokens, doc=docs[0], neighbors_list=neighbors_list, info=info))
+        outputs.append(Sample(tokens=tokens, doc=docs[0], neighbors_list=neighbors_list, info=info))
     return outputs
 
 
-def sanitize_sample(sample: SAMPLE, unk_token_id: int) -> SAMPLE:
+def sanitize_sample(sample: Sample, unk_token_id: int) -> Sample:
     for i, tokens in enumerate(sample.tokens):
         if len(tokens) == 0:
             sample.tokens[i] = [unk_token_id]
+        elif any(token is None for token in tokens):
+            sample.tokens[i] = [token or unk_token_id for token in tokens]
     return sample
 
 
@@ -321,7 +328,8 @@ def open_lmdb(lmdb_path: str, write: bool = False) -> lmdb.Environment:
     )
 
 
-def collate(items: List[Tuple[DATA_INPUT, Dict[str, Any]]]) -> BATCH:
+def collate(items: List[Tuple[DataInput, Dict[str, Any]]]) -> Batch:
+    assert len(items)
     data = []
     info = {}
     for item in items:
@@ -331,9 +339,9 @@ def collate(items: List[Tuple[DATA_INPUT, Dict[str, Any]]]) -> BATCH:
                 info[key] = [val]
             else:
                 info[key].append(val)
-    if len(data) > 0 and isinstance(data[0], dgl.DGLHeteroGraph):
+    if isinstance(data[0], dgl.DGLHeteroGraph):
         data = dgl.batch(data)
-    return BATCH(data, info)
+    return Batch(data, info)
 
 
 # modified version of
@@ -483,7 +491,7 @@ class BucketSampler(Sampler):
 
 
 def get_word_whitespace_groups(
-        sample: SAMPLE
+        sample: Sample
 ) -> torch.Tensor:
     word_whitespace_groups = []
     word_ws_group = 0
@@ -495,7 +503,7 @@ def get_word_whitespace_groups(
 
 
 def get_word_and_word_whitespace_groups(
-        sample: SAMPLE
+        sample: Sample
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     word_groups = []
     word_whitespace_groups = []
@@ -509,13 +517,13 @@ def get_word_and_word_whitespace_groups(
 
 
 def get_sequence_groups(
-        sample: SAMPLE
+        sample: Sample
 ) -> torch.Tensor:
     return torch.tensor([0] * len(flatten(sample.tokens)), dtype=torch.long)
 
 
 def get_word_and_sequence_groups(
-        sample: SAMPLE
+        sample: Sample
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     word_groups = []
     for i, tokens in enumerate(sample.tokens):
@@ -552,43 +560,17 @@ def get_character_groups_from_repaired_doc(
 
 
 def clean_sequence(sequence: str, fix_unicode_errors: bool = False) -> str:
-    """
-
-    Replace all multiple whitespaces, tabs,
-    linebreaks etc. with single whitespaces.
-
-    :param sequence: string
-    :param fix_unicode_errors: bool
-    :return: cleaned string
-    """
     if fix_unicode_errors:
         sequence = fix_unicode(sequence)
     return " ".join(sequence.strip().split())
 
 
 def fix_unicode(sequence: str) -> str:
-    """
-
-    Fixes quotes and unicode issues using ftfy.
-
-    :param sequence: string
-    :return: cleaned string
-    """
     # sequence = "".join(ch for ch in sequence if unicodedata.category(ch)[0] != "C")
     return ftfy.fix_text(sequence)
 
 
 def is_valid_sequence(sequence: str, min_length: int = 0, max_length: int = -1, min_words: int = 0) -> bool:
-    """
-    Check if a string is a valid sequence in the
-    sense that it is a proper sentence/expression.
-
-    :param sequence: string
-    :param min_length: minimum length of string
-    :param max_length: maximum length of string
-    :param min_words: minimum number of words in string
-    :return: bool whether string is valid
-    """
     if max_length < 0:
         max_length = float("inf")
     # from tokenization repair repo
@@ -608,3 +590,42 @@ def is_valid_sequence(sequence: str, min_length: int = 0, max_length: int = -1, 
         return False
     # if sequence passes all the tests its valid
     return True
+
+
+def get_words_windows(sample: Sample, max_length: int, context_length: int) -> List[Tuple[int, int, int, int]]:
+    sequence = str(sample)
+    words = sequence.split()
+    word_lengths = [len(w) for w in words]
+
+    window_length = max_length - 2 * context_length
+
+    num_word_ws_tokens = [0] * len(words)
+    word_ws_idx = 0
+    for word_tokens, word in zip(sample.tokens, sample.doc):
+        num_word_ws_tokens[word_ws_idx] += len(word_tokens)
+        if word.whitespace_ == " ":
+            word_ws_idx += 1
+    assert word_ws_idx == len(words) - 1
+    assert all(num_tokens <= window_length for num_tokens in num_word_ws_tokens), \
+        f"a single word in the input sequence {sequence} is longer than the max window length of {window_length} tokens"
+
+    word_window_start = 0
+    windows = []
+    while word_window_start < len(words):
+        word_window_end = word_window_start + (np.cumsum(num_word_ws_tokens[word_window_start:]) <= window_length).sum()
+        assert word_window_end > word_window_start
+        word_context_start = word_window_start - (
+                np.cumsum(num_word_ws_tokens[:word_window_start][::-1]) <= context_length
+        ).sum()
+        word_context_end = word_window_end + (np.cumsum(num_word_ws_tokens[word_window_end:]) <= context_length).sum()
+
+        windows.append((
+            max(0, word_context_start - 1 + sum(word_lengths[:word_context_start])),  # ctx start
+            word_context_end - 1 + sum(word_lengths[:word_context_end]),  # ctx end
+            max(0, word_window_start - 1 + sum(word_lengths[:word_window_start])),  # window start
+            word_window_end - 1 + sum(word_lengths[:word_window_end])  # window end
+        ))
+
+        word_window_start = word_window_end
+
+    return windows

@@ -8,7 +8,7 @@ from gnn_lib import models, tasks
 from gnn_lib.data import tokenization
 from gnn_lib.modules import inference, utils
 from gnn_lib.tasks import utils as task_utils
-from gnn_lib.utils import data_containers, BATCH
+from gnn_lib.utils import data_containers, Batch
 
 
 class Graph2Seq(tasks.Task):
@@ -24,7 +24,7 @@ class Graph2Seq(tasks.Task):
 
     def _prepare_inputs_and_labels(
             self,
-            batch: BATCH,
+            batch: Batch,
             device: torch.device
     ) -> Tuple[Dict[str, Any], Any]:
         decoder_inputs = []
@@ -117,7 +117,7 @@ class Graph2Seq(tasks.Task):
 
         got_str_input = isinstance(inputs, list) and isinstance(inputs[0], str)
         if got_str_input:
-            g, infos = self.variant.prepare_sequences_for_inference(inputs)
+            g, infos = self.variant.batch_sequences_for_inference(inputs)
         else:
             g, infos = inputs
 

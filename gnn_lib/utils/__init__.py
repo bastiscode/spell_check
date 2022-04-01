@@ -3,9 +3,9 @@ from typing import List, Union, Dict, Any
 import dgl
 import torch
 
-TENSOR_INPUT = torch.Tensor  # maybe extend this with Dict[str, torch.Tensor] in the future
-DATA_INPUT = Union[List[TENSOR_INPUT], dgl.DGLHeteroGraph]
-INFO_INPUT = Dict[str, List[Any]]
+TensorInput = torch.Tensor  # maybe extend this with Dict[str, torch.Tensor] in the future
+DataInput = Union[List[TensorInput], dgl.DGLHeteroGraph]
+InfoInput = Dict[str, List[Any]]
 
 
 def pin(item: Union[dgl.DGLHeteroGraph, torch.Tensor, Dict, List]) \
@@ -37,8 +37,8 @@ def to(item: Union[dgl.DGLHeteroGraph, torch.Tensor, Dict, List], device: torch.
         return item
 
 
-class BATCH:
-    def __init__(self, data: DATA_INPUT, info: INFO_INPUT) -> None:
+class Batch:
+    def __init__(self, data: DataInput, info: InfoInput) -> None:
         self.data = data
         self.info = info
 

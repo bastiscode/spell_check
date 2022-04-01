@@ -7,8 +7,9 @@ from torch.nn import functional as F
 
 from gnn_lib import models, tasks
 from gnn_lib.data import utils
+from gnn_lib.data.utils import Sample
 from gnn_lib.modules import utils as mod_utils
-from gnn_lib.utils import data_containers, BATCH, to, tokenization_repair
+from gnn_lib.utils import data_containers, Batch, to, tokenization_repair
 from gnn_lib.tasks import utils as task_utils
 
 
@@ -25,7 +26,7 @@ class TokenizationRepairPlus(tasks.Task):
 
     def _prepare_inputs_and_labels(
             self,
-            batch: BATCH,
+            batch: Batch,
             device: torch.device
     ) -> Tuple[Dict[str, Any], Any]:
         label_dict = {
@@ -104,30 +105,31 @@ class TokenizationRepairPlus(tasks.Task):
     def inference(
             self,
             model: models.ModelForTokenizationRepairPlus,
-            inputs: List[str],
+            inputs: List[Union[str, Sample]],
+            output_type: str = "all",
+            no_repair: bool = False,
             **kwargs: Any
     ) -> Union[Dict[str, Any], List[List[int]]]:
         self._check_model(model)
         model = model.eval()
         model_cfg: models.ModelForTokenizationRepairPlusConfig = model.cfg
-        output_type = kwargs.get("tokenization_repair_plus_output_type", "all")
         assert output_type in {"tokenization_repair", "sed", "sec", "all"}, \
             f"unknown tokenization repair plus output type {output_type}, must be one of " \
             f"{{tokenization_repair, sed, sec, all}}"
-        # this flag ensures that the input tokenization is not repaired, useful when you are sure that
+        # the no_repair flag ensures that the input tokenization is not repaired, useful when you are sure that
         # the input has no tokenization errors or when you want to evaluate on sed benchmarks
-        no_repair = kwargs.get("tokenization_repair_plus_no_repair", False)
 
-        oversized = [len(ipt) > model_cfg.max_length for ipt in inputs]
+        oversized = [len(str(ipt)) > model_cfg.max_length for ipt in inputs]
         if sum(oversized) == len(inputs):
             return [
-                [0] * len(ipt.split()) for ipt in inputs
+                [0] * len(str(ipt).split()) for ipt in inputs
             ]
-        org_inputs = copy.deepcopy(inputs)
+        org_inputs = [str(ipt) for ipt in inputs]
         inputs = [ipt for i, ipt in enumerate(inputs) if not oversized[i]]
 
-        assert task_utils.is_string_input(inputs)
-        batch = self.variant.prepare_sequences_for_inference(inputs)
+        batch = self.variant.batch_sequences_for_inference(inputs)
+
+        inputs = [str(ipt) for ipt in inputs]
 
         x, padding_mask, lengths = model.pad_inputs(batch.data, pad_val=model.input_pad_token_id)
 

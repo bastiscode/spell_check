@@ -4,8 +4,9 @@ import torch
 from torch.nn import functional as F
 
 from gnn_lib import models, tasks
+from gnn_lib.data.utils import Sample
 from gnn_lib.modules import inference, utils
-from gnn_lib.utils import data_containers, BATCH, to
+from gnn_lib.utils import data_containers, Batch, to
 from gnn_lib.tasks import utils as task_utils
 
 
@@ -25,7 +26,7 @@ class Seq2Seq(tasks.Task):
 
     def _prepare_inputs_and_labels(
             self,
-            batch: BATCH,
+            batch: Batch,
             device: torch.device
     ) -> Tuple[Dict[str, Any], Any]:
         decoder_inputs = []
@@ -95,16 +96,12 @@ class Seq2Seq(tasks.Task):
     @torch.inference_mode()
     def inference(self,
                   model: models.ModelForSeq2Seq,
-                  inputs: Union[BATCH, List[str]],
+                  inputs: List[Union[str, Sample]],
                   **kwargs: Any) -> List[List[str]]:
         self._check_model(model)
         model = model.eval()
 
-        got_str_input = task_utils.is_string_input(inputs)
-        if got_str_input:
-            batch = self.variant.prepare_sequences_for_inference(inputs)
-        else:
-            batch = inputs
+        batch = self.variant.batch_sequences_for_inference(inputs)
 
         encoder_inputs, encoder_padding_mask = model.pad_inputs(batch.data)
         encoder_outputs = model.encode(encoder_inputs, encoder_padding_mask)

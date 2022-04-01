@@ -311,7 +311,7 @@ class PreprocessedDataset(data.Dataset):
         sequence = utils.deserialize_samples([data_sequence])[0]
         data_target_sequence = self.txns[txn_idx].get(f"{idx}_target".encode("utf8"))
         target_sequence = data_target_sequence.decode("utf8")
-        return self.variant.prepare_sequence(sequence, target_sequence)
+        return self.variant.get_inputs(sequence, target_sequence)
 
     def __len__(self) -> int:
         return min(self.limit, sum(self.sizes))

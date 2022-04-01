@@ -180,7 +180,7 @@ class HeterogeneousDGLData:
 
 
 def sequence_to_token_graph(
-        sample: utils.SAMPLE
+        sample: utils.Sample
 ) -> HeterogeneousDGLData:
     types = {
         ("token", "connects_to", "token")
@@ -215,7 +215,7 @@ def _indices_to_sequence_edge_type(from_idx: int, to_idx: int) -> str:
 
 
 def sequence_to_word_graph(
-        sample: utils.SAMPLE,
+        sample: utils.Sample,
         tokenizer: tokenization.Tokenizer,
         add_sequence_level_node: bool = False,
         dictionary: Optional[Dict[str, int]] = None,

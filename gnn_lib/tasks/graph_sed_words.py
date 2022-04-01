@@ -5,8 +5,9 @@ import torch
 
 from gnn_lib import models
 from gnn_lib.data import variants, tokenization
+from gnn_lib.data.utils import Sample
 from gnn_lib.tasks.multi_node_classification import MultiNodeClassification
-from gnn_lib.utils import data_containers, BATCH
+from gnn_lib.utils import data_containers, Batch
 from gnn_lib.tasks import utils as task_utils
 
 
@@ -72,30 +73,8 @@ class GraphSEDWords(MultiNodeClassification):
     def inference(
             self,
             model: models.ModelForMultiNodeClassification,
-            inputs: List[str],
+            inputs: List[Union[str, Sample]],
             **kwargs: Any
     ) -> List[List[int]]:
-        assert task_utils.is_string_input(inputs)
-        batch = self.variant.prepare_sequences_for_inference(inputs)
-
-        oversized = (batch.data.batch_num_nodes("token") >= model.cfg.max_length).tolist()
-
-        if sum(oversized):
-            # print(f"found {sum(oversized)} sequences that are too long: {batch.data.batch_num_nodes('token')}")
-            data = dgl.batch([graph for i, graph in enumerate(dgl.unbatch(batch.data)) if not oversized[i]])
-            info = {k: [v_ for i, v_ in enumerate(v) if not oversized[i]] for k, v in batch.info.items()}
-            batch = BATCH(data, info)
-
-        detections_dicts = super().inference(model, batch, **kwargs)
-
-        prediction_idx = 0
-        outputs = []
-        for ipt, is_oversized in zip(inputs, oversized):
-            if not is_oversized:
-                detections_dict = detections_dicts[prediction_idx]
-                outputs.append(detections_dict[list(detections_dict)[0]])
-                prediction_idx += 1
-            else:
-                outputs.append([0] * len(ipt.split()))
-        assert prediction_idx == len(detections_dicts)
-        return outputs
+        detections_dicts = super().inference(model, inputs, **kwargs)
+        return [detections_dict[list(detections_dict)[0]] for detections_dict in detections_dicts]

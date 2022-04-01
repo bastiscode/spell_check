@@ -1,3 +1,4 @@
+import os
 import pprint
 from typing import List, Optional, Union, Any, Dict
 
@@ -10,9 +11,10 @@ from gnn_lib.api.utils import (
     StringInputOutput,
     load_experiment,
     get_string_dataset_and_loader,
-    reorder_data, get_device_info, _APIBase
+    reorder_data, get_device_info, _APIBase, get_inference_dataset_and_loader, load_text_file
 )
 from gnn_lib.data import DatasetVariants
+from gnn_lib.data.utils import clean_sequence
 from gnn_lib.modules import inference
 from gnn_lib.tasks import graph_sed_words, graph_sed_sequence, sed_words, sed_sequence, tokenization_repair_plus
 from gnn_lib.utils import common
@@ -142,10 +144,17 @@ class SpellingErrorDetector(_APIBase):
             sort_by_length: bool = True,
             show_progress: bool = False
     ) -> List[List[int]]:
-        dataset, loader = get_string_dataset_and_loader(
+        if isinstance(inputs, str):
+            inputs = load_text_file(inputs)
+
+        inputs = [clean_sequence(ipt) for ipt in inputs]
+
+        dataset, loader = get_inference_dataset_and_loader(
             inputs,
-            sort_by_length,
-            batch_size
+            variant=self.task.variant,
+            max_length=self.max_length,
+            sort_by_length=sort_by_length,
+            batch_size=batch_size
         )
 
         pbar = tqdm(
@@ -158,14 +167,16 @@ class SpellingErrorDetector(_APIBase):
         )
 
         inference_kwargs = {
-            "threshold": threshold,
-            "tokenization_repair_plus_output_type": "sed",
-            "tokenization_repair_plus_no_repair": True
+            "threshold": threshold
         }
 
+        if isinstance(self.task, tokenization_repair_plus.TokenizationRepairPlus):
+            inference_kwargs["output_type"] = "tokenization_repair"
+            inference_kwargs["no_repair"] = True
+
         all_outputs = []
-        for i, (batch, info) in enumerate(pbar):
-            batch_length = sum(info["lengths"])
+        for i, (batch, infos, _) in enumerate(pbar):
+            batch_length = sum(info.ctx_end - info.ctx_start for info in infos)
             pbar.set_description(
                 f"[Batch {i + 1}] Detecting spelling errors in {len(batch):,} sequences "
                 f"with {batch_length:,} characters in total"
@@ -186,7 +197,8 @@ class SpellingErrorDetector(_APIBase):
             pbar.update(batch_length)
 
         pbar.close()
-        return reorder_data(all_outputs, dataset.indices)
+        all_outputs = reorder_data(all_outputs, dataset.indices)
+        return self.task.variant.postprocess_inference_outputs(inputs, dataset.sample_infos, all_outputs)
 
     def detect_text(
             self,

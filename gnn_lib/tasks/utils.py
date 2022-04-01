@@ -7,7 +7,7 @@ import torch
 from torch import nn
 
 from gnn_lib.modules.utils import tensor_to_python, split
-from gnn_lib.utils import DATA_INPUT, BATCH
+from gnn_lib.utils import DataInput, Batch
 
 SAMPLE_SEQUENCE = \
     "But I must explain to you how all this mistaken idea of denouncing pleasure and praising pain was " \
@@ -88,15 +88,11 @@ def get_token_ids_from_graphs(graph: dgl.DGLHeteroGraph) -> List[List[int]]:
     )
 
 
-def get_batch_size_from_data(data: DATA_INPUT) -> int:
+def get_batch_size_from_data(data: DataInput) -> int:
     if isinstance(data, dgl.DGLHeteroGraph):
         return data.batch_size
     else:
         return len(data)
-
-
-def is_string_input(inputs: Union[List[str], BATCH]):
-    return isinstance(inputs, list) and all(isinstance(ipt, str) for ipt in inputs)
 
 
 def get_unused_parameters(model: nn.Module, **inputs: Any) -> Set[str]:

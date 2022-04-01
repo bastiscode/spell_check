@@ -13,7 +13,7 @@ from omegaconf import MISSING, OmegaConf
 from spacy.tokens import Doc
 
 from gnn_lib.data import utils
-from gnn_lib.data.utils import PREPROCESSING_FN, SAMPLE, TOKENIZATION_FN, NEIGHBOR_FN
+from gnn_lib.data.utils import PreprocessingFn, Sample, TokenizationFn, NeighborFn
 
 
 _INCLUDE_ALL = tuple(i for i in range(4))
@@ -678,19 +678,19 @@ def get_preprocessing_from_config(cfg: Union[PreprocessingConfig, omegaconf.Dict
 
 def get_preprocessing_fn(
         preprocessing: Preprocessing,
-        tokenization_fn: TOKENIZATION_FN,
-        neighbor_fn: Optional[NEIGHBOR_FN] = None,
+        tokenization_fn: TokenizationFn,
+        neighbor_fn: Optional[NeighborFn] = None,
         split_only_on_ws: bool = False,
         with_pos_tags: bool = False,
         with_ner: bool = False,
         with_dep_parser: bool = False,
         batch_size: Optional[int] = None
-) -> PREPROCESSING_FN:
+) -> PreprocessingFn:
     def _preprocessing_fn(
             sequences: List[str],
             target_sequences: List[Optional[str]],
             is_inference: bool = False
-    ) -> List[Tuple[SAMPLE, str]]:
+    ) -> List[Tuple[Sample, str]]:
         # initialize target sequences with target sequences if given else with input sequences
         target_sequences = [
             None if is_inference else target_sequence or sequence

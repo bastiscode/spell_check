@@ -13,7 +13,7 @@ from gnn_lib.api.utils import (
     reorder_data, get_device_info, _APIBase
 )
 from gnn_lib.modules import inference
-from gnn_lib.tasks import tokenization_repair
+from gnn_lib.tasks import tokenization_repair, tokenization_repair_plus
 from gnn_lib.utils import common
 
 __all__ = ["get_available_tokenization_repair_models", "TokenizationRepairer"]
@@ -52,8 +52,10 @@ class TokenizationRepairer(_APIBase):
             kwargs.get("keep_existing_env_vars", False)
         )
 
-        assert isinstance(task, tokenization_repair.TokenizationRepair), \
-            f"expected experiment to be of type TokenizationRepair, but got {type(task)}"
+        assert (
+            isinstance(task, tokenization_repair.TokenizationRepair),
+            isinstance(task, tokenization_repair_plus.TokenizationRepairPlus)
+        ), f"expected experiment to be of type TokenizationRepair or TokenizationRepairPlus, but got {type(task)}"
 
         self.max_length = model.cfg.max_length
 
@@ -123,6 +125,10 @@ class TokenizationRepairer(_APIBase):
             unit="char"
         )
 
+        inference_kwargs = {}
+        if isinstance(self.task, tokenization_repair_plus.TokenizationRepairPlus):
+            inference_kwargs["output_type"] = "tokenization_repair"
+
         all_outputs = []
         for i, (batch, info) in enumerate(pbar):
             batch_length = sum(info["lengths"])
@@ -138,9 +144,9 @@ class TokenizationRepairer(_APIBase):
                         dtype=self._mixed_precision_dtype,
                         enabled=self.mixed_precision_enabled
                 ):
-                    outputs = self.task.inference(self.model, batch)
+                    outputs = self.task.inference(self.model, batch, **inference_kwargs)
             else:
-                outputs = self.task.inference(self.model, batch)
+                outputs = self.task.inference(self.model, batch, **inference_kwargs)
 
             all_outputs.extend(outputs)
             pbar.update(batch_length)

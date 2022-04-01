@@ -8,7 +8,7 @@ from torch.nn import functional as F
 from gnn_lib import models, tasks
 from gnn_lib.modules import utils, inference
 from gnn_lib.modules.utils import pad
-from gnn_lib.utils import BATCH
+from gnn_lib.utils import Batch
 
 
 class MultiNode2Seq(tasks.Task):
@@ -16,7 +16,7 @@ class MultiNode2Seq(tasks.Task):
 
     def _prepare_inputs_and_labels(
             self,
-            batch: BATCH,
+            batch: Batch,
             device: torch.device
     ) -> Tuple[Dict[str, Any], Any]:
         decoder_inputs = collections.defaultdict(list)
@@ -89,7 +89,7 @@ class MultiNode2Seq(tasks.Task):
 
         got_str_input = isinstance(inputs, list) and isinstance(inputs[0], str)
         if got_str_input:
-            g, infos = self.variant.prepare_sequences_for_inference(inputs)
+            g, infos = self.variant.batch_sequences_for_inference(inputs)
         else:
             g, infos = inputs
 
