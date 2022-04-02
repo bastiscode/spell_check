@@ -14,6 +14,7 @@ benchmark_dir=$(realpath $script_dir/../$split)
 base_dir=$(realpath $script_dir/../../..)
 cd "$base_dir" || exit 1
 gnn_lib_dir=$(realpath $base_dir/gnn_lib)
+bin_dir=$(realpath $base_dir/bin)
 experiments_dir=$(realpath $base_dir/experiments)
 data_dir=$(realpath $base_dir/data)
 config_dir=$(realpath $base_dir/spelling_correction/configs)
@@ -23,18 +24,19 @@ overwrite=${OVERWRITE:-false}
 
 declare -A experiment_to_benchmark=(
   ["TOKENIZATION_REPAIR"]="tokenization_repair"
-  ["TOKENIZATION_REPAIR_GROUPS"]="tokenization_repair"
   ["SED_WORDS"]="sed_words"
   ["SED_SEQUENCE"]="sed_sequence"
   ["SEC_NMT"]="sec"
-  ["SEC_WORDS"]="sec"
   ["SEC_WORDS_NMT"]="sec"
 )
 
-#declare -A inference_kwargs=(
-#  ["threshold"]="0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9"
-#  ["inference_mode"]="greedy beam sample best_first"
-#)
+declare -A experiment_to_exec=(
+  ["TOKENIZATION_REPAIR"]="trt"
+  ["SED_WORDS"]="gsed"
+  ["SED_SEQUENCE"]="gsed"
+  ["SEC_NMT"]="gsec"
+  ["SEC_WORDS_NMT"]="gsec"
+)
 
 exp_regex=${EXP_REGEX:-"*"}
 benchmark_regex=${BENCHMARK_REGEX:-"*"}
@@ -46,7 +48,7 @@ do
   experiment_name=${experiment_rel//\//_}
 
   if [[ $experiment != $exp_regex ]]; then
-    echo "experiment not matching regex $exp_regex, skipping"
+    echo "experiment $experiment_name not matching regex $exp_regex, skipping"
     continue
   fi
 
@@ -55,9 +57,18 @@ do
     continue
   fi
 
+  echo "Enter model name for experiment $experiment_name (or type 'skip' to skip):"
+
+  read model_name
+  if [[ "$model_name" == "skip" ]]; then
+    echo "Skipping experiment $experiment_name"
+    continue
+  fi
+
+  bin_name=${experiment_to_exec[$experiment_type]}
+
   for benchmark in ${experiment_to_benchmark[$experiment_type]}
   do
-    runtime_file=$benchmark_dir/${benchmark}_runtimes.tsv
     in_files=`ls $benchmark_dir/$benchmark/*/*/corrupt.txt`
     for in_file in $in_files
     do
@@ -76,14 +87,7 @@ do
       fi
 
       echo "Running experiment $experiment_name ($experiment_type) on $out_dir_rel of $benchmark benchmark"
-      python $gnn_lib_dir/test.py \
-        $experiment \
-        --data-dir $data_dir \
-        --config-dir $config_dir \
-        --in-file $in_file \
-        --out-path $out_dir \
-        --batch-size ${BATCH_SIZE:-16} \
-        --runtime-file $runtime_file
+      ${bin_dir}/${bin_name} -e $experiment -f $in_file -o $out_dir/${model_name}.txt -b 128
     done
   done
 done

@@ -592,7 +592,7 @@ def is_valid_sequence(sequence: str, min_length: int = 0, max_length: int = -1, 
     return True
 
 
-def get_words_windows(sample: Sample, max_length: int, context_length: int) -> List[Tuple[int, int, int, int]]:
+def get_word_windows(sample: Sample, max_length: int, context_length: int) -> List[Tuple[int, int, int, int]]:
     sequence = str(sample)
     words = sequence.split()
     word_lengths = [len(w) for w in words]
@@ -627,5 +627,45 @@ def get_words_windows(sample: Sample, max_length: int, context_length: int) -> L
         ))
 
         word_window_start = word_window_end
+
+    return windows
+
+
+def get_character_windows(sample: Sample, max_length: int, context_length: int) -> List[Tuple[int, int, int, int]]:
+    sequence = str(sample)
+    window_length = max_length - 2 * context_length
+    windows = []
+    for window_start in range(0, len(sequence), window_length):
+        windows.append((
+            max(0, window_start - context_length),  # ctx start
+            min(len(sequence), window_start + window_length + context_length),  # ctx end
+            window_start,  # window start
+            min(len(sequence), window_start + window_length)  # window end
+        ))
+    return windows
+
+
+def get_byte_windows(sample: Sample, max_length: int, context_length: int) -> List[Tuple[int, int, int, int]]:
+    sequence = str(sample)
+    window_length = max_length - 2 * context_length
+    byte_lengths = [len(char.encode("utf8")) for char in sequence]
+    windows = []
+    byte_window_start = 0
+    while byte_window_start < len(byte_lengths):
+        byte_window_end = byte_window_start + (np.cumsum(byte_lengths[byte_window_start:]) <= window_length).sum()
+        assert byte_window_end > byte_window_start
+        byte_context_start = byte_window_start - (
+            np.cumsum(byte_lengths[:byte_window_start][::-1]) <= context_length
+        )
+        byte_context_end = byte_window_end + (np.cumsum(byte_lengths[byte_window_end:]) <= context_length).sum()
+
+        windows.append((
+            byte_context_start,  # ctx start
+            byte_context_end,  # ctx end
+            byte_window_start,  # window start
+            byte_window_end  # window end
+        ))
+
+        byte_window_start = byte_window_end
 
     return windows

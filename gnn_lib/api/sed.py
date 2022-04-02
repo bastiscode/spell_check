@@ -211,8 +211,8 @@ class SpellingErrorDetector(_APIBase):
         input_is_string = isinstance(inputs, str)
         assert (
                 input_is_string
-                or (isinstance(inputs, list) and len(inputs) > 0 and isinstance(inputs[0], str))
-        ), f"input needs to be a string or a non empty list of strings"
+                or all(isinstance(ipt, str) for ipt in inputs)
+        ), f"input needs to be a string or a list of strings"
 
         outputs = self._detect_text_raw(
             [inputs] if input_is_string else inputs,

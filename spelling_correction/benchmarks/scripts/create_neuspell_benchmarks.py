@@ -1,17 +1,26 @@
+import argparse
 import os
 
 import numpy as np
 from tqdm import tqdm
 
 from gnn_lib.utils import io
-from spelling_correction import DATA_DIR, BENCHMARK_DIR
 from spelling_correction.utils import neuspell
 
 
-if __name__ == "__main__":
-    NEUSPELL_SRC_DIR = os.path.join(DATA_DIR, "raw", "neuspell", "traintest")
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--neuspell-dir", type=str, required=True)
+    parser.add_argument("--benchmark-dir", type=str, required=True)
+    parser.add_argument("--benchmarks", type=str, nargs="+", required=True)
+    parser.add_argument("--seed", type=int, default=22)
+    return parser.parse_args()
 
-    rand = np.random.default_rng(22)
+
+if __name__ == "__main__":
+    args = parse_args()
+
+    rand = np.random.default_rng(args.seed)
 
     benchmarks = {
         "bea4k.noise": ("bea4k", "bea4k"),
@@ -26,12 +35,15 @@ if __name__ == "__main__":
 
     for output_type in ["sed_sequence", "sed_words", "sec"]:
         for noise, b in tqdm(benchmarks.items(), desc=f"Creating {output_type} benchmarks"):
-            benchmark_dir = os.path.join(BENCHMARK_DIR, output_type, "neuspell", b[1])
+            if b[1] not in args.benchmarks:
+                continue
+
+            benchmark_dir = os.path.join(args.benchmark_dir, output_type, "neuspell", b[1])
 
             os.makedirs(benchmark_dir, exist_ok=True)
 
-            correct_src = os.path.join(NEUSPELL_SRC_DIR, f"test.{b[0]}")
-            corrupt_src = os.path.join(NEUSPELL_SRC_DIR, f"test.{noise}")
+            correct_src = os.path.join(args.neuspell_dir, f"test.{b[0]}")
+            corrupt_src = os.path.join(args.neuspell_dir, f"test.{noise}")
 
             correct_b = os.path.join(benchmark_dir, "correct.txt")
             corrupt_b = os.path.join(benchmark_dir, "corrupt.txt")
@@ -43,14 +55,17 @@ if __name__ == "__main__":
                     open(correct_b, "w", encoding="utf8") as correct_of, \
                     open(corrupt_src, "r", encoding="utf8") as corrupt_inf, \
                     open(corrupt_b, "w", encoding="utf8") as corrupt_of:
-                for correct_line, corrupt_line in tqdm(zip(correct_inf, corrupt_inf),
-                                                       leave=False,
-                                                       total=io.line_count(correct_src),
-                                                       desc=f"Creating {output_type} {b[1]} benchmark"):
+                for correct_line, corrupt_line in tqdm(
+                        zip(correct_inf, corrupt_inf),
+                        leave=False,
+                        total=io.line_count(correct_src),
+                        desc=f"Creating {output_type} {b[1]} benchmark"
+                ):
                     correct_line = correct_line.strip()
                     corrupt_line = corrupt_line.strip()
-                    if corrupt_line == "" or corrupt_line == "" or len(corrupt_line) > 512 or len(correct_line) > 512:
+                    if corrupt_line == "" or correct_line == "":
                         continue
+
                     correct_line, corrupt_line = neuspell.clean_sequences(correct_line, corrupt_line)
 
                     if output_type == "sed_sequence":

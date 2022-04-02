@@ -3,12 +3,9 @@ import json
 import os
 
 import numpy as np
-import omegaconf
 from tqdm import tqdm
 
 from gnn_lib.data import preprocessing
-
-from spelling_correction import MISSPELLINGS_DIR
 
 
 def parse_args() -> argparse.Namespace:
@@ -19,6 +16,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-sequences", type=int, required=True)
     parser.add_argument("--out-dir", type=str, required=True)
     parser.add_argument("--benchmark-name", type=str, required=True)
+    parser.add_argument("--misspellings-dir", type=str, required=True)
     parser.add_argument("--misspelling-type", choices=["artificial", "realistic"], required=True)
     parser.add_argument("--misspelling-split", choices=["train", "dev", "test"], required=True)
     parser.add_argument("--output-type", choices=["sed_sequence", "sed_words", "sec"], required=True)
@@ -72,26 +70,31 @@ def create(args: argparse.Namespace) -> None:
     corrupt_out_file = open(corrupt_out_path, "w", encoding="utf8")
 
     if args.misspelling_type == "artificial":
-        noise_config = omegaconf.DictConfig({
-            "type": "ARTIFICIAL",
-            "edit_token_p": 0.2,
-            "num_edits_p": 0.8
-        })
+        noise = preprocessing.ArtificialNoise(
+            preprocessing.ArtificialNoiseConfig(
+                edit_token_p=0.2,
+                num_edits_p=0.8
+            ),
+            args.seed
+        )
     else:
-        noise_config = omegaconf.DictConfig({
-            "type": "REALISTIC",
-            "edit_token_p": 0.2,
-            "word_misspellings_file": os.path.join(MISSPELLINGS_DIR, f"{args.misspelling_split}_misspellings.json")
-        })
-
-    spelling_noise = noise.get_preprocessing_from_config(noise_config, args.seed)
-    print(f"Using noise config: {noise_config}")
+        noise = preprocessing.RealisticNoise(
+            preprocessing.RealisticNoiseConfig(
+                edit_token_p=0.2,
+                word_misspellings_file=os.path.join(
+                    args.misspellings_dir, f"{args.misspelling_split}_misspellings.json"
+                )
+            ),
+            args.seed
+        )
 
     for idx in tqdm(indices[:args.max_sequences],
                     desc=f"Creating benchmark {args.benchmark_name} ({args.output_type}, {args.misspelling_type}, "
                          f"{args.misspelling_split})"):
         sequence = all_sequences[idx]
-        sequence, corrupted = spelling_noise.apply(sequence)
+        corrupted, sequence, _ = noise.apply([sequence], [sequence], [])
+        corrupted = corrupted[0]
+        sequence = sequence[0]
 
         if args.output_type == "sed_sequence":
             # make even 50/50 split here
@@ -100,13 +103,16 @@ def create(args: argparse.Namespace) -> None:
                 corrupted = sequence
             else:
                 correct_out_file.write(str(int(corrupted != sequence)))
+
         elif args.output_type == "sed_words":
             corrupted_words = corrupted.split()
             correct_words = sequence.split()
             assert len(corrupted_words) == len(correct_words)
             correct_out_file.write(" ".join(str(int(c != s)) for c, s in zip(corrupted_words, correct_words)))
+
         elif args.output_type == "sec":
             correct_out_file.write(sequence)
+
         else:
             raise ValueError(f"Unknown output type {args.output_type}")
 

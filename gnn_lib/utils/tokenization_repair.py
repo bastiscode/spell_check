@@ -1,6 +1,6 @@
 import re
 from enum import Enum
-from typing import List
+from typing import List, Tuple
 
 
 class TokenizationRepairTokens(Enum):
@@ -127,69 +127,32 @@ def repair_whitespace(
     return repaired_sequence
 
 
-def repair_whitespace_from_groups(
-        sequence: str,
-        char_repair_tokens: List[int],
-        whitespace_repair_tokens: List[int]
-) -> str:
-    """
-    Repair the white spacing in the given sequence
-    using the given character and whitespace repair tokens.
+def match_string_ignoring_space(
+        search_str: str,
+        left_context: str,
+        window: str,
+        right_context: str
+) -> Tuple[int, int]:
+    left_context_pattern = r"\s*".join(
+        re.escape(char) for char in left_context.replace(" ", "")
+    )
+    right_context_pattern = r"\s*".join(
+        re.escape(char) for char in right_context.replace(" ", "")
+    )
+    window_pattern = r"\s*".join(
+        re.escape(char) for char in window.replace(" ", "")
+    )
+    if window.startswith(" "):
+        window_pattern = r"(\s*" + window_pattern
+    else:
+        window_pattern = r"\s*(" + window_pattern
+    if window.endswith(" "):
+        window_pattern = window_pattern + r"\s*)"
+    else:
+        window_pattern = window_pattern + r")\s*"
 
-    :param sequence: string which has to be repaired
-    :param char_repair_tokens: list with 0's and 1's
-        indicating to keep the char or insert a whitespace
-    :param whitespace_repair_tokens: list with 0's and 1's
-        indicating to keep the or delete a whitespace
-    :return: repaired string
-    """
-    assert len(char_repair_tokens) + len(whitespace_repair_tokens) == len(sequence), \
-        f"the number of whitespace and character repair tokens together must be " \
-        f"equal to the length of the sequence, but got {len(char_repair_tokens)} + {len(whitespace_repair_tokens)}" \
-        f" = {len(sequence)} for sequence '{sequence}'"
-
-    allowed_tokens = {0, 1}
-    assert (
-            all([token in allowed_tokens for token in char_repair_tokens])
-            and all([token in allowed_tokens for token in whitespace_repair_tokens])
-    ), f"Only 0's and 1's are allowed as repair tokens, " \
-       f"but got {char_repair_tokens} and {whitespace_repair_tokens} for sequence \"{sequence}\""
-
-    sequence_ptr = 0
-    char_token_ptr = 0
-    whitespace_token_ptr = 0
-
-    repaired_sequence = ""
-    while sequence_ptr < len(sequence):
-        char = sequence[sequence_ptr]
-        prev_char = sequence[sequence_ptr - 1] if sequence_ptr > 0 else " "
-
-        if char == " ":
-            token = whitespace_repair_tokens[whitespace_token_ptr]
-            whitespace_token_ptr += 1
-        else:
-            token = char_repair_tokens[char_token_ptr]
-            char_token_ptr += 1
-
-        if token == 1 and char != " " and prev_char != " ":
-            # if we should insert a whitespace and the current
-            # and previous character are not whitespaces,
-            # add a whitespace in front of the character
-            repaired_sequence += " " + char
-
-        elif token == 1 and char == " ":
-            # if we should delete a whitespace and
-            # we are at a whitespace, just skip
-            pass
-
-        else:
-            # keep current character in all other cases
-            repaired_sequence += char
-
-        sequence_ptr += 1
-
-    assert (sequence_ptr == len(sequence)
-            and char_token_ptr == len(char_repair_tokens)
-            and whitespace_token_ptr == len(whitespace_repair_tokens))
-
-    return repaired_sequence
+    pattern = re.compile(left_context_pattern + window_pattern + right_context_pattern)
+    match = pattern.search(search_str)
+    assert match is not None, f"could no match the following two strings:" \
+                              f"\n{left_context + window + right_context}\n{search_str}"
+    return match.start(1), match.end(1)

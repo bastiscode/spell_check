@@ -53,7 +53,8 @@ do
             --out-dir $benchmark_dir/$benchmark/results/$out_dir \
             --baseline $baseline \
             --sec-baseline=$sec_baseline \
-            --batch-size ${BATCH_SIZE:-32}
+            --batch-size ${BATCH_SIZE:-16} \
+            --sort-by-length
         done
       else
         if [[ $baseline != $baseline_regex ]]; then
@@ -66,7 +67,8 @@ do
           --out-dir $benchmark_dir/$benchmark/results/$out_dir \
           --baseline $baseline \
           --sec-baseline=$sec_baseline \
-          --batch-size ${BATCH_SIZE:-32}
+          --batch-size ${BATCH_SIZE:-16} \
+          --sort-by-length
       fi
     done
   done

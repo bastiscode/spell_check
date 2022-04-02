@@ -1,5 +1,3 @@
-import collections
-import dataclasses
 import math
 import queue
 from typing import Callable, Tuple, Dict, List, Any, Union, Optional
@@ -52,11 +50,11 @@ def greedy_select_fn() -> BeamSelectFn:
 
 
 def sample_select_fn(sample_top_k: int) -> BeamSelectFn:
-    def _greedy(beams: List[Tuple[Beam, float]]) -> Beam:
-        sample_idx = torch.randint(min(len(beams), sample_top_k)).item()
+    def _sample(beams: List[Tuple[Beam, float]]) -> Beam:
+        sample_idx = torch.randint(min(len(beams), sample_top_k), (1,)).item()
         return beams[sample_idx][0]
 
-    return _greedy
+    return _sample
 
 
 DeTokFn = Callable[[List[int]], str]
@@ -72,7 +70,7 @@ ScoreFn = Callable[
 
 
 def log_likelihood_score(normalize_by_length: bool = True, alpha: float = 1.0) -> Callable[[Beam], float]:
-    def score(beam: Beam) -> float:
+    def score(beam: Beam, input_str: Optional[str] = None) -> float:
         s = sum(beam.log_prob)
         if normalize_by_length:
             return s / (len(beam.log_prob) ** alpha)
@@ -97,8 +95,8 @@ def spelling_correction_score(
 ) -> ScoreFn:
     log_likelihood_score_fn = log_likelihood_score(normalize_by_length, alpha)
 
-    def score(beam: Beam,
-              input_str: Optional[str] = None) -> float:
+    def _score(beam: Beam,
+               input_str: Optional[str] = None) -> float:
         s = log_likelihood_score_fn(beam)
         if mode == "log_likelihood":
             return s
@@ -107,8 +105,8 @@ def spelling_correction_score(
                 prefix_index is not None
                 and input_str is not None
                 and de_tok_fn is not None
-        ), f"for all modes other than log_likelihood you need to pass a prefix index, the original input string and " \
-           f"a de-tokenization function"
+        ), "for all modes other than log_likelihood you need to pass a prefix index, the original input string and " \
+           "a de-tokenization function"
 
         pred_str = de_tok_fn(beam.token_ids)
         pred_str_split = pred_str.split()
@@ -156,7 +154,7 @@ def spelling_correction_score(
 
         return s
 
-    return score
+    return _score
 
 
 def _sub_select(inputs: Union[torch.Tensor, Dict[str, torch.Tensor]], mask: Union[int, torch.Tensor]) -> \
@@ -299,7 +297,7 @@ def best_first_inference(
 
     batch_size = len(next(iter(encoder_outputs.values())))
 
-    positions = decoder_positions or torch.zeros(batch_size, dtype=torch.long)
+    positions = decoder_positions if decoder_positions is not None else torch.zeros(batch_size, dtype=torch.long)
 
     for b in range(batch_size):
         # encoder_outputs_b: shape [L, H]
@@ -363,7 +361,7 @@ def best_first_inference(
 
             log_softmax_scores = torch.log_softmax(decoder_output, dim=1)[0].tolist()
 
-            min_log_prob = math.log(1 / len(log_softmax_scores))
+            min_log_prob = -1_000_000  # math.log(1 / len(log_softmax_scores))
             for i, score in enumerate(log_softmax_scores):
                 if score < min_log_prob:
                     continue
@@ -408,7 +406,7 @@ def beam_inference(
 
     batch_size = len(next(iter(encoder_outputs.values())))
 
-    positions = decoder_positions or torch.zeros(batch_size, dtype=torch.long)
+    positions = decoder_positions if decoder_positions is not None else torch.zeros(batch_size, dtype=torch.long)
 
     for b in range(batch_size):
         # encoder_outputs_b: shape [L, H]
@@ -458,7 +456,7 @@ def beam_inference(
 
             log_softmax_scores = torch.log_softmax(decoder_output, dim=1)
 
-            min_log_prob = math.log(1 / log_softmax_scores.shape[1])
+            min_log_prob = -1_000_000  # math.log(1 / log_softmax_scores.shape[1])
             valid_indices = torch.nonzero(log_softmax_scores >= min_log_prob, as_tuple=True)
             valid_log_prob = log_softmax_scores[valid_indices].tolist()
             valid_indices = torch.stack(valid_indices, dim=-1).tolist()
@@ -555,6 +553,7 @@ def run_inference(
             eos_token_id=eos_token_id,
             max_length=max_length,
             select_fn=greedy_select_fn(),
+            score_fn=score_fn,
             input_strings=input_strings,
             **kwargs
         )
@@ -568,11 +567,11 @@ def run_inference(
             eos_token_id=eos_token_id,
             max_length=max_length,
             select_fn=sample_select_fn(sample_top_k),
+            score_fn=score_fn,
             input_strings=input_strings,
             **kwargs
         )
     elif search_mode == "beam":
-        score_fn = kwargs.pop("score_fn", log_likelihood_score())
         beam_width = kwargs.pop("beam_width", 5)
         outputs = beam_inference(
             model=model,

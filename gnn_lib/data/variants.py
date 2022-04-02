@@ -1,5 +1,6 @@
 import enum
 import hashlib
+import pprint
 from dataclasses import dataclass
 from typing import Tuple, List, Union, Optional, Dict, Any
 
@@ -87,8 +88,9 @@ class DatasetVariant:
             self,
             sample: utils.Sample,
             max_length: int,
-            context_length: int
-    ) -> Tuple[List[utils.Sample], List[utils.InferenceInfo]]:
+            context_length: int,
+            **kwargs: Any
+    ) -> List[Tuple[int, int, int, int]]:
         raise NotImplementedError
 
     def prepare_sequences_for_inference(
@@ -116,9 +118,18 @@ class DatasetVariant:
                     length=length
                 ))
             else:
-                samples, infos = self._split_sample_for_inference(sample, max_length, context_length)
-                all_samples.extend(samples)
-                all_infos.extend(infos)
+                windows = self._split_sample_for_inference(sample, max_length, context_length, **kwargs)
+                for i, (ctx_start, ctx_end, window_start, window_end) in enumerate(windows):
+                    sample, _ = self._get_sample(sequence[ctx_start:ctx_end], is_inference=True)
+                    all_samples.append(sample)
+                    all_infos.append(utils.InferenceInfo(
+                        ctx_start=ctx_start,
+                        ctx_end=ctx_end,
+                        window_start=window_start,
+                        window_end=window_end,
+                        window_idx=i,
+                        length=sum(len(t) for t in sample.tokens)
+                    ))
         return all_samples, all_infos
 
     def batch_sequences_for_inference(
@@ -128,6 +139,15 @@ class DatasetVariant:
         items = [self.get_inputs(s, is_inference=True) for s in sequences]
         return utils.collate(items)
 
+    def _merge_inference_outputs(
+            self,
+            sequence: str,
+            infos: List[utils.InferenceInfo],
+            predictions: List[Any],
+            **kwargs: Any
+    ) -> Any:
+        raise NotImplementedError
+
     def postprocess_inference_outputs(
             self,
             sequences: List[str],
@@ -135,7 +155,30 @@ class DatasetVariant:
             predictions: List[Any],
             **kwargs: Any
     ) -> List[Any]:
-        raise NotImplementedError
+        grouped_predictions: List[List[int]] = []
+        grouped_infos: List[List[utils.InferenceInfo]] = []
+        prev_info = None
+        for info, prediction in zip(infos, predictions):
+            if info.window_idx == 0:
+                grouped_predictions.append([prediction])
+                grouped_infos.append([info])
+            elif info.window_idx == prev_info.window_idx + 1:
+                grouped_predictions[-1].append(prediction)
+                grouped_infos[-1].append(info)
+            else:
+                raise RuntimeError("should not happen")
+
+            prev_info = info
+
+        assert len(sequences) == len(grouped_predictions) == len(grouped_infos)
+
+        merged_predictions = []
+        for sequence, predictions, infos in zip(sequences, grouped_predictions, grouped_infos):
+            if len(predictions) == 1:
+                merged_predictions.append(predictions[0])
+            else:
+                merged_predictions.append(self._merge_inference_outputs(sequence, infos, predictions))
+        return merged_predictions
 
 
 @dataclass
@@ -329,51 +372,21 @@ class SEDSequence(DatasetVariant):
             self,
             sample: utils.Sample,
             max_length: int,
-            context_length: int
-    ) -> Tuple[List[utils.Sample], List[utils.InferenceInfo]]:
-        sequence = str(sample)
-        samples = []
-        infos = []
-        windows = utils.get_words_windows(sample, max_length, context_length)
-        for i, (ctx_start, ctx_end, window_start, window_end) in enumerate(windows):
-            sample, _ = self._get_sample(sequence[ctx_start:ctx_end], is_inference=True)
-            samples.append(sample)
-            infos.append(utils.InferenceInfo(
-                ctx_start=ctx_start,
-                ctx_end=ctx_end,
-                window_start=window_start,
-                window_end=window_end,
-                window_idx=i,
-                length=sum(len(tokens) for tokens in sample.tokens)
-            ))
-        return samples, infos
+            context_length: int,
+            **kwargs: Any
+    ) -> List[Tuple[int, int, int, int]]:
+        return utils.get_word_windows(sample, max_length, context_length)
 
-    def postprocess_inference_outputs(
+    def _merge_inference_outputs(
             self,
-            sequences: List[str],
+            sequence: str,
             infos: List[utils.InferenceInfo],
             predictions: List[int],
             **kwargs: Any
-    ) -> List[int]:
-        grouped_predictions: List[List[int]] = []
-        prev_info = None
-        for info, prediction in zip(infos, predictions):
-            if info.window_idx == 0:
-                grouped_predictions.append([prediction])
-            elif info.window_idx == prev_info.window_idx + 1:
-                grouped_predictions[-1].append(prediction)
-            else:
-                raise RuntimeError("should not happen")
-
-            prev_info = info
-
-        assert len(sequences) == len(grouped_predictions)
-
-        merged_predictions = []
-        for predictions in grouped_predictions:
-            assert all(p in {0, 1} for p in predictions)
-            merged_predictions.append(int(any(p for p in predictions)))
-        return merged_predictions
+    ) -> int:
+        assert all(p in {0, 1} for p in predictions)
+        # for sed sequence, if for any part of the sequence an error was detected, the overall sequence has an error
+        return int(any(p for p in predictions))
 
 
 @dataclass
@@ -559,64 +572,27 @@ class SEDWords(DatasetVariant):
             self,
             sample: utils.Sample,
             max_length: int,
-            context_length: int
-    ) -> Tuple[List[utils.Sample], List[utils.InferenceInfo]]:
-        sequence = str(sample)
-        samples = []
-        infos = []
-        windows = utils.get_words_windows(sample, max_length, context_length)
-        for i, (ctx_start, ctx_end, window_start, window_end) in enumerate(windows):
-            sample, _ = self._get_sample(sequence[ctx_start:ctx_end], is_inference=True)
-            samples.append(sample)
-            infos.append(utils.InferenceInfo(
-                ctx_start=ctx_start,
-                ctx_end=ctx_end,
-                window_start=window_start,
-                window_end=window_end,
-                window_idx=i,
-                length=sum(len(tokens) for tokens in sample.tokens)
-            ))
-        return samples, infos
+            context_length: int,
+            **kwargs: Any
+    ) -> List[Tuple[int, int, int, int]]:
+        return utils.get_word_windows(sample, max_length, context_length)
 
-    def postprocess_inference_outputs(
+    def _merge_inference_outputs(
             self,
-            sequences: List[str],
+            sequence: str,
             infos: List[utils.InferenceInfo],
             predictions: List[List[int]],
             **kwargs: Any
-    ) -> List[List[int]]:
-        grouped_predictions: List[List[List[int]]] = []
-        grouped_infos: List[List[utils.InferenceInfo]] = []
-        prev_info = None
+    ) -> List[int]:
+        assert all(p in {0, 1} for prediction in predictions for p in prediction)
+        merged_prediction = []
         for info, prediction in zip(infos, predictions):
-            if info.window_idx == 0:
-                grouped_predictions.append([prediction])
-                grouped_infos.append([info])
-            elif info.window_idx == prev_info.window_idx + 1:
-                grouped_predictions[-1].append(prediction)
-                grouped_infos[-1].append(info)
-            else:
-                raise RuntimeError("should not happen")
-
-            prev_info = info
-
-        assert len(sequences) == len(grouped_predictions)
-
-        merged_predictions = []
-        for sequence, infos, predictions in zip(sequences, grouped_infos, grouped_predictions):
-            assert all(p in {0, 1} for prediction in predictions for p in prediction)
-            if len(predictions) == 1:
-                merged_predictions.append(predictions[0])
-                continue
-            merged_prediction = []
-            for info, prediction in zip(infos, predictions):
-                assert len(sequence[info.ctx_start:info.ctx_end].split()) == len(prediction)
-                num_left_context_words = len(sequence[info.ctx_start:info.window_start].split())
-                num_window_words = len(sequence[info.window_start:info.window_end].split())
-                merged_prediction.extend(prediction[num_left_context_words:num_left_context_words + num_window_words])
-            assert len(merged_prediction) == len(sequence.split())
-            merged_predictions.append(merged_prediction)
-        return merged_predictions
+            assert len(sequence[info.ctx_start:info.ctx_end].split()) == len(prediction)
+            num_left_context_words = len(sequence[info.ctx_start:info.window_start].split())
+            num_window_words = len(sequence[info.window_start:info.window_end].split())
+            merged_prediction.extend(prediction[num_left_context_words:num_left_context_words + num_window_words])
+        assert len(merged_prediction) == len(sequence.split())
+        return merged_prediction
 
 
 @dataclass
@@ -682,6 +658,43 @@ class TokenizationRepair(DatasetVariant):
 
         return self._construct_input(input_sample), info
 
+    def _split_sample_for_inference(
+            self,
+            sample: utils.Sample,
+            max_length: int,
+            context_length: int,
+            **kwargs: Any
+    ) -> List[Tuple[int, int, int, int]]:
+        self.cfg: TokenizationRepairConfig
+        if self.cfg.tokenization_level == "char":
+            return utils.get_character_windows(sample, max_length, context_length)
+        elif self.cfg.tokenization_level == "byte":
+            return utils.get_byte_windows(sample, max_length, context_length)
+        else:
+            raise RuntimeError("should not happen")
+
+    def _merge_inference_outputs(
+            self,
+            sequence: str,
+            infos: List[utils.InferenceInfo],
+            predictions: List[str],
+            **kwargs: Any
+    ) -> str:
+        merged_prediction = ""
+        for prediction, info in zip(predictions, infos):
+            left_context = sequence[info.ctx_start:info.window_start]
+            window = sequence[info.window_start:info.window_end]
+            right_context = sequence[info.window_end:info.ctx_end]
+            match_start, match_end = tokenization_repair.match_string_ignoring_space(
+                prediction,
+                left_context,
+                window,
+                right_context
+            )
+            merged_prediction += prediction[match_start:match_end]
+        assert merged_prediction.replace(" ", "") == sequence.replace(" ", "")
+        return merged_prediction
+
 
 @dataclass
 class SECWordsNMTConfig(DatasetVariantConfig):
@@ -708,7 +721,7 @@ class SECWordsNMT(DatasetVariant):
     def __init__(self,
                  cfg: DatasetVariantConfig,
                  seed: int):
-        cfg: SECNMTConfig
+        cfg: SECWordsNMTConfig
         self.input_tokenizer = get_tokenizer_from_config(cfg.input_tokenizer)
         self.output_tokenizer = get_tokenizer_from_config(cfg.output_tokenizer)
 
@@ -737,7 +750,7 @@ class SECWordsNMT(DatasetVariant):
             self,
             sample: utils.Sample
     ) -> Union[torch.Tensor, dgl.DGLHeteroGraph]:
-        self.cfg: SECNMTConfig
+        self.cfg: SECWordsNMTConfig
         if self.cfg.data_scheme == "token_graph":
             return graph.sequence_to_token_graph(
                 sample=sample
@@ -803,6 +816,35 @@ class SECWordsNMT(DatasetVariant):
         info["encoder_group_lengths"] = torch.tensor(encoder_group_lengths, dtype=torch.long)
 
         return self._construct_input(input_sample), info
+
+    def _split_sample_for_inference(
+            self,
+            sample: utils.Sample,
+            max_length: int,
+            context_length: int,
+            **kwargs: Any
+    ) -> List[Tuple[int, int, int, int]]:
+        return utils.get_word_windows(sample, max_length, context_length)
+
+    def _merge_inference_outputs(
+            self,
+            sequence: str,
+            infos: List[utils.InferenceInfo],
+            predictions: List[List[str]],
+            **kwargs: Any
+    ) -> List[str]:
+        min_num_predictions = min(len(prediction) for prediction in predictions)
+        merged_predictions = [[] for _ in range(min_num_predictions)]
+        for info, prediction in zip(infos, predictions):
+            num_left_context_words = len(sequence[info.ctx_start:info.window_start].split())
+            num_window_words = len(sequence[info.window_start:info.window_end].split())
+            for i in range(min_num_predictions):
+                predicted_words = prediction[i].split()
+                merged_predictions[i].extend(
+                    predicted_words[num_left_context_words:num_left_context_words + num_window_words]
+                )
+        merged_predictions = [" ".join(predicted_words) for predicted_words in merged_predictions]
+        return merged_predictions
 
 
 @dataclass
@@ -909,6 +951,31 @@ class SECNMT(DatasetVariant):
             info["label"] = label
 
         return self._construct_input(input_sample), info
+
+    def _split_sample_for_inference(
+            self,
+            sample: utils.Sample,
+            max_length: int,
+            context_length: int,
+            **kwargs: Any
+    ) -> List[Tuple[int, int, int, int]]:
+        return utils.get_word_windows(sample, max_length, 0)
+
+    def _merge_inference_outputs(
+            self,
+            sequence: str,
+            infos: List[utils.InferenceInfo],
+            predictions: List[List[str]],
+            **kwargs: Any
+    ) -> Any:
+        print(pprint.pformat(predictions))
+        min_num_predictions = min(len(prediction) for prediction in predictions)
+        merged_predictions = [[] for _ in range(min_num_predictions)]
+        for prediction in predictions:
+            for i in range(min_num_predictions):
+                merged_predictions[i].append(prediction[i])
+        merged_predictions = [" ".join(s.strip() for s in predictions) for predictions in merged_predictions]
+        return merged_predictions
 
 
 @dataclass
@@ -1027,40 +1094,26 @@ class TokenizationRepairPlus(TokenizationRepair):
             self,
             sample: utils.Sample,
             max_length: int,
-            context_length: int
-    ) -> Tuple[List[utils.Sample], List[utils.InferenceInfo]]:
-        return [sample], [utils.InferenceInfo(
-                ctx_start=0,
-                ctx_end=len(str(sample)),
-                window_start=0,
-                window_end=len(str(sample)),
-                window_idx=0,
-                length=sum(len(tokens) for tokens in sample.tokens)
-            )]
-        # sequence = str(sample)
-        # samples = []
-        # infos = []
-        # windows = utils.get_words_windows(sample, max_length, context_length)
-        # for i, (ctx_start, ctx_end, window_start, window_end) in enumerate(windows):
-        #     sample, _ = self._get_sample(sequence[ctx_start:ctx_end], is_inference=True)
-        #     samples.append(sample)
-        #     infos.append(utils.InferenceInfo(
-        #         ctx_start=ctx_start,
-        #         ctx_end=ctx_end,
-        #         window_start=window_start,
-        #         window_end=window_end,
-        #         window_idx=i,
-        #         length=sum(len(tokens) for tokens in sample.tokens)
-        #     ))
-        # return samples, infos
+            context_length: int,
+            no_repair: bool = False,
+            **kwargs: Any
+    ) -> List[Tuple[int, int, int, int]]:
+        if no_repair:
+            return utils.get_word_windows(sample, max_length, context_length)
+        else:
+            return super()._split_sample_for_inference(sample, max_length, context_length, **kwargs)
 
     def postprocess_inference_outputs(
             self,
             sequences: List[str],
             infos: List[utils.InferenceInfo],
             predictions: List[Any],
+            output_type: str = "all",
+            no_repair: bool = False,
             **kwargs: Any
     ) -> List[Any]:
+        if no_repair:
+            pass
         return predictions
 
 

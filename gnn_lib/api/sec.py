@@ -1,6 +1,6 @@
-import dataclasses
 import os
 import pprint
+from dataclasses import dataclass
 from typing import List, Optional, Union, Any, Dict
 
 import torch
@@ -13,14 +13,15 @@ from gnn_lib.api.utils import (
     StringInputOutput,
     download_data,
     load_experiment,
-    get_string_dataset_and_loader,
     reorder_data,
     load_text_file,
-    get_device_info
+    get_device_info,
+    get_inference_dataset_and_loader
 )
 from gnn_lib.data import index
+from gnn_lib.data.utils import clean_sequence
 from gnn_lib.modules import inference
-from gnn_lib.tasks import graph_sec_nmt, graph_sec_words_nmt, sec_nmt, sec_words_nmt
+from gnn_lib.tasks import graph_sec_nmt, graph_sec_words_nmt, sec_nmt, sec_words_nmt, tokenization_repair_plus
 from gnn_lib.utils import common
 
 __all__ = ["get_available_spelling_error_correction_models", "SpellingErrorCorrector"]
@@ -45,28 +46,32 @@ def get_available_spelling_error_correction_models() -> List[ModelInfo]:
     ]
 
 
-@dataclasses.dataclass
+@dataclass
 class Search:
     pass
 
 
+@dataclass
 class GreedySearch(Search):
     pass
 
 
+@dataclass
 class SampleSearch(Search):
     top_k: int = 5
 
 
+@dataclass
 class BestFirstSearch(Search):
     pass
 
 
+@dataclass
 class BeamSearch(Search):
     beam_width: int = 5
 
 
-@dataclasses.dataclass
+@dataclass
 class SpellingCorrectionScore:
     normalize_by_length: bool = True
     alpha: float = 1.0
@@ -194,11 +199,25 @@ class SpellingErrorCorrector(_APIBase):
             sort_by_length: bool = True,
             show_progress: bool = False
     ) -> List[str]:
-        dataset, loader = get_string_dataset_and_loader(
+        if isinstance(inputs, str):
+            inputs = load_text_file(inputs)
+
+        inputs = [clean_sequence(ipt) for ipt in inputs]
+
+        dataset, loader = get_inference_dataset_and_loader(
             inputs,
-            sort_by_length,
-            batch_size
+            variant=self.task.variant,
+            max_length=self.max_length,
+            sort_by_length=sort_by_length,
+            batch_size=batch_size
         )
+
+        if detections is not None:
+            assert (
+                    len(detections) == len(inputs)
+                    and all(len(det) == len(ipt.split()) for det, ipt in zip(detections, inputs))
+            )
+            raise NotImplementedError
 
         pbar = tqdm(
             loader,
@@ -210,19 +229,19 @@ class SpellingErrorCorrector(_APIBase):
         )
 
         inference_kwargs = inference_kwargs_from_search_and_score(search, score)
+        if isinstance(self.task, tokenization_repair_plus.TokenizationRepairPlus):
+            inference_kwargs["output_type"] = "sec"
+            inference_kwargs["no_repair"] = True
 
         all_outputs = []
-        for i, (batch, info) in enumerate(pbar):
+        for i, (batch, infos, indices) in enumerate(pbar):
             if detections is not None:
-                batch_detections = [detections[idx] for idx in info["indices"]]
-                assert all(len(det) == len(seq.split()) for det, seq in zip(batch_detections, batch)), \
-                    f"expected to have a detection flag of 0 or 1 for every word in the batch " \
-                    f"but got {pprint.pformat(batch_detections)} as detections and {pprint.pformat(batch)} as batch"
+                batch_detections = [detections[idx] for idx in indices]
                 inference_kwargs.update({
                     "detections": batch_detections
                 })
 
-            batch_length = sum(info["lengths"])
+            batch_length = sum(info.ctx_end - info.ctx_start for info in infos)
             pbar.set_description(
                 f"[Batch {i + 1}] Correcting spelling errors of {len(batch):,} sequences "
                 f"with {batch_length:,} characters in total"
@@ -243,8 +262,9 @@ class SpellingErrorCorrector(_APIBase):
             pbar.update(batch_length)
 
         pbar.close()
-        reordered_outputs = reorder_data(all_outputs, dataset.indices)
-        return [inference.inference_output_to_str(output) for output in reordered_outputs]
+        all_outputs = reorder_data(all_outputs, dataset.indices)
+        all_outputs = self.task.variant.postprocess_inference_outputs(inputs, dataset.sample_infos, all_outputs)
+        return [inference.inference_output_to_str(output) for output in all_outputs]
 
     def correct_text(
             self,
@@ -259,8 +279,8 @@ class SpellingErrorCorrector(_APIBase):
         input_is_string = isinstance(inputs, str)
         assert (
                 input_is_string
-                or (isinstance(inputs, list) and len(inputs) > 0 and isinstance(inputs[0], str))
-        ), f"input needs to be a string or a non empty list of strings"
+                or all(isinstance(ipt, list) for ipt in inputs)
+        ), f"input needs to be a string or a list of strings"
 
         outputs = self._correct_text_raw(
             [inputs] if input_is_string else inputs,

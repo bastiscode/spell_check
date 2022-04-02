@@ -1,15 +1,13 @@
-import copy
 from typing import List, Any, Union
 
 import torch
+
 from gnn_lib import models
+from gnn_lib.data import utils
 from gnn_lib.data.utils import Sample
 from gnn_lib.modules import inference
-from gnn_lib.tasks.token2seq import Token2Seq
-from gnn_lib.data import utils
-from gnn_lib.tasks import utils as task_utils
 from gnn_lib.modules import utils as mod_utils
-from gnn_lib.utils import Batch
+from gnn_lib.tasks.token2seq import Token2Seq
 
 
 class SECWordsNMT(Token2Seq):
@@ -24,17 +22,8 @@ class SECWordsNMT(Token2Seq):
         model = model.eval()
         model_cfg: models.ModelForToken2SeqConfig = model.cfg
 
-        org_inputs = copy.deepcopy(inputs)
-
         batch = self.variant.batch_sequences_for_inference(inputs)
-
-        oversized = [len(t) > model_cfg.max_length for t in batch.data]
-        if sum(oversized):
-            # print(f"found {sum(oversized)} sequences that are too long: {[len(t) for t in batch.data]}")
-            data = [t for i, t in enumerate(batch.data) if not oversized[i]]
-            info = {k: [v_ for i, v_ in enumerate(v) if not oversized[i]] for k, v in batch.info.items()}
-            batch = Batch(data, info)
-            inputs = [ipt for i, ipt in enumerate(inputs) if not oversized[i]]
+        inputs = [str(ipt) for ipt in inputs]
 
         encoder_lengths = [len(t) for t in batch.data]
         encoder_inputs, encoder_padding_mask = model.pad_inputs(batch.data)
@@ -43,7 +32,7 @@ class SECWordsNMT(Token2Seq):
 
         encoder_group_lengths: List[torch.Tensor] = batch.info["encoder_group_lengths"]
         if "detections" in kwargs:
-            detections = [detection for i, detection in enumerate(kwargs["detections"]) if not oversized[i]]
+            detections = [detection for i, detection in enumerate(kwargs["detections"])]
         else:
             detections = [[1] * len(group_lengths) for group_lengths in encoder_group_lengths]
 
@@ -115,14 +104,4 @@ class SECWordsNMT(Token2Seq):
                 assert result_idx == num_words
                 batch_result_str.append(" ".join(result_words))
             all_results.append(batch_result_str)
-
-        prediction_idx = 0
-        outputs = []
-        for ipt, is_oversized in zip(org_inputs, oversized):
-            if not is_oversized:
-                outputs.append(all_results[prediction_idx])
-                prediction_idx += 1
-            else:
-                outputs.append([ipt])
-        assert prediction_idx == len(all_results)
-        return outputs
+        return all_results

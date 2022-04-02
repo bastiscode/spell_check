@@ -4,7 +4,7 @@ import torch
 from torch.nn import functional as F
 
 from gnn_lib import models
-from gnn_lib.tasks import utils as task_utils
+from gnn_lib.data.utils import Sample
 from gnn_lib.tasks.token_classification import TokenClassification
 from gnn_lib.utils import tokenization_repair, data_containers
 
@@ -44,14 +44,10 @@ class TokenizationRepair(TokenClassification):
     def inference(
             self,
             model: models.ModelForTokenClassification,
-            inputs: List[str],
+            inputs: List[Union[str, Sample]],
             **kwargs: Any
-    ) -> Union[List[str], List[List[int]]]:
-        assert task_utils.is_string_input(inputs)
-        batch = self.variant.batch_sequences_for_inference(inputs)
-
-        repair_tokens_list = super().inference(model, batch, **kwargs)
-
+    ) -> List[str]:
+        repair_tokens_list = super().inference(model, inputs, **kwargs)
         return [
             tokenization_repair.repair_whitespace(
                 ipt,

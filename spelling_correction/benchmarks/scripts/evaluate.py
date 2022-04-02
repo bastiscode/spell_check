@@ -4,6 +4,7 @@ import os
 from tabulate import tabulate
 
 from gnn_lib.utils import common
+from gnn_lib.api import tables
 from spelling_correction.utils import metrics as M
 
 logger = common.get_logger("EVALUATE_BENCHMARKS")

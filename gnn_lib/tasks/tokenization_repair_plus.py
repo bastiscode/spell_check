@@ -119,16 +119,7 @@ class TokenizationRepairPlus(tasks.Task):
         # the no_repair flag ensures that the input tokenization is not repaired, useful when you are sure that
         # the input has no tokenization errors or when you want to evaluate on sed benchmarks
 
-        oversized = [len(str(ipt)) > model_cfg.max_length for ipt in inputs]
-        if sum(oversized) == len(inputs):
-            return [
-                [0] * len(str(ipt).split()) for ipt in inputs
-            ]
-        org_inputs = [str(ipt) for ipt in inputs]
-        inputs = [ipt for i, ipt in enumerate(inputs) if not oversized[i]]
-
         batch = self.variant.batch_sequences_for_inference(inputs)
-
         inputs = [str(ipt) for ipt in inputs]
 
         x, padding_mask, lengths = model.pad_inputs(batch.data, pad_val=model.input_pad_token_id)
@@ -235,16 +226,7 @@ class TokenizationRepairPlus(tasks.Task):
         if output_type == "tokenization_repair":
             return outputs["tokenization_repair"]["repair_tokens"]
         elif output_type == "sed":
-            sed_outputs = []
-            prediction_idx = 0
-            for ipt, is_oversized in zip(org_inputs, oversized):
-                if is_oversized:
-                    sed_outputs.append([0] * len(ipt.split()))
-                else:
-                    sed_outputs.append(outputs["sed"][prediction_idx])
-                    prediction_idx += 1
-            assert prediction_idx == len(outputs["sed"])
-            return sed_outputs
+            return outputs["sed"]
         elif output_type == "sec":
             return outputs["sec"]
         else:
