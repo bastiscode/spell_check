@@ -100,8 +100,9 @@ class Seq2Seq(tasks.Task):
                   **kwargs: Any) -> List[List[str]]:
         self._check_model(model)
         model = model.eval()
+        model_cfg: models.ModelForSeq2SeqConfig = model.cfg
 
-        batch = self.variant.batch_sequences_for_inference(inputs)
+        batch = self._batch_sequences_for_inference(inputs)
 
         encoder_inputs, encoder_padding_mask = model.pad_inputs(batch.data)
         encoder_outputs = model.encode(encoder_inputs, encoder_padding_mask)
@@ -111,6 +112,6 @@ class Seq2Seq(tasks.Task):
             output_tokenizer=model.output_tokenizer,
             encoder_outputs={"encoder_outputs": encoder_outputs},
             encoder_lengths={"encoder_outputs": torch.tensor([len(t) for t in batch.data], dtype=torch.long)},
-            max_length=model.cfg.max_length,
+            max_length=model_cfg.max_output_length,
             **kwargs
         )

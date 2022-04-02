@@ -1,5 +1,3 @@
-import collections
-import copy
 from typing import List, Any, Dict, Tuple, Union
 
 import torch
@@ -9,8 +7,8 @@ from gnn_lib import models, tasks
 from gnn_lib.data import utils
 from gnn_lib.data.utils import Sample
 from gnn_lib.modules import utils as mod_utils
-from gnn_lib.utils import data_containers, Batch, to, tokenization_repair
 from gnn_lib.tasks import utils as task_utils
+from gnn_lib.utils import data_containers, Batch, to, tokenization_repair
 
 
 class TokenizationRepairPlus(tasks.Task):
@@ -119,7 +117,7 @@ class TokenizationRepairPlus(tasks.Task):
         # the no_repair flag ensures that the input tokenization is not repaired, useful when you are sure that
         # the input has no tokenization errors or when you want to evaluate on sed benchmarks
 
-        batch = self.variant.batch_sequences_for_inference(inputs)
+        batch = self._batch_sequences_for_inference(inputs)
         inputs = [str(ipt) for ipt in inputs]
 
         x, padding_mask, lengths = model.pad_inputs(batch.data, pad_val=model.input_pad_token_id)
@@ -231,3 +229,27 @@ class TokenizationRepairPlus(tasks.Task):
             return outputs["sec"]
         else:
             return outputs
+
+    def _split_sample_for_inference(
+            self,
+            sample: utils.Sample,
+            max_length: int,
+            context_length: int,
+            no_repair: bool = False,
+            **kwargs: Any
+    ) -> List[Tuple[int, int, int, int]]:
+        if no_repair:
+            return task_utils.get_word_windows(sample, max_length, context_length)
+        else:
+            return super()._split_sample_for_inference(sample, max_length, context_length, **kwargs)
+
+    def _merge_inference_outputs(
+            self,
+            sequence: str,
+            infos: List[utils.InferenceInfo],
+            predictions: List[str],
+            no_repair: bool = False,
+            output_type: str = "all",
+            **kwargs: Any
+    ) -> str:
+        return super()._merge_inference_outputs(sequence, infos, predictions, **kwargs)

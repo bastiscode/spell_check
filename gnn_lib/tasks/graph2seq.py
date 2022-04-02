@@ -6,6 +6,7 @@ from torch.nn import functional as F
 
 from gnn_lib import models, tasks
 from gnn_lib.data import tokenization
+from gnn_lib.data.utils import Sample
 from gnn_lib.modules import inference, utils
 from gnn_lib.tasks import utils as task_utils
 from gnn_lib.utils import data_containers, Batch
@@ -106,24 +107,21 @@ class Graph2Seq(tasks.Task):
         )
 
     @torch.inference_mode()
-    def inference(self,
-                  model: models.ModelForGraph2Seq,
-                  inputs: Union[List[str], Tuple[dgl.DGLHeteroGraph, List[Dict[str, Any]]]],
-                  **kwargs: Any) -> List[List[str]]:
+    def inference(
+            self,
+            model: models.ModelForGraph2Seq,
+            inputs: List[Union[str, Sample]],
+            **kwargs: Any
+    ) -> List[List[str]]:
         self._check_model(model)
         model = model.eval()
+        model_cfg: models.ModelForGraph2SeqConfig = model.cfg
 
-        cfg: models.ModelForGraph2SeqConfig = model.cfg
+        batch = self._batch_sequences_for_inference(inputs)
 
-        got_str_input = isinstance(inputs, list) and isinstance(inputs[0], str)
-        if got_str_input:
-            g, infos = self.variant.batch_sequences_for_inference(inputs)
-        else:
-            g, infos = inputs
-
-        g = model.encode(g)
+        g = model.encode(batch.data)
         encoder_outputs, encoder_lengths = utils.graph2seq_encoder_outputs_from_graph(
-            g, cfg.context_node_types, cfg.hidden_feature
+            g, model_cfg.context_node_types, model_cfg.hidden_feature
         )
 
         return inference.run_inference(
@@ -131,6 +129,6 @@ class Graph2Seq(tasks.Task):
             output_tokenizer=model.output_tokenizer,
             encoder_outputs=encoder_outputs,
             encoder_lengths=encoder_lengths,
-            max_length=model.cfg.max_length,
+            max_length=model_cfg.max_output_length,
             **kwargs
         )

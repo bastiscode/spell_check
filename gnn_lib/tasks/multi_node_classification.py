@@ -69,7 +69,7 @@ class MultiNodeClassification(tasks.Task):
         self._check_model(model)
         model = model.eval()
 
-        batch = self.variant.batch_sequences_for_inference(inputs)
+        batch = self._batch_sequences_for_inference(inputs)
         outputs, _ = model(batch.data, **batch.info)
 
         return_logits = kwargs.get("return_logits", False)

@@ -1,14 +1,13 @@
-from typing import Dict, List, Union, Any
+from typing import Dict, List, Union, Any, Tuple
 
-import dgl
 import torch
 
 from gnn_lib import models
 from gnn_lib.data import variants, tokenization
-from gnn_lib.data.utils import Sample
-from gnn_lib.tasks.multi_node_classification import MultiNodeClassification
-from gnn_lib.utils import data_containers, Batch
+from gnn_lib.data.utils import Sample, InferenceInfo
 from gnn_lib.tasks import utils as task_utils
+from gnn_lib.tasks.multi_node_classification import MultiNodeClassification
+from gnn_lib.utils import data_containers
 
 
 class GraphSEDWords(MultiNodeClassification):
@@ -78,3 +77,29 @@ class GraphSEDWords(MultiNodeClassification):
     ) -> List[List[int]]:
         detections_dicts = super().inference(model, inputs, **kwargs)
         return [detections_dict[list(detections_dict)[0]] for detections_dict in detections_dicts]
+
+    def _split_sample_for_inference(
+            self,
+            sample: Sample,
+            max_length: int,
+            context_length: int,
+            **kwargs: Any
+    ) -> List[Tuple[int, int, int, int]]:
+        return task_utils.get_word_windows(sample, max_length, context_length)
+
+    def _merge_inference_outputs(
+            self,
+            sequence: str,
+            infos: List[InferenceInfo],
+            predictions: List[List[int]],
+            **kwargs: Any
+    ) -> List[int]:
+        assert all(p in {0, 1} for prediction in predictions for p in prediction)
+        merged_prediction = []
+        for info, prediction in zip(infos, predictions):
+            assert len(sequence[info.ctx_start:info.ctx_end].split()) == len(prediction)
+            num_left_context_words = len(sequence[info.ctx_start:info.window_start].split())
+            num_window_words = len(sequence[info.window_start:info.window_end].split())
+            merged_prediction.extend(prediction[num_left_context_words:num_left_context_words + num_window_words])
+        assert len(merged_prediction) == len(sequence.split())
+        return merged_prediction

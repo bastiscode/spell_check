@@ -1,9 +1,10 @@
-from typing import List, Any, Union
+from typing import List, Any, Union, Tuple
 
 import torch
 from gnn_lib import models
-from gnn_lib.data.utils import Sample
+from gnn_lib.data.utils import Sample, InferenceInfo
 from gnn_lib.tasks.seq2seq import Seq2Seq
+from gnn_lib.tasks import utils as task_utils
 
 
 class SECNMT(Seq2Seq):
@@ -19,3 +20,27 @@ class SECNMT(Seq2Seq):
         })
 
         return super().inference(model, inputs, **kwargs)
+
+    def _split_sample_for_inference(
+            self,
+            sample: Sample,
+            max_length: int,
+            context_length: int,
+            **kwargs: Any
+    ) -> List[Tuple[int, int, int, int]]:
+        return task_utils.get_word_windows(sample, max_length, 0)
+
+    def _merge_inference_outputs(
+            self,
+            sequence: str,
+            infos: List[InferenceInfo],
+            predictions: List[List[str]],
+            **kwargs: Any
+    ) -> Any:
+        min_num_predictions = min(len(prediction) for prediction in predictions)
+        merged_predictions = [[] for _ in range(min_num_predictions)]
+        for prediction in predictions:
+            for i in range(min_num_predictions):
+                merged_predictions[i].append(prediction[i])
+        merged_predictions = [" ".join(s.strip() for s in predictions) for predictions in merged_predictions]
+        return merged_predictions

@@ -1,10 +1,10 @@
-from typing import List, Any, Union
+from typing import List, Any, Union, Tuple
 
 import torch
 
 from gnn_lib import models
-from gnn_lib.data import utils
-from gnn_lib.data.utils import Sample
+from gnn_lib.tasks import utils as task_utils
+from gnn_lib.data.utils import Sample, flatten, InferenceInfo
 from gnn_lib.modules import inference
 from gnn_lib.modules import utils as mod_utils
 from gnn_lib.tasks.token2seq import Token2Seq
@@ -22,7 +22,7 @@ class SECWordsNMT(Token2Seq):
         model = model.eval()
         model_cfg: models.ModelForToken2SeqConfig = model.cfg
 
-        batch = self.variant.batch_sequences_for_inference(inputs)
+        batch = self._batch_sequences_for_inference(inputs)
         inputs = [str(ipt) for ipt in inputs]
 
         encoder_lengths = [len(t) for t in batch.data]
@@ -41,8 +41,8 @@ class SECWordsNMT(Token2Seq):
             for group_lengths in encoder_group_lengths
         ])
 
-        input_words = utils.flatten([ipt.split() for ipt in inputs])
-        detections_flattened = utils.flatten(detections)
+        input_words = flatten([ipt.split() for ipt in inputs])
+        detections_flattened = flatten(detections)
         assert len(detections_flattened) == len(input_words)
         assert all(det in {0, 1} for det in detections_flattened)
 
@@ -105,3 +105,32 @@ class SECWordsNMT(Token2Seq):
                 batch_result_str.append(" ".join(result_words))
             all_results.append(batch_result_str)
         return all_results
+
+    def _split_sample_for_inference(
+            self,
+            sample: Sample,
+            max_length: int,
+            context_length: int,
+            **kwargs: Any
+    ) -> List[Tuple[int, int, int, int]]:
+        return task_utils.get_word_windows(sample, max_length, context_length)
+
+    def _merge_inference_outputs(
+            self,
+            sequence: str,
+            infos: List[InferenceInfo],
+            predictions: List[List[str]],
+            **kwargs: Any
+    ) -> List[str]:
+        min_num_predictions = min(len(prediction) for prediction in predictions)
+        merged_predictions = [[] for _ in range(min_num_predictions)]
+        for info, prediction in zip(infos, predictions):
+            num_left_context_words = len(sequence[info.ctx_start:info.window_start].split())
+            num_window_words = len(sequence[info.window_start:info.window_end].split())
+            for i in range(min_num_predictions):
+                predicted_words = prediction[i].split()
+                merged_predictions[i].extend(
+                    predicted_words[num_left_context_words:num_left_context_words + num_window_words]
+                )
+        merged_predictions = [" ".join(predicted_words) for predicted_words in merged_predictions]
+        return merged_predictions

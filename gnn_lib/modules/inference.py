@@ -117,17 +117,17 @@ def spelling_correction_score(
             # split current predicted word (by whitespace) further using regex
             pred_words, _ = data_utils.tokenize_words_regex(pred_str_split[-1])
 
-            valid_pred = False
             # check if current predicted word (or its lowercase version)
             # is a prefix of a dictionary word (in prefix tree)
-            valid_pred |= (
+            valid_pred = (
                     len(prefix_index.retrieve(pred_words[-1])) > 0
                     or len(prefix_index.retrieve(pred_words[-1].lower())) > 0
             )
-
+            if mode == "dictionary":
+                pass
             # check if current predicted word (or its lowercase version)
             # is a prefix of an input word
-            if mode == "dictionary_or_in_input":
+            elif mode == "dictionary_or_in_input":
                 valid_pred |= (
                         any(ipt_w.startswith(pred_words[-1]) for ipt_w in input_words)
                         or any(ipt_w.startswith(pred_words[-1].lower()) for ipt_w in input_words)
@@ -201,7 +201,8 @@ def token_inference(
 
     non_eos_mask = torch.ones(batch_size, dtype=torch.bool, device=device)
     smaller_max_length_mask = torch.ones(batch_size, dtype=torch.bool, device=device)
-    indices_to_decode = torch.ones(batch_size, dtype=torch.bool, device=device)
+    smaller_max_length_mask[lengths + positions[:, 0] >= max_length] = False
+    indices_to_decode = non_eos_mask & smaller_max_length_mask
 
     while True:
         decoder_lengths = _sub_select(lengths, indices_to_decode)
@@ -257,7 +258,7 @@ def token_inference(
         new_eos_indices = torch.where(indices_to_decode)[0][inferred_eos_indices]
         non_eos_mask[new_eos_indices] = False
 
-        max_length_indices = torch.where(lengths >= max_length)[0]
+        max_length_indices = torch.where(lengths + positions[:, 0] >= max_length)[0]
         smaller_max_length_mask[max_length_indices] = False
 
         indices_to_decode = non_eos_mask & smaller_max_length_mask
@@ -323,7 +324,7 @@ def best_first_inference(
 
         search_depth = 1
 
-        while len(finished_beams) < top_k and search_depth < max_length and not beam_queue.empty():
+        while len(finished_beams) < top_k and positions[b] + search_depth < max_length and not beam_queue.empty():
             beam: Beam = beam_queue.get()[1]
 
             if beam.is_eos(eos_token_id):
@@ -361,7 +362,7 @@ def best_first_inference(
 
             log_softmax_scores = torch.log_softmax(decoder_output, dim=1)[0].tolist()
 
-            min_log_prob = -1_000_000  # math.log(1 / len(log_softmax_scores))
+            min_log_prob = math.log(1 / len(log_softmax_scores))
             for i, score in enumerate(log_softmax_scores):
                 if score < min_log_prob:
                     continue
@@ -423,7 +424,7 @@ def beam_inference(
 
         search_depth = 1
 
-        while beam_queue.qsize() < beam_width and search_depth < max_length and len(current_beams) > 0:
+        while beam_queue.qsize() < beam_width and positions[b] + search_depth < max_length and len(current_beams) > 0:
             decoder_inputs = torch.tensor(
                 [beam.token_ids for beam in current_beams],
                 dtype=torch.long,
@@ -456,7 +457,7 @@ def beam_inference(
 
             log_softmax_scores = torch.log_softmax(decoder_output, dim=1)
 
-            min_log_prob = -1_000_000  # math.log(1 / log_softmax_scores.shape[1])
+            min_log_prob = math.log(1 / log_softmax_scores.shape[1])
             valid_indices = torch.nonzero(log_softmax_scores >= min_log_prob, as_tuple=True)
             valid_log_prob = log_softmax_scores[valid_indices].tolist()
             valid_indices = torch.stack(valid_indices, dim=-1).tolist()
@@ -515,7 +516,7 @@ def beam_inference(
     return all_beams
 
 
-def _get_de_tok_fn(output_tokenizer: tokenization.Tokenizer, bos_token_id: int, eos_token_id: int) \
+def get_de_tok_fn(output_tokenizer: tokenization.Tokenizer, bos_token_id: int, eos_token_id: int) \
         -> Callable[[List[int]], str]:
     def de_tokenize(token_ids: List[int]) -> str:
         if len(token_ids) < 2:
@@ -542,7 +543,7 @@ def run_inference(
         **kwargs: Any) -> List[List[str]]:
     bos_token_id = output_tokenizer.token_to_id(tokenization.BOS)
     eos_token_id = output_tokenizer.token_to_id(tokenization.EOS)
-    de_tok_fn = _get_de_tok_fn(output_tokenizer, bos_token_id, eos_token_id)
+    de_tok_fn = get_de_tok_fn(output_tokenizer, bos_token_id, eos_token_id)
 
     if search_mode == "greedy":
         outputs = token_inference(

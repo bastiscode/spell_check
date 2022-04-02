@@ -151,7 +151,7 @@ class SpellingErrorDetector(_APIBase):
 
         dataset, loader = get_inference_dataset_and_loader(
             inputs,
-            variant=self.task.variant,
+            task=self.task,
             max_length=self.max_length,
             sort_by_length=sort_by_length,
             batch_size=batch_size
@@ -198,7 +198,7 @@ class SpellingErrorDetector(_APIBase):
 
         pbar.close()
         all_outputs = reorder_data(all_outputs, dataset.indices)
-        return self.task.variant.postprocess_inference_outputs(inputs, dataset.sample_infos, all_outputs)
+        return self.task.postprocess_inference_outputs(inputs, dataset.sample_infos, all_outputs, **inference_kwargs)
 
     def detect_text(
             self,
@@ -211,7 +211,7 @@ class SpellingErrorDetector(_APIBase):
         input_is_string = isinstance(inputs, str)
         assert (
                 input_is_string
-                or all(isinstance(ipt, str) for ipt in inputs)
+                or (isinstance(inputs, list) and all(isinstance(ipt, str) for ipt in inputs))
         ), f"input needs to be a string or a list of strings"
 
         outputs = self._detect_text_raw(

@@ -1,13 +1,14 @@
-import collections
 import copy
-from typing import List, Union, Optional, Set, Dict, Any
+from typing import List, Union, Optional, Set, Dict, Any, Tuple
 
 import dgl
+import numpy as np
 import torch
 from torch import nn
 
+from gnn_lib.data import utils as data_utils
 from gnn_lib.modules.utils import tensor_to_python, split
-from gnn_lib.utils import DataInput, Batch
+from gnn_lib.utils import DataInput
 
 SAMPLE_SEQUENCE = \
     "But I must explain to you how all this mistaken idea of denouncing pleasure and praising pain was " \
@@ -118,3 +119,85 @@ def get_unused_parameters(model: nn.Module, **inputs: Any) -> Set[str]:
             unused_parameters.add(name)
 
     return unused_parameters
+
+
+def get_word_windows(
+        sample: data_utils.Sample, max_length: int, context_length: int) -> List[Tuple[int, int, int, int]]:
+    sequence = str(sample)
+    words = sequence.split()
+    word_lengths = [len(w) for w in words]
+
+    window_length = max_length - 2 * context_length
+
+    num_word_ws_tokens = [0] * len(words)
+    word_ws_idx = 0
+    for word_tokens, word in zip(sample.tokens, sample.doc):
+        num_word_ws_tokens[word_ws_idx] += len(word_tokens)
+        if word.whitespace_ == " ":
+            word_ws_idx += 1
+    assert word_ws_idx == len(words) - 1
+    assert all(num_tokens <= window_length for num_tokens in num_word_ws_tokens), \
+        f"a single word in the input sequence {sequence} is longer than the max window length of {window_length} tokens"
+
+    word_window_start = 0
+    windows = []
+    while word_window_start < len(words):
+        word_window_end = word_window_start + (np.cumsum(num_word_ws_tokens[word_window_start:]) <= window_length).sum()
+        assert word_window_end > word_window_start
+        word_context_start = word_window_start - (
+                np.cumsum(num_word_ws_tokens[:word_window_start][::-1]) <= context_length
+        ).sum()
+        word_context_end = word_window_end + (np.cumsum(num_word_ws_tokens[word_window_end:]) <= context_length).sum()
+
+        windows.append((
+            max(0, word_context_start - 1 + sum(word_lengths[:word_context_start])),  # ctx start
+            word_context_end - 1 + sum(word_lengths[:word_context_end]),  # ctx end
+            max(0, word_window_start - 1 + sum(word_lengths[:word_window_start])),  # window start
+            word_window_end - 1 + sum(word_lengths[:word_window_end])  # window end
+        ))
+
+        word_window_start = word_window_end
+
+    return windows
+
+
+def get_character_windows(
+        sample: data_utils.Sample, max_length: int, context_length: int) -> List[Tuple[int, int, int, int]]:
+    sequence = str(sample)
+    window_length = max_length - 2 * context_length
+    windows = []
+    for window_start in range(0, len(sequence), window_length):
+        windows.append((
+            max(0, window_start - context_length),  # ctx start
+            min(len(sequence), window_start + window_length + context_length),  # ctx end
+            window_start,  # window start
+            min(len(sequence), window_start + window_length)  # window end
+        ))
+    return windows
+
+
+def get_byte_windows(
+        sample: data_utils.Sample, max_length: int, context_length: int) -> List[Tuple[int, int, int, int]]:
+    sequence = str(sample)
+    window_length = max_length - 2 * context_length
+    byte_lengths = [len(char.encode("utf8")) for char in sequence]
+    windows = []
+    byte_window_start = 0
+    while byte_window_start < len(byte_lengths):
+        byte_window_end = byte_window_start + (np.cumsum(byte_lengths[byte_window_start:]) <= window_length).sum()
+        assert byte_window_end > byte_window_start
+        byte_context_start = byte_window_start - (
+                np.cumsum(byte_lengths[:byte_window_start][::-1]) <= context_length
+        )
+        byte_context_end = byte_window_end + (np.cumsum(byte_lengths[byte_window_end:]) <= context_length).sum()
+
+        windows.append((
+            byte_context_start,  # ctx start
+            byte_context_end,  # ctx end
+            byte_window_start,  # window start
+            byte_window_end  # window end
+        ))
+
+        byte_window_start = byte_window_end
+
+    return windows

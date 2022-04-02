@@ -18,7 +18,7 @@ from gnn_lib.api.utils import (
     get_device_info,
     get_inference_dataset_and_loader
 )
-from gnn_lib.data import index
+from gnn_lib.data import index, tokenization
 from gnn_lib.data.utils import clean_sequence
 from gnn_lib.modules import inference
 from gnn_lib.tasks import graph_sec_nmt, graph_sec_words_nmt, sec_nmt, sec_words_nmt, tokenization_repair_plus
@@ -79,7 +79,11 @@ class SpellingCorrectionScore:
     prefix_index: Optional[index.PrefixIndex] = None
 
 
-def inference_kwargs_from_search_and_score(search: Search, score: SpellingCorrectionScore) -> Dict[str, Any]:
+def inference_kwargs_from_search_and_score(
+        search: Search,
+        score: SpellingCorrectionScore,
+        tokenizer: tokenization.Tokenizer
+) -> Dict[str, Any]:
     inference_kwargs = {}
     if isinstance(search, GreedySearch):
         inference_kwargs["search_mode"] = "greedy"
@@ -104,8 +108,13 @@ def inference_kwargs_from_search_and_score(search: Search, score: SpellingCorrec
         )
 
     inference_kwargs["score_fn"] = inference.spelling_correction_score(
-        score.mode,
-        score.prefix_index,
+        mode=score.mode,
+        prefix_index=score.prefix_index,
+        de_tok_fn=inference.get_de_tok_fn(
+            tokenizer,
+            tokenizer.token_to_id(tokenization.BOS),
+            tokenizer.token_to_id(tokenization.EOS)
+        ),
         normalize_by_length=score.normalize_by_length,
         alpha=score.alpha
     )
@@ -206,18 +215,45 @@ class SpellingErrorCorrector(_APIBase):
 
         dataset, loader = get_inference_dataset_and_loader(
             inputs,
-            variant=self.task.variant,
+            task=self.task,
             max_length=self.max_length,
             sort_by_length=sort_by_length,
             batch_size=batch_size
         )
 
-        if detections is not None:
+        search = BestFirstSearch()
+        score = SpellingCorrectionScore(True, 1.0, mode="dictionary")
+
+        if (detections is not None and (
+                isinstance(self.task, sec_words_nmt.SECWordsNMT)
+                or isinstance(self.task, graph_sec_words_nmt.GraphSECWordsNMT)
+        )):
+            # prepare detections based on inference infos from inference dataset
             assert (
                     len(detections) == len(inputs)
                     and all(len(det) == len(ipt.split()) for det, ipt in zip(detections, inputs))
-            )
-            raise NotImplementedError
+            ), "expected one detection for every word in every input sequence"
+            new_detections = []
+            input_idx = 0
+            prev_info = None
+            for info in dataset.sample_infos:
+                if prev_info and info.window_idx == prev_info.window_idx:
+                    input_idx += 1
+                sequence = inputs[input_idx]
+                detection = detections[input_idx]
+                num_left_words = len(sequence[:info.window_start].split())
+                num_window_words = len(sequence[info.window_start:info.window_end].split())
+                assert num_left_words + num_window_words == len(sequence[:info.window_end].split()), \
+                    "when using detections for spelling error correction, too long sequences must be split between " \
+                    "and not within whitespace separated words"
+                new_detections.append(detection[num_left_words:num_left_words + num_window_words])
+
+                prev_info = info
+
+            assert input_idx == len(inputs) - 1
+            detections = new_detections
+        else:
+            detections = None
 
         pbar = tqdm(
             loader,
@@ -228,7 +264,7 @@ class SpellingErrorCorrector(_APIBase):
             unit="char"
         )
 
-        inference_kwargs = inference_kwargs_from_search_and_score(search, score)
+        inference_kwargs = inference_kwargs_from_search_and_score(search, score, self.model.output_tokenizer)
         if isinstance(self.task, tokenization_repair_plus.TokenizationRepairPlus):
             inference_kwargs["output_type"] = "sec"
             inference_kwargs["no_repair"] = True
@@ -263,7 +299,8 @@ class SpellingErrorCorrector(_APIBase):
 
         pbar.close()
         all_outputs = reorder_data(all_outputs, dataset.indices)
-        all_outputs = self.task.variant.postprocess_inference_outputs(inputs, dataset.sample_infos, all_outputs)
+        all_outputs = self.task.postprocess_inference_outputs(
+            inputs, dataset.sample_infos, all_outputs, **inference_kwargs)
         return [inference.inference_output_to_str(output) for output in all_outputs]
 
     def correct_text(
@@ -279,7 +316,7 @@ class SpellingErrorCorrector(_APIBase):
         input_is_string = isinstance(inputs, str)
         assert (
                 input_is_string
-                or all(isinstance(ipt, list) for ipt in inputs)
+                or (isinstance(inputs, list) and all(isinstance(ipt, str) for ipt in inputs))
         ), f"input needs to be a string or a list of strings"
 
         outputs = self._correct_text_raw(

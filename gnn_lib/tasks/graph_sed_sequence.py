@@ -1,10 +1,12 @@
-from typing import Dict, Any
+from typing import Dict, Any, Tuple, List
 
 import torch
 
 from gnn_lib import models
 from gnn_lib.tasks.graph_classification import GraphClassification
 from gnn_lib.utils import data_containers
+from gnn_lib.data import utils as data_utils
+from gnn_lib.tasks import utils as task_utils
 
 
 class GraphSEDSequence(GraphClassification):
@@ -26,3 +28,23 @@ class GraphSEDSequence(GraphClassification):
 
         predictions = torch.argmax(model_output, dim=1)
         stats["fpr"].add((labels.cpu(), predictions.cpu()))
+
+    def _split_sample_for_inference(
+            self,
+            sample: data_utils.Sample,
+            max_length: int,
+            context_length: int,
+            **kwargs: Any
+    ) -> List[Tuple[int, int, int, int]]:
+        return task_utils.get_word_windows(sample, max_length, context_length)
+
+    def _merge_inference_outputs(
+            self,
+            sequence: str,
+            infos: List[data_utils.InferenceInfo],
+            predictions: List[int],
+            **kwargs: Any
+    ) -> int:
+        assert all(p in {0, 1} for p in predictions)
+        # for sed sequence, if for any part of the sequence an error was detected, the overall sequence has an error
+        return int(any(p for p in predictions))

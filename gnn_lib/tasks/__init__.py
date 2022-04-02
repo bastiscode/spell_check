@@ -386,18 +386,6 @@ class Task:
 
         return loss_stat.value, best
 
-    def prepare_inference_windows(self, inputs: List[str]) -> None:
-        raise NotImplementedError
-
-    @torch.inference_mode()
-    def inference(
-            self,
-            model: Model,
-            inputs: Any,
-            **kwargs: Any
-    ) -> Any:
-        raise NotImplementedError
-
     def get_model(self,
                   sample_inputs: Batch,
                   cfg: omegaconf.DictConfig,
@@ -474,6 +462,112 @@ class Task:
     def _check_model(self, model: nn.Module) -> None:
         if not isinstance(model, self.expected_model):
             raise ValueError(f"expected a model of type {self.expected_model.__name__}, but got {type(model)}")
+
+    def _split_sample_for_inference(
+            self,
+            sample: data_utils.Sample,
+            max_length: int,
+            context_length: int,
+            **kwargs: Any
+    ) -> List[Tuple[int, int, int, int]]:
+        raise NotImplementedError
+
+    def prepare_sequences_for_inference(
+            self,
+            sequences: List[str],
+            max_length: int,
+            context_length: Optional[int] = None,
+            **kwargs: Any
+    ) -> Tuple[List[data_utils.Sample], List[data_utils.InferenceInfo]]:
+        samples, _ = zip(*self.variant.preprocessing_fn(sequences, [None] * len(sequences), True))
+        all_samples = []
+        all_infos = []
+        for sample in samples:
+            sample = data_utils.sanitize_sample(sample, self.variant.unk_token_id)
+            sequence = str(sample)
+            token_lengths = [len(tokens) for tokens in sample.tokens]
+            length = sum(token_lengths)
+            if length <= max_length:
+                all_samples.append(sample)
+                all_infos.append(data_utils.InferenceInfo(
+                    ctx_start=0,
+                    ctx_end=len(sequence),
+                    window_start=0,
+                    window_end=len(sequence),
+                    window_idx=0,
+                    length=length
+                ))
+            else:
+                windows = self._split_sample_for_inference(sample, max_length, context_length, **kwargs)
+                for i, (ctx_start, ctx_end, window_start, window_end) in enumerate(windows):
+                    sample, _ = self.variant.get_sample(sequence[ctx_start:ctx_end], is_inference=True)
+                    all_samples.append(sample)
+                    all_infos.append(data_utils.InferenceInfo(
+                        ctx_start=ctx_start,
+                        ctx_end=ctx_end,
+                        window_start=window_start,
+                        window_end=window_end,
+                        window_idx=i,
+                        length=sum(len(t) for t in sample.tokens)
+                    ))
+        return all_samples, all_infos
+
+    def _batch_sequences_for_inference(
+            self,
+            sequences: List[Union[str, data_utils.Sample]]
+    ) -> Batch:
+        items = [self.variant.get_inputs(s, is_inference=True) for s in sequences]
+        return data_utils.collate(items)
+    
+    @torch.inference_mode()
+    def inference(
+            self,
+            model: Model,
+            inputs: List[Union[str, data_utils.Sample]],
+            **kwargs: Any
+    ) -> Any:
+        raise NotImplementedError
+
+    def _merge_inference_outputs(
+            self,
+            sequence: str,
+            infos: List[data_utils.InferenceInfo],
+            predictions: List[Any],
+            **kwargs: Any
+    ) -> Any:
+        raise NotImplementedError
+
+    def postprocess_inference_outputs(
+            self,
+            sequences: List[str],
+            infos: List[data_utils.InferenceInfo],
+            predictions: List[Any],
+            **kwargs: Any
+    ) -> List[Any]:
+        grouped_predictions: List[List[int]] = []
+        grouped_infos: List[List[data_utils.InferenceInfo]] = []
+        prev_info = None
+        for info, prediction in zip(infos, predictions):
+            if info.window_idx == 0:
+                grouped_predictions.append([prediction])
+                grouped_infos.append([info])
+            elif info.window_idx == prev_info.window_idx + 1:
+                grouped_predictions[-1].append(prediction)
+                grouped_infos[-1].append(info)
+            else:
+                raise RuntimeError("should not happen")
+
+            prev_info = info
+
+        assert len(sequences) == len(grouped_predictions) == len(grouped_infos)
+
+        merged_predictions = []
+        for sequence, predictions, infos in zip(sequences, grouped_predictions, grouped_infos):
+            if len(predictions) == 1:
+                merged_predictions.append(predictions[0])
+            else:
+                merged_predictions.append(self._merge_inference_outputs(sequence, infos, predictions, **kwargs))
+        return merged_predictions
 
 
 def get_task(

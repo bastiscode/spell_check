@@ -1,8 +1,9 @@
-from typing import List, Any
+from typing import List, Any, Union
 
 import torch
 
 from gnn_lib import models
+from gnn_lib.data.utils import Sample
 from gnn_lib.modules import inference, utils as mod_utils
 from gnn_lib.tasks.multi_node2seq import MultiNode2Seq
 
@@ -12,20 +13,17 @@ class GraphSECWordsNMT(MultiNode2Seq):
     def inference(
             self,
             model: models.ModelForMultiNode2Seq,
-            inputs: List[str],
+            inputs: List[Union[str, Sample]],
             **kwargs: Any
     ) -> List[List[str]]:
         self._check_model(model)
         model = model.eval()
-
-        assert len(model.cfg.decoder_node_types) == 1
-        decoder_node_type = model.cfg.decoder_node_types[0]
-
-        assert isinstance(inputs, list) and isinstance(inputs[0], str)
-        g, infos = self.variant.batch_sequences_for_inference(inputs)
-
         model_cfg: models.ModelForMultiNode2SeqConfig = model.cfg
-        g = model.encode(g)
+        decoder_node_type = model_cfg.decoder_node_types[0]
+
+        batch = self._batch_sequences_for_inference(inputs)
+
+        g = model.encode(batch.data)
 
         (
             encoder_outputs, encoder_lengths, aligned_encoder_positions
@@ -88,7 +86,7 @@ class GraphSECWordsNMT(MultiNode2Seq):
             output_tokenizer=output_tokenizer,
             encoder_outputs=encoder_outputs,
             encoder_lengths=encoder_lengths,
-            max_length=model.cfg.max_length,
+            max_length=model_cfg.max_output_length,
             decoder_positions=decoder_positions,
             input_strings=input_strings,
             **kwargs

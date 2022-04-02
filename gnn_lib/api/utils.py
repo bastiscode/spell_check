@@ -23,6 +23,7 @@ from gnn_lib.api import tables
 from gnn_lib.data import utils
 from gnn_lib.data.utils import clean_sequence, flatten
 from gnn_lib.data.variants import DatasetVariant
+from gnn_lib.tasks import Task
 from gnn_lib.utils import config, common
 
 _BASE_URL = "https://tokenization.cs.uni-freiburg.de/transformer"
@@ -394,20 +395,20 @@ class InferenceDataset(Dataset):
     def __init__(
             self,
             strings: List[str],
-            variant: DatasetVariant,
+            task: Task,
             max_length: int,
             context_length: Optional[int] = None,
             sort_by_length: bool = False
     ) -> None:
         self.strings = strings
-        self.variant = variant
+        self.task = task
         self.max_length = max_length
         self.context_length = context_length
         if self.context_length is None:
             self.context_length = self.max_length // 8
         self.sort_by_length = sort_by_length
 
-        self.samples, self.sample_infos = variant.prepare_sequences_for_inference(
+        self.samples, self.sample_infos = self.task.prepare_sequences_for_inference(
             self.strings, self.max_length, self.context_length
         )
 
@@ -440,7 +441,7 @@ class InferenceDataset(Dataset):
 
 def get_inference_dataset_and_loader(
         sequences: List[str],
-        variant: DatasetVariant,
+        task: Task,
         max_length: int,
         sort_by_length: bool,
         batch_size: int,
@@ -448,7 +449,7 @@ def get_inference_dataset_and_loader(
 ) -> Tuple[InferenceDataset, DataLoader]:
     dataset = InferenceDataset(
         sequences,
-        variant,
+        task,
         max_length,
         context_length=context_length,
         sort_by_length=sort_by_length

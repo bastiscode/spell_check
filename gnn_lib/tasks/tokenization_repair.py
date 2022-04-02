@@ -1,12 +1,14 @@
-from typing import Union, List, Dict, Any
+from typing import Union, List, Dict, Any, Tuple
 
 import torch
 from torch.nn import functional as F
 
 from gnn_lib import models
-from gnn_lib.data.utils import Sample
+from gnn_lib.data.utils import Sample, InferenceInfo
+from gnn_lib.data.variants import TokenizationRepairConfig
 from gnn_lib.tasks.token_classification import TokenClassification
 from gnn_lib.utils import tokenization_repair, data_containers
+from gnn_lib.tasks import utils as task_utils
 
 
 class TokenizationRepair(TokenClassification):
@@ -55,3 +57,40 @@ class TokenizationRepair(TokenClassification):
             )
             for ipt, repair_tokens in zip(inputs, repair_tokens_list)
         ]
+
+    def _split_sample_for_inference(
+            self,
+            sample: Sample,
+            max_length: int,
+            context_length: int,
+            **kwargs: Any
+    ) -> List[Tuple[int, int, int, int]]:
+        self.variant_cfg: TokenizationRepairConfig
+        if self.variant_cfg.tokenization_level == "char":
+            return task_utils.get_character_windows(sample, max_length, context_length)
+        elif self.variant_cfg.tokenization_level == "byte":
+            return task_utils.get_byte_windows(sample, max_length, context_length)
+        else:
+            raise RuntimeError("should not happen")
+
+    def _merge_inference_outputs(
+            self,
+            sequence: str,
+            infos: List[InferenceInfo],
+            predictions: List[str],
+            **kwargs: Any
+    ) -> str:
+        merged_prediction = ""
+        for prediction, info in zip(predictions, infos):
+            left_context = sequence[info.ctx_start:info.window_start]
+            window = sequence[info.window_start:info.window_end]
+            right_context = sequence[info.window_end:info.ctx_end]
+            match_start, match_end = tokenization_repair.match_string_ignoring_space(
+                prediction,
+                left_context,
+                window,
+                right_context
+            )
+            merged_prediction += prediction[match_start:match_end]
+        assert merged_prediction.replace(" ", "") == sequence.replace(" ", "")
+        return merged_prediction

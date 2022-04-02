@@ -59,7 +59,7 @@ class GraphClassification(tasks.Task):
         threshold = kwargs.get("threshold", 0.5)
         temperature = kwargs.get("temperature", 1.0)
 
-        batch = self.variant.batch_sequences_for_inference(inputs)
+        batch = self._batch_sequences_for_inference(inputs)
         outputs, _ = model(batch.data, **batch.info)
 
         return_logits = kwargs.get("return_logits", False)
