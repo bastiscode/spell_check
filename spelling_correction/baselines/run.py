@@ -68,14 +68,16 @@ def run(args: argparse.Namespace) -> None:
 
     os.makedirs(args.out_dir, exist_ok=True)
     all_outputs = []
-    for batch, info in tqdm(loader,
-                            total=len(loader),
-                            desc=f"Running baseline {baseline.name} ({args.baseline}) on "
-                                 f"{os.path.relpath(args.in_file, BENCHMARK_DIR)}"):
+    for batch, indices in tqdm(
+            loader,
+            total=len(loader),
+            desc=f"Running baseline {baseline.name} ({args.baseline}) on "
+                 f"{os.path.relpath(args.in_file, BENCHMARK_DIR)}"
+    ):
         inference_kwargs = {}
         if args.detections_file is not None:
             inference_kwargs.update({
-                "detections": [detections[idx] for idx in info["indices"]]
+                "detections": [detections[idx] for idx in indices]
             })
 
         outputs = baseline.inference(batch, **inference_kwargs)

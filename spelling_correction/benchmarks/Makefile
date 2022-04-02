@@ -3,7 +3,11 @@ create_benchmarks: create_neuspell_benchmarks create_own_benchmarks
 
 .PHONY: create_neuspell_benchmarks
 create_neuspell_benchmarks:
-	@python scripts/create_neuspell_benchmarks.py
+	@python scripts/create_neuspell_benchmarks.py \
+	--neuspell-dir ../../data/raw/neuspell/traintest \
+	--benchmark-dir `pwd`/test \
+	--benchmarks bea60k \
+	--seed 22
 
 # determines benchmark split: one of {dev, test}
 SPLIT := test
