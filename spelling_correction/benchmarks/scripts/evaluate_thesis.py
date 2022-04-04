@@ -65,8 +65,8 @@ def evaluate(
 
 _METRIC_TO_FMT = {
     "sequence_accuracy": ".1f",
-    "binary_f1": ".1f",
-    "word_accuracy": ".1f",
+    "binary_f1": ".2f",
+    "word_accuracy": ".2f",
     "mean_normalized_edit_distance": ".4f"
 }
 
@@ -77,10 +77,8 @@ _METRIC_TO_HIGHER_BETTER = {
     "mean_normalized_edit_distance": False
 }
 
-Model = Tuple[str, str]
 
-
-def get_sed_models_and_metrics(is_sed_words: bool) -> Tuple[Dict[int, List[Model]], Set[str]]:
+def get_sed_models_and_metrics(is_sed_words: bool) -> Tuple[Dict[int, List[Tuple[str, str]]], Set[str]]:
     dictionary = {
         0: [
             ("aspell", "baseline_aspell"),
@@ -108,7 +106,7 @@ def get_sed_models_and_metrics(is_sed_words: bool) -> Tuple[Dict[int, List[Model
     return dictionary, metric_names
 
 
-def get_sec_models_and_metrics() -> Tuple[Dict[int, List[Model]], Set[str]]:
+def get_sec_models_and_metrics() -> Tuple[Dict[int, List[Tuple[str, str]]], Set[str]]:
     return {
                0: [
                    ("aspell", "baseline_aspell"),

@@ -83,16 +83,21 @@ do
 
       out_dir_rel=$(dirname $(realpath --relative-to=$benchmark_dir/$benchmark $in_file))
       out_dir=$benchmark_dir/$benchmark/results/$out_dir_rel
+      out_file=$out_dir/${model_name}.txt
+
+      if [[ -f $out_file ]]; then
+        echo "output file $out_file already exists, skipping"
+        continue
+      fi
 
       # skip 1blm benchmarks and bea60k for now since they take too long
-      if [[ $out_dir_rel == *"1blm_"* ]]
-      then
+      if [[ $out_dir_rel == *"1blm_"* ]]; then
         continue
       fi
 
       bin_name=${benchmark_to_exec[$benchmark]}
       echo "Running experiment $experiment_name ($experiment_type) on $out_dir_rel of $benchmark benchmark"
-      ${bin_dir}/${bin_name} -e $experiment -f $in_file -o $out_dir/${model_name}.txt
+      ${bin_dir}/${bin_name} -e $experiment -f $in_file -o $out_file
     done
   done
 done
