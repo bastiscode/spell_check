@@ -14,7 +14,8 @@ def generate_table(
 ) -> str:
     assert fmt in {"markdown", "latex"}
 
-    assert all(len(header) == len(item) for item in data)
+    assert all(len(header) == len(item) for item in data), \
+        f"header has length {len(header)}, but data items have lengths {[len(item) for item in data]}"
 
     if alignments is None:
         alignments = ["left"] + ["right"] * (len(header) - 1)

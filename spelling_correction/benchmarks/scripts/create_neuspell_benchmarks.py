@@ -47,6 +47,11 @@ if __name__ == "__main__":
 
             correct_b = os.path.join(benchmark_dir, "correct.txt")
             corrupt_b = os.path.join(benchmark_dir, "corrupt.txt")
+            correct_seq_b = os.path.join(benchmark_dir, "correct.sequences.txt")
+            if output_type != "sec":
+                correct_seq_b_file = open(correct_seq_b, "w", encoding="utf8")
+            else:
+                correct_seq_b_file = None
 
             if os.path.exists(corrupt_b) and os.path.exists(correct_b):
                 continue
@@ -69,20 +74,27 @@ if __name__ == "__main__":
                     correct_line, corrupt_line = neuspell.clean_sequences(correct_line, corrupt_line)
 
                     if output_type == "sed_sequence":
+                        correct_seq_b_file.write(correct_line + "\n")
+
                         if rand.random() < 0.5:
                             corrupt_line = correct_line
                             correct_of.write("0")
                         else:
                             correct_of.write(str(int(correct_line != corrupt_line)))
+
                     elif output_type == "sed_words":
+                        correct_seq_b_file.write(correct_line + "\n")
+
                         correct_words = correct_line.split()
                         corrupt_words = corrupt_line.split()
                         correct_of.write(
                             " ".join(str(int(correct != corrupt))
                                      for correct, corrupt in zip(correct_words, corrupt_words))
                         )
+
                     elif output_type == "sec":
                         correct_of.write(correct_line)
+
                     else:
                         raise ValueError(f"Unknown output type {output_type}")
 
@@ -90,3 +102,6 @@ if __name__ == "__main__":
 
                     corrupt_of.write(corrupt_line)
                     corrupt_of.write("\n")
+
+            if correct_seq_b_file:
+                correct_seq_b_file.close()

@@ -103,5 +103,5 @@ loc:
 matthias-thesis:
 	docker run --runtime=nvidia -it \
 	-v $(shell pwd)/third_party/matthias-master/thesis:/external \
-	-v $(shell pwd)/spelling_correction/benchmarks/dev/sec:/sec \
+	-v $(shell pwd)/spelling_correction/benchmarks/test/sec:/sec \
 	-p 1234:1234 matthias-hertel-thesis

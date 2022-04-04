@@ -61,6 +61,7 @@ def create(args: argparse.Namespace) -> None:
     out_dir = os.path.join(args.out_dir, args.output_type, args.benchmark_name, args.misspelling_type)
     correct_out_path = os.path.join(out_dir, "correct.txt")
     corrupt_out_path = os.path.join(out_dir, "corrupt.txt")
+    correct_sequences_out_path = os.path.join(out_dir, "correct.sequences.txt")
     if os.path.exists(correct_out_path) and os.path.exists(corrupt_out_path):
         print(f"Benchmark {args.output_type} {args.benchmark_name} {args.misspelling_type} already exists")
         return
@@ -68,6 +69,10 @@ def create(args: argparse.Namespace) -> None:
     os.makedirs(out_dir, exist_ok=True)
     correct_out_file = open(correct_out_path, "w", encoding="utf8")
     corrupt_out_file = open(corrupt_out_path, "w", encoding="utf8")
+    if args.output_type != "sec":
+        correct_sequences_out_file = open(correct_sequences_out_path, "w", encoding="utf8")
+    else:
+        correct_sequences_out_file = None
 
     if args.misspelling_type == "artificial":
         noise = preprocessing.ArtificialNoise(
@@ -97,7 +102,9 @@ def create(args: argparse.Namespace) -> None:
         sequence = sequence[0]
 
         if args.output_type == "sed_sequence":
-            # make even 50/50 split here
+            # make about 50/50 split here
+            correct_sequences_out_file.write(sequence + "\n")
+
             if rand.random() < 0.5:
                 correct_out_file.write("0")
                 corrupted = sequence
@@ -105,6 +112,8 @@ def create(args: argparse.Namespace) -> None:
                 correct_out_file.write(str(int(corrupted != sequence)))
 
         elif args.output_type == "sed_words":
+            correct_sequences_out_file.write(sequence + "\n")
+
             corrupted_words = corrupted.split()
             correct_words = sequence.split()
             assert len(corrupted_words) == len(correct_words)
@@ -123,6 +132,8 @@ def create(args: argparse.Namespace) -> None:
 
     corrupt_out_file.close()
     correct_out_file.close()
+    if correct_sequences_out_file:
+        correct_sequences_out_file.close()
 
 
 if __name__ == "__main__":

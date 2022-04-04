@@ -24,18 +24,18 @@ overwrite=${OVERWRITE:-false}
 
 declare -A experiment_to_benchmark=(
   ["TOKENIZATION_REPAIR"]="tokenization_repair"
+  ["TOKENIZATION_REPAIR_PLUS"]="tokenization_repair sed_words sec"
   ["SED_WORDS"]="sed_words"
   ["SED_SEQUENCE"]="sed_sequence"
   ["SEC_NMT"]="sec"
   ["SEC_WORDS_NMT"]="sec"
 )
 
-declare -A experiment_to_exec=(
-  ["TOKENIZATION_REPAIR"]="trt"
-  ["SED_WORDS"]="gsed"
-  ["SED_SEQUENCE"]="gsed"
-  ["SEC_NMT"]="gsec"
-  ["SEC_WORDS_NMT"]="gsec"
+declare -A benchmark_to_exec=(
+  ["tokenization_repair"]="trt"
+  ["sed_sequence"]="gsed"
+  ["sed_words"]="gsed"
+  ["sec"]="gsec"
 )
 
 exp_regex=${EXP_REGEX:-"*"}
@@ -65,7 +65,11 @@ do
     continue
   fi
 
-  bin_name=${experiment_to_exec[$experiment_type]}
+  if [[ $experiment_type == "sed" || $experiment_type == "" ]]; then
+    export GNN_LIB_TOKENIZATION_REPAIR_PLUS_NO_REPAIR=true
+  else
+    export GNN_LIB_TOKENIZATION_REPAIR_PLUS_NO_REPAIR=true
+  fi
 
   for benchmark in ${experiment_to_benchmark[$experiment_type]}
   do
@@ -86,8 +90,9 @@ do
         continue
       fi
 
+      bin_name=${benchmark_to_exec[$benchmark]}
       echo "Running experiment $experiment_name ($experiment_type) on $out_dir_rel of $benchmark benchmark"
-      ${bin_dir}/${bin_name} -e $experiment -f $in_file -o $out_dir/${model_name}.txt -b 128
+      ${bin_dir}/${bin_name} -e $experiment -f $in_file -o $out_dir/${model_name}.txt
     done
   done
 done

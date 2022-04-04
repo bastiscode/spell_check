@@ -100,7 +100,7 @@ def binary_f1_prec_rec(
     tn = (targets[predicted_false] == 0).sum()
     fn = predicted_false.sum() - tn
 
-    assert tp + fp + fn + fn == len(predictions)
+    assert tp + fp + tn + fn == len(predictions)
     return _tp_fp_fn_to_f1_prec_rec(tp, fp, fn)
 
 

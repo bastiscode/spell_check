@@ -18,35 +18,37 @@ create_own_benchmarks:
 
 .PHONY: evaluate_sed_sequence
 evaluate_sed_sequence:
-	@python scripts/evaluate.py \
-	--groundtruths $(SPLIT)/sed_sequence/*/*/correct.txt \
-	--predictions $(SPLIT)/sed_sequence/results/*/*/*.txt \
-	--inputs $(SPLIT)/sed_sequence/*/*/corrupt.txt \
-	--metrics binary_f1 binary_precision binary_recall sequence_accuracy
+	@python scripts/evaluate_thesis.py \
+	--benchmark-dir $(SPLIT)/sed_sequence \
+	--benchmark-type sed_sequence \
+	--result-dir $(SPLIT)/sed_sequence/results \
+	--save-dir $(SPLIT)/sed_sequence_tables
+
+	@glow -w 150 $(SPLIT)/sed_sequence_tables/*.md
 
 .PHONY: evaluate_sed_words
 evaluate_sed_words:
-	@python scripts/evaluate.py \
-	--groundtruths $(SPLIT)/sed_words/*/*/correct.txt \
-	--predictions $(SPLIT)/sed_words/results/*/*/*.txt \
-	--inputs $(SPLIT)/sed_words/*/*/corrupt.txt \
-	--metrics binary_f1 binary_precision binary_recall sequence_accuracy word_accuracy
+	@python scripts/evaluate_thesis.py \
+	--benchmark-dir $(SPLIT)/sed_words \
+	--benchmark-type sed_words \
+	--result-dir $(SPLIT)/sed_words/results \
+	--save-dir $(SPLIT)/sed_words_tables
+
+	@glow -w 150 $(SPLIT)/sed_words_tables/*.md
 
 .PHONY: evaluate_sec
 evaluate_sec:
-	@python scripts/evaluate.py \
-	--groundtruths $(SPLIT)/sec/*/*/correct.txt \
-	--predictions $(SPLIT)/sec/results/*/*/*.txt \
-	--inputs $(SPLIT)/sec/*/*/corrupt.txt \
-	--metrics sequence_accuracy f1 precision recall med mned
+	@python scripts/evaluate_thesis.py \
+	--benchmark-dir $(SPLIT)/sec \
+	--benchmark-type sec \
+	--result-dir $(SPLIT)/sec/results \
+	--save-dir $(SPLIT)/sec_tables
 
-#.PHONY: evaluate_tokenization_repair
-#evaluate_tokenization_repair:
-#	@python scripts/evaluate.py \
-#	--groundtruths $(SPLIT)/tokenization_repair/*/$(SPLIT)/correct.txt \
-#	--predictions $(SPLIT)/tokenization_repair/results/*/$(SPLIT)/*.txt \
-#	--inputs $(SPLIT)/tokenization_repair/*/*/corrupt.txt \
-#	--metrics sequence_accuracy f1 precision recall med mned
+	@glow -w 150 $(SPLIT)/sec_tables/*.md
+
+.PHONY: evaluate_tokenization_repair
+evaluate_tokenization_repair:
+	echo "to be implemented"
 
 .PHONY: evaluate_all
 evaluate_all: evaluate_sed_words evaluate_sed_sequence evaluate_sec evaluate_tokenization_repair
