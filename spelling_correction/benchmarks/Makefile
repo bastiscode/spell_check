@@ -50,8 +50,28 @@ evaluate_sec:
 evaluate_tokenization_repair:
 	echo "to be implemented"
 
+.PHONY: evaluate_benchmark_statistics
+evaluate_benchmark_statistics:
+	@python scripts/generate_statistics_thesis.py \
+	--benchmark-dir $(SPLIT)/sed_words \
+	--benchmark-type sed_words \
+	--dictionary ../../data/dictionaries/merged_train_100k.txt \
+	--out-file $(SPLIT)/benchmark_statistics_tables/sed_words_benchmark_statistics.tex
+
+	@python scripts/generate_statistics_thesis.py \
+	--benchmark-dir $(SPLIT)/sed_sequence \
+	--benchmark-type sed_sequence \
+	--dictionary ../../data/dictionaries/merged_train_100k.txt \
+	--out-file $(SPLIT)/benchmark_statistics_tables/sed_sequence_benchmark_statistics.tex
+
+	@python scripts/generate_statistics_thesis.py \
+	--benchmark-dir $(SPLIT)/sec \
+	--benchmark-type sec \
+	--dictionary ../../data/dictionaries/merged_train_100k.txt \
+	--out-file $(SPLIT)/benchmark_statistics_tables/sec_benchmark_statistics.tex
+
 .PHONY: evaluate_all
-evaluate_all: evaluate_sed_words evaluate_sed_sequence evaluate_sec evaluate_tokenization_repair
+evaluate_all: evaluate_benchmark_statistics evaluate_sed_words evaluate_sed_sequence evaluate_sec evaluate_tokenization_repair
 
 .PHONY: run_experiments_on_benchmarks
 run_experiments_on_benchmarks:

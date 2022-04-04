@@ -70,6 +70,13 @@ _METRIC_TO_FMT = {
     "mean_normalized_edit_distance": ".4f"
 }
 
+_METRIC_TO_HIGHER_BETTER = {
+    "sequence_accuracy": True,
+    "binary_f1": True,
+    "word_accuracy": True,
+    "mean_normalized_edit_distance": False
+}
+
 Model = Tuple[str, str]
 
 
@@ -103,21 +110,21 @@ def get_sed_models_and_metrics(is_sed_words: bool) -> Tuple[Dict[int, List[Model
 
 def get_sec_models_and_metrics() -> Tuple[Dict[int, List[Model]], Set[str]]:
     return {
-        0: [
-            ("aspell", "baseline_aspell"),
-            ("jamspell", "baseline_jamspell"),
-            ("language_tool", "baseline_languagetool"),
-            ("close_to_dictionary", "baseline_ctd"),
-            ("do_nothing", "baseline_dummy")
-        ],
-        1: [
-            ("neuspell_bert", "baseline_neuspell_bert")
-        ],
-        2: [
-            ("transformer", "transformer_sec_nmt"),
-            ("transformer_word", "transformer_sec_words_nmt")
-        ]
-    }, {"sequence_accuracy", "mean_normalized_edit_distance"}
+               0: [
+                   ("aspell", "baseline_aspell"),
+                   ("jamspell", "baseline_jamspell"),
+                   ("language_tool", "baseline_languagetool"),
+                   ("close_to_dictionary", "baseline_ctd"),
+                   ("do_nothing", "baseline_dummy")
+               ],
+               1: [
+                   ("neuspell_bert", "baseline_neuspell_bert")
+               ],
+               2: [
+                   ("transformer", "transformer_sec_nmt"),
+                   ("transformer_word", "transformer_sec_words_nmt")
+               ]
+           }, {"sequence_accuracy", "mean_normalized_edit_distance"}
 
 
 if __name__ == "__main__":
@@ -179,15 +186,18 @@ if __name__ == "__main__":
         if len(data) == 0:
             continue
 
+        higher_better = _METRIC_TO_HIGHER_BETTER[metric_name]
         best_scores_per_benchmark = [float("-inf")] * len(data[0])
         best_models_per_benchmark = [set()] * len(data[0])
         for i, model_scores_per_benchmark in enumerate(data):
             for j, benchmark_score in enumerate(model_scores_per_benchmark):
-                if j == 0:  # j == 0 is model name
+                if benchmark_score is None or j == 0:
                     continue
-                if benchmark_score is None:
-                    continue
-                elif benchmark_score == best_scores_per_benchmark[j]:
+
+                if not higher_better:
+                    benchmark_score = -benchmark_score
+
+                if benchmark_score == best_scores_per_benchmark[j]:
                     best_models_per_benchmark[j].add(i)
                 elif benchmark_score > best_scores_per_benchmark[j]:
                     best_models_per_benchmark[j] = {i}
