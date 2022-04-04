@@ -31,7 +31,7 @@ class Sample(collections.namedtuple("SAMPLE", ["tokens", "doc", "neighbors_list"
     __slots__ = ()
 
     def __str__(self) -> str:
-        return str(self.doc)
+        return " " * self.doc.user_data.get("leading_whitespace", False) + str(self.doc)
 
 
 class InferenceInfo(collections.namedtuple(
@@ -201,7 +201,6 @@ def deserialize_samples(inputs: List[bytes]) -> List[Sample]:
 def sanitize_sample(sample: Sample, unk_token_id: int) -> Sample:
     for i, tokens in enumerate(sample.tokens):
         if len(tokens) == 0:
-            print("adding unk for empty")
             sample.tokens[i] = [unk_token_id]
         elif any(token is None for token in tokens):
             sample.tokens[i] = [token or unk_token_id for token in tokens]
@@ -528,18 +527,22 @@ def get_character_groups_from_repaired_doc(
         input_characters: List[str],
         repaired_doc: Doc
 ) -> torch.Tensor:
-    character_groups = []
-    char_idx = 0
-    for i, word in enumerate(repaired_doc):
-        running_word = ""
-        while running_word != word.text and len(running_word) < len(word.text):
-            if input_characters[char_idx] == " ":
-                character_groups.append(-1)
-            else:
-                running_word += input_characters[char_idx]
-                character_groups.append(i)
-            char_idx += 1
-        assert running_word == word.text
+    assert [c for c in input_characters if c != " "] == flatten([list(word.text) for word in repaired_doc])
+    character_groups = [-1] * len(input_characters)
+    word_idx = 0
+    word_char_idx = 0
+    for i in range(len(input_characters)):
+        if input_characters[i] == " ":
+            continue
+
+        assert input_characters[i] == repaired_doc[word_idx].text[word_char_idx]
+        character_groups[i] = word_idx
+
+        if word_char_idx == len(repaired_doc[word_idx].text) - 1:
+            word_idx += 1
+            word_char_idx = 0
+        else:
+            word_char_idx += 1
 
     return torch.tensor(character_groups, dtype=torch.long)
 

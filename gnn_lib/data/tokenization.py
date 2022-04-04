@@ -94,11 +94,13 @@ def get_tokenization_fn(
 ) -> Callable[[Doc], List[List[int]]]:
     def tok(doc: Doc) -> List[List[int]]:
         if respect_leading_whitespaces:
-            # transform spacy trailing whitespaces into leading whitespaces for tokenizers such as BPE
+            # transform spacy trailing whitespaces saved in doc into leading whitespaces for our tokenizers such as BPE
+            # also add leading and trailing whitespaces before/after first/last word if necessary
             word_tokens = [
                 tokenizer.tokenize(
                     (doc[i - 1].whitespace_ if i > 0 else (doc.user_data.get("leading_whitespace", False) * " "))
                     + word.text
+                    + (doc[i].whitespace_ if i == len(doc) - 1 else "")
                 )
                 for i, word in enumerate(doc)
             ]

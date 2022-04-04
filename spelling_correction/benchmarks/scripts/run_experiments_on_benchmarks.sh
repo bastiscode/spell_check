@@ -65,14 +65,14 @@ do
     continue
   fi
 
-  if [[ $experiment_type == "sed" || $experiment_type == "" ]]; then
-    export GNN_LIB_TOKENIZATION_REPAIR_PLUS_NO_REPAIR=true
-  else
-    export GNN_LIB_TOKENIZATION_REPAIR_PLUS_NO_REPAIR=true
-  fi
-
   for benchmark in ${experiment_to_benchmark[$experiment_type]}
   do
+    if [[ $benchmark == "tokenization_repair" ]]; then
+      export GNN_LIB_TOKENIZATION_REPAIR_PLUS_NO_REPAIR=false
+    else
+      export GNN_LIB_TOKENIZATION_REPAIR_PLUS_NO_REPAIR=true
+    fi
+
     in_files=`ls $benchmark_dir/$benchmark/*/*/corrupt.txt`
     for in_file in $in_files
     do

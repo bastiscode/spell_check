@@ -162,7 +162,7 @@ class TokenizationRepairPlus(tasks.Task):
             word_ws_groups = []
             word_features = []
 
-            for input_string, output in zip(inputs, outputs):
+            for i, (input_string, output) in enumerate(zip(inputs, outputs)):
                 repaired_words, repaired_doc = utils.tokenize_words(
                     output["tokenization_repair"], return_doc=True
                 )

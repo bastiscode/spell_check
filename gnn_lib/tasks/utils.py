@@ -167,7 +167,8 @@ def get_word_windows(
 
 
 def get_character_windows(
-        sample: data_utils.Sample, max_length: int, context_length: int) -> List[Tuple[int, int, int, int]]:
+        sample: data_utils.Sample, max_length: int, context_length: int
+) -> List[Tuple[int, int, int, int]]:
     sequence = str(sample)
     window_length = max_length - 2 * context_length
     windows = []

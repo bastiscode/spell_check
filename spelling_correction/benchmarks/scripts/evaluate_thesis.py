@@ -123,6 +123,10 @@ def get_sec_models_and_metrics() -> Tuple[Dict[int, List[Model]], Set[str]]:
                2: [
                    ("transformer", "transformer_sec_nmt"),
                    ("transformer_word", "transformer_sec_words_nmt")
+               ],
+               3: [
+                   ("sed + neuspell_bert", "baseline_neuspell_bert_with_sed"),
+                   ("sed + transformer_word", "transformer_sec_words_nmt_with_sed")
                ]
            }, {"sequence_accuracy", "mean_normalized_edit_distance"}
 

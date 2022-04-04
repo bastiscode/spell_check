@@ -556,6 +556,7 @@ def group_features(
     assert all(
         len(group_feat) == group_length for group_feat, group_length in zip(grouped_feats, batch_group_lengths)
     )
+
     new_grouped_feats = []
     for batch_group, batch_grouped_feat in zip(batch_groups, grouped_feats):
         # filter out invalid groups (marked with -1 or anything else smaller zero)
