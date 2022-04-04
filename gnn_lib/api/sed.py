@@ -10,8 +10,11 @@ from gnn_lib.api.utils import (
     ModelInfo,
     StringInputOutput,
     load_experiment,
-    get_string_dataset_and_loader,
-    reorder_data, get_device_info, _APIBase, get_inference_dataset_and_loader, load_text_file
+    reorder_data,
+    get_device_info,
+    _APIBase,
+    get_inference_dataset_and_loader,
+    load_text_file, save_text_file
 )
 from gnn_lib.data import DatasetVariants
 from gnn_lib.data.utils import clean_sequence
@@ -149,12 +152,22 @@ class SpellingErrorDetector(_APIBase):
 
         inputs = [clean_sequence(ipt) for ipt in inputs]
 
+        inference_kwargs = {
+            "threshold": threshold
+        }
+
+        is_tokenization_repair_plus = isinstance(self.task, tokenization_repair_plus.TokenizationRepairPlus)
+        if is_tokenization_repair_plus:
+            inference_kwargs["output_type"] = "sed"
+            inference_kwargs["no_repair"] = os.getenv("GNN_LIB_TOKENIZATION_REPAIR_PLUS_NO_REPAIR", "false") == "true"
+
         dataset, loader = get_inference_dataset_and_loader(
             inputs,
             task=self.task,
             max_length=self.max_length,
             sort_by_length=sort_by_length,
-            batch_size=batch_size
+            batch_size=batch_size,
+            **inference_kwargs
         )
 
         pbar = tqdm(
@@ -165,14 +178,6 @@ class SpellingErrorDetector(_APIBase):
             disable=not show_progress,
             unit="char"
         )
-
-        inference_kwargs = {
-            "threshold": threshold
-        }
-
-        if isinstance(self.task, tokenization_repair_plus.TokenizationRepairPlus):
-            inference_kwargs["output_type"] = "tokenization_repair"
-            inference_kwargs["no_repair"] = True
 
         all_outputs = []
         for i, (batch, infos, _) in enumerate(pbar):
@@ -198,7 +203,13 @@ class SpellingErrorDetector(_APIBase):
 
         pbar.close()
         all_outputs = reorder_data(all_outputs, dataset.indices)
-        return self.task.postprocess_inference_outputs(inputs, dataset.sample_infos, all_outputs, **inference_kwargs)
+        all_outputs = self.task.postprocess_inference_outputs(
+            inputs, dataset.sample_infos, all_outputs, **inference_kwargs
+        )
+        if is_tokenization_repair_plus:
+            return [output["sed"] for output in all_outputs]
+        else:
+            return all_outputs
 
     def detect_text(
             self,
@@ -236,10 +247,6 @@ class SpellingErrorDetector(_APIBase):
             input_file_path, threshold, batch_size, sort_by_length, show_progress
         )
         if output_file_path is not None:
-            with open(output_file_path, "w", encoding="utf8") as out_file:
-                for output in outputs:
-                    out_file.write(inference.inference_output_to_str(output))
-                    out_file.write("\n")
-            return None
+            save_text_file(output_file_path, iter(inference.inference_output_to_str(output) for output in outputs))
         else:
             return outputs

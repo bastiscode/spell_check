@@ -8,7 +8,6 @@ from typing import Union, List, Tuple, Optional, Iterator, Any, Dict, Iterable, 
 import dgl
 import ftfy
 import lmdb
-import numpy as np
 import spacy
 import torch
 from spacy import Vocab
@@ -50,7 +49,7 @@ def tokenize_words_regex(sequence: str) -> Tuple[List[str], List[bool]]:
     words = []
     whitespaces = []
     last_end = -1
-    for match in pattern.finditer(sequence.strip()):
+    for match in pattern.finditer(sequence):
         words.append(match.group())
         if last_end >= 0:
             whitespaces.append(last_end < match.start())
@@ -66,24 +65,13 @@ class SpacyRegexTokenizer:
 
     def __call__(self, text: str) -> Doc:
         words, whitespaces = tokenize_words_regex(text)
-        return Doc(self.vocab, words=words, spaces=whitespaces)
-
-
-class SpacyWhitespaceTokenizer:
-    def __init__(self, vocab: Vocab) -> None:
-        self.vocab = vocab
-
-    def __call__(self, text: str) -> Doc:
-        words = text.strip().split()
-        whitespaces = [True] * len(words)
-        whitespaces[-1] = False
-        return Doc(self.vocab, words=words, spaces=whitespaces)
+        # spacy spaces contain information about trailing whitespaces of the words, but we sometimes might
+        # need also the leading whitespaces which is why we need to store the very first whitespace again
+        return Doc(self.vocab, words=words, spaces=whitespaces, user_data={"leading_whitespace": text.startswith(" ")})
 
 
 SPACY_TOKENIZER_REGEX = spacy.load("en_core_web_lg")
 SPACY_TOKENIZER_REGEX.tokenizer = SpacyRegexTokenizer(SPACY_TOKENIZER_REGEX.vocab)
-SPACY_TOKENIZER_WS = spacy.load("en_core_web_lg")
-SPACY_TOKENIZER_WS.tokenizer = SpacyWhitespaceTokenizer(SPACY_TOKENIZER_WS.vocab)
 
 SPACY_NER_MAP = {label: i for i, label in enumerate(SPACY_TOKENIZER_REGEX.get_pipe("ner").labels)}
 # Universal pos tags
@@ -101,14 +89,12 @@ SPACY_NUM_DEP_TAGS = len(SPACY_DEP_TAG_MAP)
 def tokenize_words_batch(
         sequences: Iterable[str],
         return_docs: bool = False,
-        split_only_on_ws: bool = False,
         with_pos_tags: bool = False,
         with_ner: bool = False,
         with_dep_parser: bool = False,
         batch_size: Optional[int] = None,
         num_processes: int = 1
 ) -> List[Union[List[str], Tuple[List[str], Doc]]]:
-    tok = SPACY_TOKENIZER_WS if split_only_on_ws else SPACY_TOKENIZER_REGEX
     disable = []
     if not with_pos_tags:
         disable.append("tagger")
@@ -118,7 +104,7 @@ def tokenize_words_batch(
     if not with_dep_parser:
         disable.append("parser")
     outputs = []
-    for doc in tok.pipe(
+    for doc in SPACY_TOKENIZER_REGEX.pipe(
             sequences,
             disable=disable,
             batch_size=batch_size,
@@ -135,7 +121,6 @@ def tokenize_words_batch(
 def tokenize_words(
         sequence: str,
         return_doc: bool = False,
-        split_only_on_ws: bool = False,
         with_pos_tags: bool = False,
         with_ner: bool = False,
         with_dep_parser: bool = False
@@ -143,7 +128,6 @@ def tokenize_words(
     return tokenize_words_batch(
         [sequence],
         return_doc,
-        split_only_on_ws,
         with_pos_tags,
         with_ner,
         with_dep_parser
@@ -217,6 +201,7 @@ def deserialize_samples(inputs: List[bytes]) -> List[Sample]:
 def sanitize_sample(sample: Sample, unk_token_id: int) -> Sample:
     for i, tokens in enumerate(sample.tokens):
         if len(tokens) == 0:
+            print("adding unk for empty")
             sample.tokens[i] = [unk_token_id]
         elif any(token is None for token in tokens):
             sample.tokens[i] = [token or unk_token_id for token in tokens]

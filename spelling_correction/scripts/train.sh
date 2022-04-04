@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --partition=alldlc_gpu-rtx2080
 #SBATCH --nodes=2
-#SBATCH --ntasks-per-node=5
-#SBATCH --gres=gpu:5
+#SBATCH --ntasks-per-node=4
+#SBATCH --gres=gpu:4
 #SBATCH --job-name=training
 #SBATCH --mail-user=sebastian.walter98@gmail.com
 #SBATCH --mail-type=END,FAIL
@@ -49,7 +49,7 @@ else
   experiment_dir=$workspace/experiments
 
   master_addr=$(scontrol show hostnames "$SLURM_JOB_NODELIST" | head -n 1)
-  world_size=10
+  world_size=8
   echo "Running on Slurm Cluster, master machine at $master_addr:$master_port"
 fi
 

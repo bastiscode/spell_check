@@ -2,7 +2,7 @@ import math
 import queue
 from typing import Callable, Tuple, Dict, List, Any, Union, Optional
 
-import Levenshtein
+# import Levenshtein
 import einops
 import torch
 
@@ -82,7 +82,7 @@ def log_likelihood_score(normalize_by_length: bool = True, alpha: float = 1.0) -
 
 def spelling_correction_score(
         # if not None, must be one of
-        # {log_likelihood, dictionary, dictionary_or_in_input, dictionary_or_eq_input, dictionary_or_close_input}
+        # {log_likelihood, dictionary, dictionary_or_in_input, dictionary_or_eq_input}
         mode: str = "log_likelihood",
         # prefix index, to check if a word is a prefix of a word in the dictionary
         prefix_index: Optional[index.PrefixIndex] = None,
@@ -139,12 +139,12 @@ def spelling_correction_score(
 
             # check if current predicted string has a smaller prefix edit distance to input string than a
             # given threshold
-            elif mode == "dictionary_or_close_input":
-                valid_pred |= (
-                        Levenshtein.distance(pred_str, input_str[:len(pred_str)])
-                        <
-                        kwargs.get("max_prefix_edit_distance", 5)
-                )
+            # elif mode == "dictionary_or_close_input":
+            #     valid_pred |= (
+            #             Levenshtein.distance(pred_str, input_str[:len(pred_str)])
+            #             <
+            #             kwargs.get("max_prefix_edit_distance", 5)
+            #     )
 
             else:
                 raise RuntimeError(f"unknown spell check score mode {mode}")

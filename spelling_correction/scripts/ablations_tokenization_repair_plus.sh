@@ -37,7 +37,7 @@ elif [[ $approach == "plus_sed_plus_sec" ]]; then
   echo "Starting training with config $(realpath "$config" --relative-to "$config_dir")"
   export GNN_LIB_EXPERIMENT_NAME="tokenization_repair_plus_sed_plus_sec"
   export GNN_LIB_MASTER_PORT=$(python -c "import random; print(random.randrange(10000, 60000))")
-  export GNN_LIB_NUM_SEC_LAYERS=3
+  export GNN_LIB_NUM_SEC_LAYERS=6
   export GNN_LIB_BATCH_MAX_LENGTH=32768
   export GNN_LIB_CONFIG=$rel_config
   sbatch spelling_correction/scripts/train.sh

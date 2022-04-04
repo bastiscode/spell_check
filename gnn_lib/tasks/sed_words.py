@@ -45,12 +45,4 @@ class SEDWords(TokenClassification):
             predictions: List[List[int]],
             **kwargs: Any
     ) -> List[int]:
-        assert all(p in {0, 1} for prediction in predictions for p in prediction)
-        merged_prediction = []
-        for info, prediction in zip(infos, predictions):
-            assert len(sequence[info.ctx_start:info.ctx_end].split()) == len(prediction)
-            num_left_context_words = len(sequence[info.ctx_start:info.window_start].split())
-            num_window_words = len(sequence[info.window_start:info.window_end].split())
-            merged_prediction.extend(prediction[num_left_context_words:num_left_context_words + num_window_words])
-        assert len(merged_prediction) == len(sequence.split())
-        return merged_prediction
+        return task_utils.merge_sed_words_outputs(sequence, infos, predictions)

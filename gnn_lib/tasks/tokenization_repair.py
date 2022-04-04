@@ -52,7 +52,7 @@ class TokenizationRepair(TokenClassification):
         repair_tokens_list = super().inference(model, inputs, **kwargs)
         return [
             tokenization_repair.repair_whitespace(
-                ipt,
+                str(ipt),
                 repair_tokens
             )
             for ipt, repair_tokens in zip(inputs, repair_tokens_list)
@@ -80,17 +80,4 @@ class TokenizationRepair(TokenClassification):
             predictions: List[str],
             **kwargs: Any
     ) -> str:
-        merged_prediction = ""
-        for prediction, info in zip(predictions, infos):
-            left_context = sequence[info.ctx_start:info.window_start]
-            window = sequence[info.window_start:info.window_end]
-            right_context = sequence[info.window_end:info.ctx_end]
-            match_start, match_end = tokenization_repair.match_string_ignoring_space(
-                prediction,
-                left_context,
-                window,
-                right_context
-            )
-            merged_prediction += prediction[match_start:match_end]
-        assert merged_prediction.replace(" ", "") == sequence.replace(" ", "")
-        return merged_prediction
+        return task_utils.merge_tokenization_repair_outputs(sequence, infos, predictions)

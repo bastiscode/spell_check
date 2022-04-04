@@ -1,16 +1,13 @@
 from typing import Dict, Union, List, Any, Tuple
 
-import dgl
 import torch
 from torch.nn import functional as F
 
 from gnn_lib import tasks, models
-from gnn_lib.data import utils as data_utils
 from gnn_lib.data.utils import Sample
 from gnn_lib.modules import utils
 from gnn_lib.tasks import utils as task_utils
 from gnn_lib.utils import data_containers, Batch, to
-from gnn_lib.utils.distributed import DistributedDevice
 
 
 class GraphClassification(tasks.Task):
@@ -22,10 +19,12 @@ class GraphClassification(tasks.Task):
             "accuracy": data_containers.AverageScalarContainer(name="accuracy")
         }
 
-    def _prepare_inputs_and_labels(self,
-                                   batch: Batch,
-                                   device: DistributedDevice) -> Tuple[Dict[str, Any], Any]:
-        labels = to(torch.cat(batch.info.pop("label")), device.device)
+    def _prepare_inputs_and_labels(
+            self,
+            batch: Batch,
+            device: torch.device
+    ) -> Tuple[Dict[str, Any], Any]:
+        labels = to(torch.cat(batch.info.pop("label")), device)
 
         return {"g": batch.data, **batch.info}, labels
 

@@ -59,7 +59,7 @@ class Task:
 
     def disable_unused_parameters(
             self,
-            model: DDP,
+            model: models.Model,
             device: DistributedDevice
     ) -> Set[str]:
         batch = self.generate_sample_inputs(num_samples=1)
@@ -485,8 +485,7 @@ class Task:
         for sample in samples:
             sample = data_utils.sanitize_sample(sample, self.variant.unk_token_id)
             sequence = str(sample)
-            token_lengths = [len(tokens) for tokens in sample.tokens]
-            length = sum(token_lengths)
+            length = sum(len(tokens) for tokens in sample.tokens)
             if length <= max_length:
                 all_samples.append(sample)
                 all_infos.append(data_utils.InferenceInfo(
@@ -500,7 +499,13 @@ class Task:
             else:
                 windows = self._split_sample_for_inference(sample, max_length, context_length, **kwargs)
                 for i, (ctx_start, ctx_end, window_start, window_end) in enumerate(windows):
+                    if i > 0:
+                        # make sure than windows are aligned properly, start of current window is end of previous window
+                        assert window_start == windows[i - 1][-1]
                     sample, _ = self.variant.get_sample(sequence[ctx_start:ctx_end], is_inference=True)
+                    length = sum(len(t) for t in sample.tokens)
+                    assert length <= max_length, f"sample with length {length} after splitting still exceeds " \
+                                                 f"max length of {max_length}, this should not happen"
                     all_samples.append(sample)
                     all_infos.append(data_utils.InferenceInfo(
                         ctx_start=ctx_start,
@@ -508,7 +513,7 @@ class Task:
                         window_start=window_start,
                         window_end=window_end,
                         window_idx=i,
-                        length=sum(len(t) for t in sample.tokens)
+                        length=length
                     ))
         return all_samples, all_infos
 
@@ -518,7 +523,7 @@ class Task:
     ) -> Batch:
         items = [self.variant.get_inputs(s, is_inference=True) for s in sequences]
         return data_utils.collate(items)
-    
+
     @torch.inference_mode()
     def inference(
             self,

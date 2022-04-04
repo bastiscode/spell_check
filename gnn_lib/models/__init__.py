@@ -14,7 +14,7 @@ from gnn_lib.data.tokenization import TokenizerConfig, get_tokenizer_from_config
 from gnn_lib.modules import heads, embedding, utils, encoders
 from gnn_lib.modules.embedding import GraphEmbeddingConfig, TensorEmbeddingConfig
 from gnn_lib.modules.utils import GraphEncoderMixin, TensorEncoderMixin, DecoderMixin, pad
-from gnn_lib.utils import TensorInput, Batch, DataInput, to
+from gnn_lib.utils import TensorInput, Batch, DataInput, to, io
 
 
 class Models(enum.IntEnum):
@@ -1070,6 +1070,10 @@ class ModelForTokenizationRepairPlusConfig(TensorModelConfig):
     num_input_layers: int = MISSING
     num_word_layers: int = MISSING
 
+    # tokenization repair backbone args
+    start_from_tokenization_repair_checkpoint: Optional[str] = None
+    fix_tokenization_repair: bool = False
+
     # special args when output_type is tokenization_repair_plus_sed_plus_sec
     sec_tokenizer: Optional[TokenizerConfig] = None
     num_sec_layers: int = MISSING
@@ -1103,6 +1107,25 @@ class ModelForTokenizationRepairPlus(TensorModel, TensorEncoderMixin):
             self.sec_pad_token_id = self.sec_tokenizer.token_to_id(tokenization.PAD)
 
         super().__init__(sample_inputs, cfg, device)
+
+        if cfg.start_from_tokenization_repair_checkpoint is not None:
+            checkpoint = io.load_checkpoint(cfg.start_from_tokenization_repair_checkpoint, self.device)
+            ckpt_state_dict = checkpoint["model_state_dict"]
+            ckpt_encoder_state_dict = io.filter_state_dict(ckpt_state_dict, "encoder.")
+            ckpt_head_state_dict = io.filter_state_dict(ckpt_state_dict, "head.")
+            ckpt_embedding_state_dict = io.filter_state_dict(ckpt_state_dict, "embedding.")
+
+            self.embedding.load_state_dict(ckpt_embedding_state_dict)
+            self.encoder.load_state_dict(ckpt_encoder_state_dict)
+            self.head["tokenization_repair"].load_state_dict(ckpt_head_state_dict)
+
+        if cfg.fix_tokenization_repair:
+            for param in self.embedding.parameters():
+                param.requires_grad = False
+            for param in self.encoder.parameters():
+                param.requires_grad = False
+            for param in self.head["tokenization_repair"].parameters():
+                param.requires_grad = False
 
         self.word_encoder = self.build_word_encoder(sample_inputs)
 
@@ -1315,6 +1338,7 @@ class ModelForTokenizationRepairPlus(TensorModel, TensorEncoderMixin):
                 len(positions) == length
                 for positions, length in zip(decoder_positions, sec_decoder_lengths)
             )
+            # print("max pos:", max([pos.max().item() for pos in decoder_positions]))
 
             outputs["sec"] = self.head["sec"](
                 decoder_inputs=sec_decoder_inputs,

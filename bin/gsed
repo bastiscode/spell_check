@@ -12,7 +12,7 @@ from torch.backends import cudnn
 
 import gnn_lib
 from gnn_lib import SpellingErrorDetector, get_available_spelling_error_detection_models
-from gnn_lib.api.utils import load_text_file, generate_report
+from gnn_lib.api.utils import load_text_file, generate_report, save_text_file
 from gnn_lib.modules import inference
 from gnn_lib.tasks import utils as task_utils
 from gnn_lib.utils import common
@@ -215,10 +215,10 @@ def run(args: argparse.Namespace) -> None:
             for detection, line in zip(detections, inputs):
                 print(format_output(detection, line, args.sec_out))
         else:
-            os.makedirs(os.path.dirname(args.out_path), exist_ok=True)
-            with open(args.out_path, "w", encoding="utf8") as of:
-                for detection, line in zip(detections, inputs):
-                    of.write(format_output(detection, line, args.sec_out) + "\n")
+            save_text_file(
+                args.out_path,
+                [format_output(detection, line, args.sec_out) for detection, line in zip(detections, inputs)]
+            )
 
     elif args.interactive:
         while True:

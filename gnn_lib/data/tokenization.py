@@ -96,10 +96,14 @@ def get_tokenization_fn(
         if respect_leading_whitespaces:
             # transform spacy trailing whitespaces into leading whitespaces for tokenizers such as BPE
             word_tokens = [
-                tokenizer.tokenize((doc[i - 1].whitespace_ if i > 0 else "") + word.text)
+                tokenizer.tokenize(
+                    (doc[i - 1].whitespace_ if i > 0 else (doc.user_data.get("leading_whitespace", False) * " "))
+                    + word.text
+                )
                 for i, word in enumerate(doc)
             ]
         else:
+            # just tokenize the raw words each on their own with all whitespaces removed
             word_tokens = [tokenizer.tokenize(word.text) for word in doc]
         return word_tokens
 

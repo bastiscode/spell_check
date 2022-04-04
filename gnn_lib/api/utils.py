@@ -8,7 +8,7 @@ import re
 import shutil
 import time
 import zipfile
-from typing import Optional, Union, List, Tuple, Dict, Callable
+from typing import Optional, Union, List, Tuple, Dict, Callable, Any, Iterator
 
 import requests
 from omegaconf import OmegaConf
@@ -367,6 +367,14 @@ def load_text_file(file_path: str) -> List[str]:
     return text
 
 
+def save_text_file(file_path: str, content: Iterator[str]) -> None:
+    if os.path.dirname(file_path):
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    with open(file_path, "w", encoding="utf8") as of:
+        for line in content:
+            of.write(line + "\n")
+
+
 def get_string_dataset_and_loader(
         file_or_list_of_strings: Union[str, List[str]],
         sort_by_length: bool,
@@ -398,7 +406,8 @@ class InferenceDataset(Dataset):
             task: Task,
             max_length: int,
             context_length: Optional[int] = None,
-            sort_by_length: bool = False
+            sort_by_length: bool = False,
+            **kwargs: Any
     ) -> None:
         self.strings = strings
         self.task = task
@@ -409,7 +418,7 @@ class InferenceDataset(Dataset):
         self.sort_by_length = sort_by_length
 
         self.samples, self.sample_infos = self.task.prepare_sequences_for_inference(
-            self.strings, self.max_length, self.context_length
+            self.strings, self.max_length, self.context_length, **kwargs
         )
 
         if not self.sort_by_length:
@@ -445,14 +454,16 @@ def get_inference_dataset_and_loader(
         max_length: int,
         sort_by_length: bool,
         batch_size: int,
-        context_length: Optional[int] = None
+        context_length: Optional[int] = None,
+        **kwargs: Any
 ) -> Tuple[InferenceDataset, DataLoader]:
     dataset = InferenceDataset(
         sequences,
         task,
         max_length,
         context_length=context_length,
-        sort_by_length=sort_by_length
+        sort_by_length=sort_by_length,
+        **kwargs
     )
 
     loader = DataLoader(

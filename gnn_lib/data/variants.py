@@ -740,6 +740,10 @@ class TokenizationRepairPlusConfig(TokenizationRepairConfig):
 
     # one of {tokenization_repair_plus_sed, tokenization_repair_plus_sed_plus_sec}
     output_type: str = "tokenization_repair_plus_sed"
+    # whether to tokenization repair is considered to be fixed (no labels and thereby no tokenization repair loss
+    # and gradients will be calculated during training, should only be used together
+    # with fix_tokenization_repair in model)
+    fix_tokenization_repair: bool = False
 
     dictionary_file: Optional[str] = None
     add_word_features: bool = True
@@ -785,11 +789,12 @@ class TokenizationRepairPlus(TokenizationRepair):
         info = {}
         if not is_inference:
             assert target_sequence is not None
-            # get the whitespace operations to turn input_sample into target_sequence
-            tokenization_repair_label = tokenization_repair.get_whitespace_operations(
-                str(input_sample), target_sequence
-            )
-            info["tokenization_repair_label"] = torch.tensor(tokenization_repair_label, dtype=torch.long)
+            if not self.cfg.fix_tokenization_repair:
+                # get the whitespace operations to turn input_sample into target_sequence
+                tokenization_repair_label = tokenization_repair.get_whitespace_operations(
+                    str(input_sample), target_sequence
+                )
+                info["tokenization_repair_label"] = torch.tensor(tokenization_repair_label, dtype=torch.long)
 
             assert "org_sequence" in input_sample.info
             org_words = input_sample.info["org_sequence"].split()
@@ -833,7 +838,7 @@ class TokenizationRepairPlus(TokenizationRepair):
             )
 
             if self.cfg.output_type == "tokenization_repair_plus_sed_plus_sec":
-                assert self.sec_tokenizer is not None, "output tokenizer must be specified to use sec output"
+                assert self.sec_tokenizer is not None, "sec tokenizer must be specified to use sec output"
                 label = [
                     self.sec_tokenizer.tokenize(word, add_bos_eos=True)
                     for word in org_words

@@ -39,9 +39,9 @@ if [[ $ablations_type == "gnn" ]]; then
 #    "false attention residual false true false false true null" # default
 #    "false attention residual false false false false true null" # default - word_features
 #    "false attention residual false true false true false null" # cliques + wfc - dictionary
-#    "false attention residual false true false true false null" # cliques + wfc
+    "false attention residual false true false true false null" # cliques + wfc
 #    "false attention residual false false false true false null" # cliques + wfc - word_features
-    "true attention residual false true true true false null" # cliques + wfc + dep + message_gating
+#    "true attention residual false true true true false null" # cliques + wfc + dep + message_gating
 #    "true message_passing residual false true true true false null" # message_passing + cliques + wfc + dep + message_gating
 #    "false convolution residual false true false false true null" # convolution
 #    "true attention residual false true true false false null" # cliques + message_gating + dep
@@ -51,9 +51,9 @@ if [[ $ablations_type == "gnn" ]]; then
 #    "gnn_default"
 #    "gnn_default_no_features"
 #    "gnn_cliques_wfc_no_dict"
-#    "gnn_cliques_wfc"
+    "gnn_cliques_wfc"
 #    "gnn_cliques_wfc_no_features"
-    "gnn_cliques_wfc_dep_gating"
+#    "gnn_cliques_wfc_dep_gating"
 #    "gnn_message_passing_cliques_wfc_dep_gating"
 #    "gnn_convolution"
 #    "gnn_cliques_dependency"

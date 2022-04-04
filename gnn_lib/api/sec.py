@@ -16,7 +16,7 @@ from gnn_lib.api.utils import (
     reorder_data,
     load_text_file,
     get_device_info,
-    get_inference_dataset_and_loader
+    get_inference_dataset_and_loader, save_text_file
 )
 from gnn_lib.data import index, tokenization
 from gnn_lib.data.utils import clean_sequence
@@ -213,16 +213,19 @@ class SpellingErrorCorrector(_APIBase):
 
         inputs = [clean_sequence(ipt) for ipt in inputs]
 
+        inference_kwargs = inference_kwargs_from_search_and_score(search, score, self.model.output_tokenizer)
+        if isinstance(self.task, tokenization_repair_plus.TokenizationRepairPlus):
+            inference_kwargs["output_type"] = "sec"
+            inference_kwargs["no_repair"] = True
+
         dataset, loader = get_inference_dataset_and_loader(
             inputs,
             task=self.task,
             max_length=self.max_length,
             sort_by_length=sort_by_length,
-            batch_size=batch_size
+            batch_size=batch_size,
+            **inference_kwargs
         )
-
-        search = BestFirstSearch()
-        score = SpellingCorrectionScore(True, 1.0, mode="dictionary")
 
         if (detections is not None and (
                 isinstance(self.task, sec_words_nmt.SECWordsNMT)
@@ -264,11 +267,6 @@ class SpellingErrorCorrector(_APIBase):
             unit="char"
         )
 
-        inference_kwargs = inference_kwargs_from_search_and_score(search, score, self.model.output_tokenizer)
-        if isinstance(self.task, tokenization_repair_plus.TokenizationRepairPlus):
-            inference_kwargs["output_type"] = "sec"
-            inference_kwargs["no_repair"] = True
-
         all_outputs = []
         for i, (batch, infos, indices) in enumerate(pbar):
             if detections is not None:
@@ -300,7 +298,8 @@ class SpellingErrorCorrector(_APIBase):
         pbar.close()
         all_outputs = reorder_data(all_outputs, dataset.indices)
         all_outputs = self.task.postprocess_inference_outputs(
-            inputs, dataset.sample_infos, all_outputs, **inference_kwargs)
+            inputs, dataset.sample_infos, all_outputs, **inference_kwargs
+        )
         return [inference.inference_output_to_str(output) for output in all_outputs]
 
     def correct_text(
@@ -350,10 +349,6 @@ class SpellingErrorCorrector(_APIBase):
         )
 
         if output_file_path is not None:
-            with open(output_file_path, "w", encoding="utf8") as out_file:
-                for output in outputs:
-                    out_file.write(output)
-                    out_file.write("\n")
-            return None
+            save_text_file(output_file_path, outputs)
         else:
             return outputs

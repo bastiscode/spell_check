@@ -47,6 +47,4 @@ class SEDSequence(SequenceClassification):
             predictions: List[int],
             **kwargs: Any
     ) -> int:
-        assert all(p in {0, 1} for p in predictions)
-        # for sed sequence, if for any part of the sequence an error was detected, the overall sequence has an error
-        return int(any(p for p in predictions))
+        return task_utils.merge_sed_sequence_outputs(predictions)

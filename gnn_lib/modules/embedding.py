@@ -41,6 +41,9 @@ class LearnedPositionalEmbedding(TokenEmbedding):
         self.embedding_dim = embedding_dim
         self.max_len = max_len
 
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}(embedding_dim={self.embedding_dim}, max_len={self.max_len})"
+
 
 class SinusoidalPositionalEmbedding(nn.Module):
     def __init__(self, embedding_dim: int, max_len: int):
@@ -59,6 +62,9 @@ class SinusoidalPositionalEmbedding(nn.Module):
     def forward(self, pos: torch.Tensor) -> torch.Tensor:
         pos_emb = torch.index_select(self.pe, 0, pos.reshape(-1))
         return pos_emb.view((*pos.shape, -1))
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}(embedding_dim={self.embedding_dim}, max_len={self.max_len})"
 
 
 def embed_nodes_along_edge(g: dgl.DGLHeteroGraph,

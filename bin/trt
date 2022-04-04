@@ -11,7 +11,9 @@ import torch.backends.cudnn
 
 import gnn_lib
 from gnn_lib.api import get_available_tokenization_repair_models, TokenizationRepairer
-from gnn_lib.api.utils import generate_report
+from gnn_lib.api.utils import generate_report, load_text_file, save_text_file
+from gnn_lib.utils import common
+from gnn_lib.tasks import utils as task_utils
 
 
 def parse_args() -> argparse.Namespace:
@@ -92,19 +94,26 @@ def parse_args() -> argparse.Namespace:
         help="List all available models with short descriptions"
     )
     parser.add_argument(
-        "--progress",
-        action="store_true",
-        help="Show a progress bar (this flag is only respected when getting input from stdin, "
-             "in interactive mode with -i progress is never shown, "
-             "when repairing a file with -f progress is always shown)"
-    )
-    parser.add_argument(
         "-p",
         "--pipe",
         action="store_true",
         help="Pass this flag when using trt in a pipe because input and output is then treated as an iterator "
              "(note that sorting by length gets disabled with this flag because it is not possible to sort an "
              "iterator)"
+    )
+    parser.add_argument(
+        "--precision",
+        choices=["fp32", "fp16", "bfp16"],
+        default="fp32",
+        help="Choose the precision for inference, fp16 or bfp16 can result in faster runtimes when running on a "
+             "new GPU that supports lower precision, but it can be slower on older GPUs."
+    )
+    parser.add_argument(
+        "--progress",
+        action="store_true",
+        help="Show a progress bar (this flag is only respected when getting input from stdin, "
+             "in interactive mode with -i progress is never shown, "
+             "when repairing a file with -f progress is always shown)"
     )
     parser.add_argument(
         "-v",
@@ -174,34 +183,30 @@ def run(args: argparse.Namespace) -> None:
             force_download=args.force_download
         )
 
+    tok_rep.set_precision(args.precision)
+
     start = time.perf_counter()
+    num_sequences = -1
+    num_characters = -1
     if args.repair is not None:
         print(tok_rep.repair_text(args.repair))
+
     elif args.file is not None:
-        repaired_lines = tok_rep.repair_file(
-            input_file_path=args.file,
-            output_file_path=args.out_path,
+        inputs = load_text_file(args.file)
+        num_sequences = len(inputs)
+        num_characters = sum(len(ipt) for ipt in inputs)
+
+        repaired_lines = tok_rep.repair_text(
+            inputs=inputs,
             batch_size=args.batch_size,
-            sort_by_length=not args.unsorted
+            sort_by_length=not args.unsorted,
+            show_progress=True
         )
         if args.out_path is None:
             for line in repaired_lines:
                 print(line)
-
-        if args.report:
-            with open(args.file, "r", encoding="utf8") as inf:
-                lines = [line.strip() for line in inf]
-
-            generate_report(
-                tok_rep.task_name,
-                tok_rep.model_name,
-                lines,
-                time.perf_counter() - start,
-                args.batch_size,
-                not args.unsorted,
-                tok_rep.device,
-                file_path=args.report
-            )
+        else:
+            save_text_file(args.out_path, repaired_lines)
 
     elif args.interactive:
         while True:
@@ -235,22 +240,35 @@ def run(args: argparse.Namespace) -> None:
                 ):
                     print(repaired_line)
 
-                if args.report:
-                    generate_report(
-                        tok_rep.task_name,
-                        tok_rep.model_name,
-                        lines,
-                        time.perf_counter() - start,
-                        args.batch_size,
-                        not args.unsorted,
-                        tok_rep.device,
-                        file_path=args.report
+                num_sequences = len(lines)
+                num_characters = sum(len(line) for line in lines)
 
-                    )
         except BrokenPipeError:
             return
         except Exception as e:
             raise e
+
+    if args.report and num_sequences >= 0 and num_characters >= 0:
+        end = time.perf_counter()
+
+        sample_inputs = tok_rep.task.generate_sample_inputs(2)
+        inputs, _ = tok_rep.task._prepare_inputs_and_labels(sample_inputs, tok_rep.device)
+        unused_parameters = task_utils.get_unused_parameters(tok_rep.model, **inputs)
+        parameter_dict = common.get_num_parameters(tok_rep.model, unused_parameters)
+
+        generate_report(
+            tok_rep.task_name,
+            tok_rep.model_name,
+            parameter_dict["total"] - parameter_dict["unused"],
+            num_sequences,
+            num_characters,
+            end - start,
+            tok_rep._mixed_precision_dtype,
+            args.batch_size,
+            not args.unsorted,
+            tok_rep.device,
+            file_path=args.report
+        )
 
 
 if __name__ == "__main__":

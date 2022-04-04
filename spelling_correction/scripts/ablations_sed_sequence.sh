@@ -37,16 +37,16 @@ if [[ $ablations_type == "gnn" ]]; then
     )
   declare -a ablations=(
 #    "false attention residual false true false false true null" # default
-#    "false attention residual false true false true false null" # cliques + wfc
+    "false attention residual false true false true false null" # cliques + wfc
 #    "false convolution residual false true false false true null" # convolution
-    "true attention residual false true true true false null" # cliques + wfc + message_gating + dep
+#    "true attention residual false true true true false null" # cliques + wfc + message_gating + dep
 #    "true message_passing residual false true false true false data/spell_check_index/ctx_0_ned_string" # default + message_gating + cliques + neighbors
   )
   declare -a ablation_names=(
 #    "gnn_default"
-#    "gnn_cliques_wfc"
+    "gnn_cliques_wfc"
 #    "gnn_convolution"
-    "gnn_cliques_wfc_dep_gating"
+#    "gnn_cliques_wfc_dep_gating"
 #    "gnn_neighbors"
   )
 

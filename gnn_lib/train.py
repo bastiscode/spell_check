@@ -160,9 +160,10 @@ def train(args: argparse.Namespace, device: DistributedDevice) -> None:
         if device.is_main_process:
             logger.info(f"Successfully loaded weights from {cfg.start_from_checkpoint}")
 
-    model = model.to(device.device)
-    torch.cuda.set_device(device.device)
-    model = DistributedDataParallel(model)  # , device_ids=[device.local_rank], output_device=device.local_rank)
+    # model = model.to(device.device)
+    # torch.cuda.set_device(device.device)
+    unused_parameters = task.disable_unused_parameters(model, device)
+    model = DistributedDataParallel(model)
 
     # this makes sure we can use DDP with parameter sharing and gradient checkpointing,
     # but we have to make sure that our models to not have any control flow in them (e.g. if statements),
@@ -233,7 +234,7 @@ def train(args: argparse.Namespace, device: DistributedDevice) -> None:
         batch_sampler=train_batch_sampler,
         collate_fn=utils.collate,
         num_workers=num_workers,
-        pin_memory=True,
+        pin_memory=cfg.pin_memory,
         worker_init_fn=worker_init_fn
     )
     val_loader = data.DataLoader(
@@ -241,7 +242,7 @@ def train(args: argparse.Namespace, device: DistributedDevice) -> None:
         batch_sampler=val_batch_sampler,
         collate_fn=utils.collate,
         num_workers=num_workers,
-        pin_memory=True,
+        pin_memory=cfg.pin_memory,
         worker_init_fn=worker_init_fn
     )
 
@@ -259,9 +260,7 @@ def train(args: argparse.Namespace, device: DistributedDevice) -> None:
                         f"({device_props.major}.{device_props.minor}, {device_props.multi_processor_count})")
         logger.info(f"Train dataset contains {len(train_dataset)} samples")
         logger.info(f"Validation dataset contains {len(val_dataset)} samples")
-        logger.info(f"Model has "
-                    f"{common.get_num_parameters(model)['total']:,} "
-                    f"parameters")
+        logger.info(f"Model has {common.get_num_parameters(unwrap_ddp(model), unused_parameters)} parameters")
         # only use tensorboard writer on main process such that we do not log multiple times
         writer = tensorboard.SummaryWriter(
             log_dir=os.path.join(experiment_dir, "tensorboard"),
@@ -299,8 +298,6 @@ def train(args: argparse.Namespace, device: DistributedDevice) -> None:
         )
         if resuming_training and "lr_scheduler_state_dict" in last_checkpoint:
             lr_scheduler.load_state_dict(last_checkpoint["lr_scheduler_state_dict"])
-
-    unused_parameters = task.disable_unused_parameters(model, device)
 
     start_epoch = 0
     steps_to_fast_forward = 0

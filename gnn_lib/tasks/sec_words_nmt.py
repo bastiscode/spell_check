@@ -122,15 +122,8 @@ class SECWordsNMT(Token2Seq):
             predictions: List[List[str]],
             **kwargs: Any
     ) -> List[str]:
-        min_num_predictions = min(len(prediction) for prediction in predictions)
-        merged_predictions = [[] for _ in range(min_num_predictions)]
-        for info, prediction in zip(infos, predictions):
-            num_left_context_words = len(sequence[info.ctx_start:info.window_start].split())
-            num_window_words = len(sequence[info.window_start:info.window_end].split())
-            for i in range(min_num_predictions):
-                predicted_words = prediction[i].split()
-                merged_predictions[i].extend(
-                    predicted_words[num_left_context_words:num_left_context_words + num_window_words]
-                )
-        merged_predictions = [" ".join(predicted_words) for predicted_words in merged_predictions]
-        return merged_predictions
+        return task_utils.merge_sec_words_nmt_outputs(
+            sequence,
+            infos,
+            [[p.split() for p in prediction] for prediction in predictions]
+        )

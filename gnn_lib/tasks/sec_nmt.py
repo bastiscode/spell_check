@@ -36,11 +36,5 @@ class SECNMT(Seq2Seq):
             infos: List[InferenceInfo],
             predictions: List[List[str]],
             **kwargs: Any
-    ) -> Any:
-        min_num_predictions = min(len(prediction) for prediction in predictions)
-        merged_predictions = [[] for _ in range(min_num_predictions)]
-        for prediction in predictions:
-            for i in range(min_num_predictions):
-                merged_predictions[i].append(prediction[i])
-        merged_predictions = [" ".join(s.strip() for s in predictions) for predictions in merged_predictions]
-        return merged_predictions
+    ) -> List[str]:
+        return task_utils.merge_sec_nmt_outputs(predictions)

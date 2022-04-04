@@ -71,6 +71,7 @@ class TrainConfig:
     keep_last_n_checkpoints: int = 0  # 0 means we only keep the best checkpoint
     seed: int = 22
     num_workers: Optional[int] = None
+    pin_memory: bool = True
     mixed_precision: bool = True
 
     start_from_checkpoint: Optional[str] = None

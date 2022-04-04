@@ -1,6 +1,7 @@
 import collections
 from typing import Optional, Callable, Tuple, List, Any, Set, Dict
 
+import numpy as np
 import torch
 from Levenshtein import distance as ed
 
@@ -16,47 +17,53 @@ def check_same_length(*args: Any) -> None:
 
 def _ed(l1: List, l2: List) -> float:
     eds = [ed(s, t) for s, t in zip(l1, l2)]
-    return sum(eds) / len(eds)
+    return sum(eds) / max(1, len(eds))
 
 
 def _ned(l1: List, l2: List) -> float:
     ned = [ed(s, t) / max(len(s), len(t)) for s, t in zip(l1, l2)]
-    return sum(ned) / len(ned)
+    return sum(ned) / max(1, len(ned))
 
 
-def sequence_edit_distance(sequences: List[str], target_sequences: List[str]) -> float:
-    check_same_length(sequences, target_sequences)
-    return _ed(sequences, target_sequences)
-
-
-def normalized_sequence_edit_distance(sequences: List[str], target_sequences: List[str]) -> float:
+def mean_edit_distance(predictions: List[str], targets: List[str]) -> float:
     """
 
-    Normalized edit distance on strings:
+    Average edit distance over all pairs of predicted and target sequences
+
+    :param predictions: list of predicted strings
+    :param targets: list of target strings
+    :return: mean normalized distance over all prediction-target-pairs
+    """
+    check_same_length(predictions, targets)
+    return _ned(predictions, targets)
+
+
+def mean_normalized_sequence_edit_distance(predictions: List[str], targets: List[str]) -> float:
+    """
+
+    Average normalized edit distance over all pairs of predicted and target sequences:
         ED(A, B) / max(len(A), len(B)) with A and B being strings
 
-    :param sequences: list of strings
-    :param target_sequences: list of strings
-    :return: mean distance over all pairs
+    :param predictions: list of predicted strings
+    :param targets: list of target strings
+    :return: mean normalized distance over all prediction-target-pairs
     """
-    check_same_length(sequences, target_sequences)
-    return _ned(sequences, target_sequences)
+    check_same_length(predictions, targets)
+    return _ned(predictions, targets)
 
 
-def accuracy(pred: List,
-             target: List) -> float:
+def accuracy(predictions: List, target: List) -> float:
     """
 
-    What percentage out of the given sequences match the target sequences:
-        1 if A == B else 0 with A and B being Lists of predictions and targets
+    Percentage of predictions that equal (check with pythons equality operator ==) their targets
 
-    :param pred: List of predictions
-    :param target: List of targets
-    :return: mean accuracy over all prediction-target-pairs
+    :param predictions: list of predictions
+    :param target: list of targets
+    :return: accuracy over all prediction-target-pairs
     """
-    check_same_length(pred, target)
-    correct = [p == t for p, t in zip(pred, target)]
-    return sum(correct) / len(correct)
+    check_same_length(predictions, target)
+    correct = [p == t for p, t in zip(predictions, target)]
+    return sum(correct) / max(1, len(correct))
 
 
 def _tp_fp_fn_to_f1_prec_rec(tp: int, fp: int, fn: int) -> Tuple[float, float, float]:
@@ -66,9 +73,40 @@ def _tp_fp_fn_to_f1_prec_rec(tp: int, fp: int, fn: int) -> Tuple[float, float, f
     return f1, precision, recall
 
 
-def f1_prec_rec(sequences: List[str],
-                target_sequences: List[str],
-                split_fn: Optional[Callable] = None) -> Tuple[float, float, float]:
+def binary_f1_prec_rec(
+        predictions: List[int],
+        targets: List[int]
+) -> Tuple[float, float, float]:
+    """
+
+    Calculates F1, Precision and Recall for given binary predictions and targets.
+
+    :param predictions: list of predictions
+    :param targets: list of targets
+    :return: f1, precision and recall scores
+    """
+    check_same_length(predictions, targets)
+    assert all(p in {0, 1} for p in predictions)
+    assert all(t in {0, 1} for t in targets)
+
+    predictions = np.array(predictions)
+    targets = np.array(targets)
+
+    predicted_true = predictions == 1
+    tp = (targets[predicted_true] == 1).sum()
+    fp = predicted_true.sum() - tp
+
+    predicted_false = np.logical_not(predicted_true)
+    tn = (targets[predicted_false] == 0).sum()
+    fn = predicted_false.sum() - tn
+
+    assert tp + fp + fn + fn == len(predictions)
+    return _tp_fp_fn_to_f1_prec_rec(tp, fp, fn)
+
+
+def text_f1_prec_rec(sequences: List[str],
+                     target_sequences: List[str],
+                     split_fn: Optional[Callable] = None) -> Tuple[float, float, float]:
     check_same_length(sequences, target_sequences)
 
     if split_fn is None:
@@ -95,109 +133,3 @@ def f1_prec_rec(sequences: List[str],
         fn += len(target_tokens) - tokens_in_common
 
     return _tp_fp_fn_to_f1_prec_rec(tp, fp, fn)
-
-
-METRIC_TO_FMT = {
-    "f1": ".2f",
-    "precision": ".2f",
-    "recall": ".2f",
-    "binary_f1": ".2f",
-    "binary_precision": ".2f",
-    "binary_recall": ".2f",
-    "sequence_accuracy": ".2f",
-    "word_accuracy": ".2f",
-    "mned": ".4f",
-    "med": ".4f",
-    "detection": ".2f",
-    "correction": ".2f"
-}
-
-
-def evaluate(groundtruth_file: str,
-             predicted_file: str,
-             input_file: str,
-             metrics: Set[str]) -> Optional[Dict[str, float]]:
-    groundtruths = []
-    predictions = []
-    inputs = []
-    with open(groundtruth_file, "r", encoding="utf8") as gtf, \
-            open(predicted_file, "r", encoding="utf8") as pf, \
-            open(input_file, "r", encoding="utf8") as inf:
-        for gt, p, ipt in zip(gtf, pf, inf):
-            # filter for "correct" sentences, that are not all capitalized
-            # ipt_words = ipt.strip().split()
-            # if all(i.isupper() for i in ipt_words) or len(ipt_words) < 2 or not ipt_words[0].istitle():
-            #     continue
-
-            # if len(inputs) >= 200:
-            #     break
-
-            groundtruths.append(gt.strip())
-            predictions.append(p.strip())
-            inputs.append(ipt.strip())
-
-    result = {}
-    try:
-        if "f1" in metrics or "precision" in metrics or "recall" in metrics:
-            f1, precision, recall = f1_prec_rec(predictions, groundtruths)
-            if "f1" in metrics:
-                result["f1"] = f1 * 100
-            if "precision" in metrics:
-                result["precision"] = precision * 100
-            if "recall" in metrics:
-                result["recall"] = recall * 100
-        if "sequence_accuracy" in metrics:
-            result["sequence_accuracy"] = accuracy(predictions, groundtruths) * 100
-        if "binary_f1" in metrics or "binary_precision" in metrics or "binary_recall" in metrics:
-            labels_ = []
-            preds_ = []
-            for ipt, pred, gt in zip(inputs, predictions, groundtruths):
-                pred = [int(p) for p in pred.split(" ")]
-                lab = [int(l) for l in gt.split(" ")]
-                assert all(p in {0, 1} for p in pred)
-                assert all(l in {0, 1} for l in lab)
-                preds_.extend(pred)
-                labels_.extend(lab)
-
-            cls_labels = torch.tensor(labels_, dtype=torch.long)
-            cls_predictions = torch.tensor(preds_, dtype=torch.long)
-
-            predicted_pos_indices = cls_predictions == 1
-            num_pos = predicted_pos_indices.sum()
-            tp = (cls_labels[predicted_pos_indices] == cls_predictions[predicted_pos_indices]).sum()
-            fp = num_pos - tp
-
-            predicted_neg_indices = torch.logical_not(cls_predictions)
-            num_neg = predicted_neg_indices.sum()
-            tn = (cls_labels[predicted_neg_indices] == cls_predictions[predicted_neg_indices]).sum()
-            fn = num_neg - tn
-
-            f1, prec, rec = _tp_fp_fn_to_f1_prec_rec(tp.item(), fp.item(), fn.item())
-            if "binary_f1" in metrics:
-                result["binary_f1"] = f1 * 100
-            if "binary_precision" in metrics:
-                result["binary_precision"] = prec * 100
-            if "binary_recall" in metrics:
-                result["binary_recall"] = rec * 100
-
-        if "word_accuracy" in metrics:
-            all_p_words = []
-            all_g_words = []
-            for p, g, ipt in zip(predictions, groundtruths, inputs):
-                p_words = p.split()
-                g_words = g.split()
-                if len(p_words) != len(g_words):
-                    raise ValueError(f"Found the number of groundtruth and predicted words to differ "
-                                     f"({len(p_words)}, {len(g_words)}) during word accuracy calculation")
-                all_p_words.extend(p_words)
-                all_g_words.extend(g_words)
-
-            result["word_accuracy"] = accuracy(all_p_words, all_g_words) * 100
-
-        if "mned" in metrics:
-            result["mned"] = normalized_sequence_edit_distance(predictions, groundtruths)
-        if "med" in metrics:
-            result["med"] = sequence_edit_distance(predictions, groundtruths)
-    except Exception as e:
-        return None
-    return result

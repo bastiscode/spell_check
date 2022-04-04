@@ -9,9 +9,13 @@ from gnn_lib.api.utils import (
     ModelInfo,
     StringInputOutput,
     load_experiment,
-    get_string_dataset_and_loader,
-    reorder_data, get_device_info, _APIBase
+    reorder_data,
+    get_device_info,
+    _APIBase,
+    load_text_file,
+    get_inference_dataset_and_loader
 )
+from gnn_lib.data.utils import clean_sequence
 from gnn_lib.modules import inference
 from gnn_lib.tasks import tokenization_repair, tokenization_repair_plus
 from gnn_lib.utils import common
@@ -53,8 +57,8 @@ class TokenizationRepairer(_APIBase):
         )
 
         assert (
-            isinstance(task, tokenization_repair.TokenizationRepair),
-            isinstance(task, tokenization_repair_plus.TokenizationRepairPlus)
+                isinstance(task, tokenization_repair.TokenizationRepair)
+                or isinstance(task, tokenization_repair_plus.TokenizationRepairPlus)
         ), f"expected experiment to be of type TokenizationRepair or TokenizationRepairPlus, but got {type(task)}"
 
         self.max_length = model.cfg.max_length
@@ -110,10 +114,23 @@ class TokenizationRepairer(_APIBase):
             sort_by_length: bool = True,
             show_progress: bool = False
     ) -> List[List[int]]:
-        dataset, loader = get_string_dataset_and_loader(
+        if isinstance(inputs, str):
+            inputs = load_text_file(inputs)
+
+        inputs = [clean_sequence(ipt) for ipt in inputs]
+
+        inference_kwargs = {}
+        is_tokenization_repair_plus = isinstance(self.task, tokenization_repair_plus.TokenizationRepairPlus)
+        if is_tokenization_repair_plus:
+            inference_kwargs["output_type"] = "tokenization_repair"
+
+        dataset, loader = get_inference_dataset_and_loader(
             inputs,
-            sort_by_length,
-            batch_size
+            task=self.task,
+            max_length=self.max_length,
+            sort_by_length=sort_by_length,
+            batch_size=batch_size,
+            **inference_kwargs
         )
 
         pbar = tqdm(
@@ -125,13 +142,9 @@ class TokenizationRepairer(_APIBase):
             unit="char"
         )
 
-        inference_kwargs = {}
-        if isinstance(self.task, tokenization_repair_plus.TokenizationRepairPlus):
-            inference_kwargs["output_type"] = "tokenization_repair"
-
         all_outputs = []
-        for i, (batch, info) in enumerate(pbar):
-            batch_length = sum(info["lengths"])
+        for i, (batch, infos, _) in enumerate(pbar):
+            batch_length = sum(info.ctx_end - info.ctx_start for info in infos)
             pbar.set_description(
                 f"[Batch {i + 1}] Repairing tokenization in {len(batch):,} sequences "
                 f"with {batch_length:,} characters in total"
@@ -152,7 +165,14 @@ class TokenizationRepairer(_APIBase):
             pbar.update(batch_length)
 
         pbar.close()
-        return reorder_data(all_outputs, dataset.indices)
+        all_outputs = reorder_data(all_outputs, dataset.indices)
+        all_outputs = self.task.postprocess_inference_outputs(
+            inputs, dataset.sample_infos, all_outputs, **inference_kwargs
+        )
+        if is_tokenization_repair_plus:
+            return [output["tokenization_repair"] for output in all_outputs]
+        else:
+            return all_outputs
 
     def repair_text(
             self,
@@ -164,8 +184,8 @@ class TokenizationRepairer(_APIBase):
         input_is_string = isinstance(inputs, str)
         assert (
                 input_is_string
-                or (isinstance(inputs, list) and len(inputs) > 0 and isinstance(inputs[0], str))
-        ), f"input needs to be a string or a non empty list of strings"
+                or (isinstance(inputs, list) and all(isinstance(ipt, str) for ipt in inputs))
+        ), f"input needs to be a string or a list of strings"
 
         outputs = self._repair_text_raw(
             [inputs] if input_is_string else inputs,

@@ -1,6 +1,7 @@
+import collections
 import glob
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, OrderedDict
 
 import torch
 from torch import nn
@@ -79,6 +80,13 @@ def load_checkpoint(
     return checkpoint
 
 
+def filter_state_dict(
+        state_dict: OrderedDict[str, torch.Tensor],
+        prefix: str
+) -> OrderedDict[str, torch.Tensor]:
+    return collections.OrderedDict({k[len(prefix):]: v for k, v in state_dict.items() if k.startswith(prefix)})
+
+
 def last_n_checkpoints(checkpoint_dir: str, n: int) -> List[str]:
     """
     Returns the paths to the newest n checkpoints in a checkpoint directory.
@@ -112,4 +120,3 @@ def dictionary_from_file(file_path: str) -> Dict[str, int]:
                 continue
             dictionary[word] = int(freq)
     return dictionary
-
