@@ -66,7 +66,7 @@ def create(args: argparse.Namespace) -> None:
         )
 
     index = NNIndex(args.out_dir)
-    index_context_length = 2 * index.params["context_length"] + 1
+    total_context_length = 2 * index.params["context_length"] + 1
 
     num_iterations = 1000
     neighbours = [3, 5, 10, 25, 50, 100]
@@ -91,9 +91,9 @@ def create(args: argparse.Namespace) -> None:
 
             sequence = utils.clean_sequence(sequence)
             contexts = index.prepare_sequence(sequence, index.params["context_length"])
-            if len(contexts) != index_context_length:
+            if len(contexts) != total_context_length:
                 logger.warning(f"Number of context from input {sequence} "
-                               f"does not match the index context length of {index_context_length}")
+                               f"does not match the index context length of {total_context_length}")
                 continue
 
             for context in contexts:
