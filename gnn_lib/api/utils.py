@@ -343,10 +343,10 @@ class StringDataset(Dataset):
             self.indices = [idx for idx, _ in indices_lengths]
 
     def __getitem__(self, idx: int) -> Tuple[str, int]:
-        return self.batches[self.indices[idx]], self.indices[idx]
+        return self.strings[self.indices[idx]], self.indices[idx]
 
     def __len__(self) -> int:
-        return len(self.sequences)
+        return len(self.strings)
 
     def word_ws_length(self) -> int:
         return sum(len(s.split()) for s in self.strings)

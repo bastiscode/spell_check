@@ -15,7 +15,7 @@ def evaluate(args: argparse.Namespace) -> None:
     with open(args.misspellings_file, "r", encoding="utf8") as f:
         misspellings = json.load(f)
 
-    index = NNIndex(args.index_dir, args.vectorizer_path)
+    index = NNIndex(args.index_dir, ef_search=args.ef_search)
 
     num_neighbors = 100
 
@@ -28,7 +28,7 @@ def evaluate(args: argparse.Namespace) -> None:
     total_time = 0
     for i, (correct, misspelled) in tqdm(enumerate(misspellings.items()), total=num_elements):
         start = time.perf_counter()
-        results = index.batch_retrieve([(m, "", "") for m in misspelled], num_neighbors)
+        results = index.batch_retrieve([("", m, "") for m in misspelled], num_neighbors)
         end = time.perf_counter()
         total_time += end - start
         total += len(misspelled)
@@ -51,8 +51,8 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--misspellings-file", type=str, required=True)
     parser.add_argument("--index-dir", type=str, required=True)
-    parser.add_argument("--vectorizer-path", type=str, default=None)
     parser.add_argument("--limit", type=int, default=None)
+    parser.add_argument("--ef-search", type=int, default=200)
     return parser.parse_args()
 
 

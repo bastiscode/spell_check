@@ -20,11 +20,17 @@ from gnn_lib.utils import common
 from gnn_lib.utils.distributed import DistributedDevice
 
 
-class Neighbors(collections.namedtuple("NEIGHBORS", ["words", "left_contexts", "right_contexts", "distances"])):
+class Neighbors(
+    collections.namedtuple("NEIGHBORS", ["words", "left_contexts", "right_contexts", "frequencies", "distances"])
+):
     __slots__ = ()
 
     def __str__(self) -> str:
-        return "\n".join(l + w + r for l, w, r in zip(self.left_contexts, self.words, self.right_contexts))
+        return "\n".join(
+            f"{i + 1: >2}. '{l}' '{w}' '{r}' (freq={freq:,}, dist={dist:.4f})"
+            for i, (l, w, r, freq, dist)
+            in enumerate(zip(self.left_contexts, self.words, self.right_contexts, self.frequencies, self.distances))
+        )
 
 
 class Sample(collections.namedtuple("SAMPLE", ["tokens", "doc", "neighbors_list", "info"])):

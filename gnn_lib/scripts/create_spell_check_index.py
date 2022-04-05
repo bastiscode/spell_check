@@ -22,6 +22,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--dist", choices=["euclidean", "cosine", "edit_distance", "norm_edit_distance"], required=True)
     parser.add_argument("--vectorizer", choices=["ft", "bert", "string", "custom"], required=True)
     parser.add_argument("--vectorizer-path", type=str, default=None)
+    parser.add_argument("--m", type=int, default=16)
+    parser.add_argument("--ef-construction", type=int, default=200)
+    parser.add_argument("--post", type=int, default=0)
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--seed", type=int, default=22)
     parser.add_argument("--interactive", action="store_true")
@@ -55,11 +58,14 @@ def create(args: argparse.Namespace) -> None:
             args.context_length,
             args.vectorizer,
             args.dist,
-            vectorizer_path=args.vectorizer_path,
-            dictionary_file=args.dictionary_file
+            dictionary_file=args.dictionary_file,
+            ef_construction=args.ef_construction,
+            m=args.m,
+            post=args.post,
+            vectorizer_path=args.vectorizer_path
         )
 
-    index = NNIndex(args.out_dir, args.vectorizer_path)
+    index = NNIndex(args.out_dir)
     index_context_length = 2 * index.params["context_length"] + 1
 
     num_iterations = 1000
@@ -69,7 +75,7 @@ def create(args: argparse.Namespace) -> None:
         times = []
         for i in range(num_iterations):
             start = time.perf_counter()
-            _ = index.retrieve(("this", context_str, context_str), n_neighbors)
+            _ = index.retrieve((context_str, "this", context_str), n_neighbors)
             end = time.perf_counter()
 
             times.append((end - start) * 1000)
@@ -82,20 +88,17 @@ def create(args: argparse.Namespace) -> None:
             sequence = input("Input a sequence you want to retrieve from the index: ")
             if sequence == "quit":
                 break
-            words = utils.clean_sequence(sequence).split()
-            if len(words) != index_context_length:
-                logger.warning(f"Input {words} does not match the index context length of {index_context_length}")
+
+            sequence = utils.clean_sequence(sequence)
+            contexts = index.prepare_sequence(sequence, index.params["context_length"])
+            if len(contexts) != index_context_length:
+                logger.warning(f"Number of context from input {sequence} "
+                               f"does not match the index context length of {index_context_length}")
                 continue
 
-            ctx_length = index.params["context_length"]
-            inputs = (words[ctx_length], " ".join(words[:ctx_length]), " ".join(words[ctx_length + 1:]))
-            neighbors = index.retrieve(inputs, 5)
-            logger.info(f"Neighbors for sequence: {sequence}")
-            for i, (data, dist) in enumerate(neighbors):
-                logger.info(
-                    f"{i + 1}. (dist={dist:.5f}):"
-                    f"\n{data}"
-                )
+            for context in contexts:
+                neighbors = index.retrieve(context, 5)
+                logger.info(f"Neighbors for context: {context}\n{neighbors}")
 
 
 if __name__ == "__main__":

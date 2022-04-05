@@ -1,109 +1,96 @@
 import argparse
 import collections
+import itertools
 import json
 import os
-from typing import List, Tuple, Callable, Dict, Optional
+from typing import List, Tuple, Callable, Dict, Set
 
 import numpy as np
 import omegaconf
 import torch
+from torch import nn
 from torch.backends import cudnn
 from torch.utils import data
 from tqdm import tqdm
 
 from gnn_lib.data import utils, index
+from gnn_lib.data.preprocessing import edit_token
 from gnn_lib.modules import lr_scheduler
 from gnn_lib.utils import common, io
 
 
 class VectorizationDataset(data.Dataset):
-    def __init__(self,
-                 misspelling_files: List[str],
-                 jsonl_files: List[str],
-                 dictionary: Dict[str, int],
-                 seed: int,
-                 stem: bool = True,
-                 labels_dict: Optional[Dict[str, int]] = None) -> None:
-        if stem:
-            try:
-                from nltk.stem import SnowballStemmer
-                stemmer = SnowballStemmer("english")
-            except ImportError:
-                raise "expect nltk with SnowballStemmer to be installed when stem=True"
-
-        label = 0
-        self.labels_dict = labels_dict or {}
-        self.joined_misspellings = collections.defaultdict(set)
+    def __init__(
+            self,
+            misspelling_files: List[str],
+            jsonl_files: List[str],
+            dictionary: Dict[str, int],
+            seed: int,
+            max_length: int
+    ) -> None:
+        self.max_length = max_length
+        self.labels_dict = {w: i for i, w in enumerate(sorted(dictionary)) if len(w) <= self.max_length}
+        self.joined_misspellings: Dict[str, Set[str]] = collections.defaultdict(set)
 
         for misspelling_file in misspelling_files:
             with open(misspelling_file, "r", encoding="utf8") as inf:
                 m = json.load(inf)
 
-            for k, v in m.items():
-                if stem:
-                    k = stemmer.stem(k)
-                if k not in dictionary:
+            for correct, misspellings in m.items():
+                if correct not in dictionary:
                     continue
-                if k in self.labels_dict:
-                    word_label = self.labels_dict[k]
-                else:
-                    self.labels_dict[k] = label
-                    word_label = label
-                    label += 1
-                self.joined_misspellings[word_label] = self.joined_misspellings[k].union(v)
-                self.joined_misspellings[word_label].add(k)
+
+                self.joined_misspellings[correct] = self.joined_misspellings[correct].union(set(misspellings))
+                self.joined_misspellings[correct].add(correct)
 
         self.rand = np.random.default_rng(seed)
-        for file in tqdm(jsonl_files, "Preparing jsonl files", disable=common.disable_tqdm()):
+        for file in tqdm(
+                jsonl_files, "Generating artifical misspellings from jsonl files", disable=common.disable_tqdm()
+        ):
             with open(file, "r", encoding="utf8") as inf:
                 for line in inf:
                     json_data = json.loads(line.strip())
                     words = utils.tokenize_words_regex(json_data["sequence"])[0]
                     for org_word in words:
-                        if stem:
-                            org_word = stemmer.stem(org_word)
                         if org_word not in dictionary:
                             continue
-                        if org_word in self.labels_dict:
-                            word_label = self.labels_dict[org_word]
-                        else:
-                            self.labels_dict[org_word] = label
-                            word_label = label
-                            label += 1
-                        word = utils.edit_token(org_word, self.rand)[0]
-                        self.joined_misspellings[word_label].add(word)
-                        self.joined_misspellings[word_label].add(org_word)
+
+                        for _ in range(10):
+                            edited_word = edit_token(org_word, self.rand)[0]
+                            self.joined_misspellings[org_word].add(edited_word)
+
+                        self.joined_misspellings[org_word].add(org_word)
 
         # convert dict of sets to list
-        self.items: List[Tuple[str, int]] = [(input_word, label)
-                                             for label in self.joined_misspellings
-                                             for input_word in self.joined_misspellings[label]
-                                             if len(input_word) <= self.max_length]
-
-    @property
-    def max_length(self) -> int:
-        return 64
+        self.items: List[Tuple[str, int, str]] = [
+            (misspelled, self.labels_dict[correct], correct)
+            for correct in self.joined_misspellings
+            for misspelled in self.joined_misspellings[correct]
+            if len(misspelled) <= self.max_length
+        ]
 
     @property
     def num_labels(self) -> int:
         return len(self.labels_dict)
 
-    def __getitem__(self, idx: int) -> Tuple[str, int]:
+    def __getitem__(self, idx: int) -> Tuple[str, int, str]:
         return self.items[idx]
 
     def __len__(self) -> int:
         return len(self.items)
 
     def get_collate_fn(self) -> Callable:
-        def join(items: List[Tuple[str, int]]) -> Tuple[List[str], torch.Tensor]:
-            labels = []
+        def _join(items: List[Tuple[str, int, str]]) -> Tuple[List[str], torch.Tensor, List[str]]:
             inputs = []
-            for ipt, tgt in items:
+            labels = []
+            correct = []
+            for ipt, tgt, corr in items:
                 inputs.append(ipt)
                 labels.append(tgt)
-            return inputs, torch.tensor(labels, dtype=torch.long)
+                correct.append(corr)
+            return inputs, torch.tensor(labels, dtype=torch.long), correct
 
-        return join
+        return _join
 
 
 def train(args: argparse.Namespace) -> None:
@@ -111,10 +98,7 @@ def train(args: argparse.Namespace) -> None:
 
     assert torch.cuda.is_available(), "need a GPU to train a custom vectorizer, but found none"
     torch.manual_seed(args.seed)
-    torch.set_num_threads(4)
     torch.backends.cudnn.benchmark = True
-
-    grad_scaler = torch.cuda.amp.GradScaler()
 
     if args.train_jsonl_file:
         jsonl_files = []
@@ -133,52 +117,57 @@ def train(args: argparse.Namespace) -> None:
     best_val_loss = float("inf")
     prev_best_val_loss = best_val_loss
 
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    encoder = index.CharTransformer().to(device)
+
     dictionary = io.dictionary_from_file(args.dictionary)
     train_dataset = VectorizationDataset(
         args.train_misspelling_files,
         jsonl_files,
         dictionary,
         args.seed,
-        args.stem
+        encoder.max_length
     )
-    train_loader = data.DataLoader(train_dataset,
-                                   batch_size=train_batch_size,
-                                   shuffle=True,
-                                   drop_last=True,
-                                   pin_memory=True,
-                                   collate_fn=train_dataset.get_collate_fn(),
-                                   num_workers=6)
+    train_loader = data.DataLoader(
+        train_dataset,
+        batch_size=train_batch_size,
+        shuffle=True,
+        drop_last=True,
+        collate_fn=train_dataset.get_collate_fn(),
+        num_workers=4
+    )
     val_dataset = VectorizationDataset(
         args.val_misspelling_files,
         [],
         dictionary,
         args.seed,
-        args.stem,
-        labels_dict=train_dataset.labels_dict
+        encoder.max_length
     )
     assert train_dataset.num_labels == val_dataset.num_labels
-    logger.info(f"Training dataset has {len(train_dataset)} samples and val dataset has {len(val_dataset)} samples, "
-                f"number of labels with stem={args.stem} is {train_dataset.num_labels:,}, dictionary size is "
-                f"{len(dictionary):,}")
-    val_loader = data.DataLoader(val_dataset,
-                                 batch_size=64,
-                                 shuffle=False,
-                                 drop_last=True,
-                                 pin_memory=True,
-                                 collate_fn=val_dataset.get_collate_fn())
+    logger.info(
+        f"Training dataset has {len(train_dataset):,} samples "
+        f"for {len(train_dataset.joined_misspellings):,} unique words and "
+        f"val dataset has {len(val_dataset):,} samples for {len(val_dataset.joined_misspellings):,} unique words, "
+        f"number of labels is {train_dataset.num_labels:,}"
+    )
 
-    loss_fn = torch.nn.CrossEntropyLoss()
+    val_loader = data.DataLoader(
+        val_dataset,
+        batch_size=128,
+        shuffle=False,
+        drop_last=True,
+        collate_fn=val_dataset.get_collate_fn()
+    )
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    encoder = index.CharTransformer()
-    model = torch.nn.Sequential(
-        encoder,
-        torch.nn.Linear(encoder.dim, train_dataset.num_labels)
-    ).to(device)
+    clf_loss_fn = torch.nn.CrossEntropyLoss()
+    emb_loss_fn = torch.nn.MSELoss()
+    grad_scaler = torch.cuda.amp.GradScaler(enabled=False)
 
-    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+    classifier = nn.Linear(encoder.dim, train_dataset.num_labels).to(device)
+
+    optimizer = torch.optim.AdamW(itertools.chain(encoder.parameters(), classifier.parameters()), lr=1e-3)
     scheduler = lr_scheduler.get_lr_scheduler_from_config(
-        omegaconf.DictConfig({"type": lr_scheduler.LRSchedulers.COSINE_WITH_WARMUP}),
+        omegaconf.DictConfig({"type": "COSINE_WITH_WARMUP"}),
         optimizer,
         len(train_loader) * args.epochs
     )
@@ -186,36 +175,53 @@ def train(args: argparse.Namespace) -> None:
     eval_per_epoch = 4
     eval_every = len(train_loader) // eval_per_epoch
 
-    model.train()
+    encoder.train()
+    classifier.train()
     for e in tqdm(range(args.epochs), disable=common.disable_tqdm()):
-        for i, (items, labels) in tqdm(enumerate(train_loader), total=len(train_loader), leave=False,
-                                       disable=common.disable_tqdm()):
-            with torch.cuda.amp.autocast():
-                outputs = model(items)
+        for i, (inputs, labels, correct) in tqdm(
+                enumerate(train_loader),
+                total=len(train_loader),
+                leave=False,
+                disable=common.disable_tqdm()
+        ):
+            with torch.cuda.amp.autocast(enabled=grad_scaler.is_enabled()):
+                output_emb = encoder(inputs)
+                correct_emb = encoder(correct)
 
-                loss = loss_fn(outputs, labels.to(outputs.device))
+                loss = (
+                        clf_loss_fn(classifier(output_emb), labels.to(output_emb.device))
+                        +
+                        emb_loss_fn(output_emb, correct_emb)
+                )
 
+            optimizer.zero_grad(set_to_none=True)
             grad_scaler.scale(loss).backward()
-            # unscale for proper gradient clipping
-            grad_scaler.unscale_(optimizer)
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             grad_scaler.step(optimizer)
             grad_scaler.update()
 
             scheduler.step()
 
-            optimizer.zero_grad(set_to_none=True)
-
             if (i + 1) % eval_every == 0:
                 val_losses = []
 
-                model.eval()
-                for items, labels in tqdm(val_loader, total=len(val_loader), leave=False,
-                                          disable=common.disable_tqdm()):
+                encoder.eval()
+                classifier.eval()
+                for inputs, labels, correct in tqdm(
+                        val_loader,
+                        total=len(val_loader),
+                        leave=False,
+                        disable=common.disable_tqdm()
+                ):
                     with torch.no_grad():
-                        outputs = model(items)
+                        output_emb = encoder(inputs)
+                        correct_emb = encoder(correct)
 
-                    loss = loss_fn(outputs, labels.to(outputs.device))
+                        loss = (
+                                clf_loss_fn(classifier(output_emb), labels.to(output_emb.device))
+                                +
+                                emb_loss_fn(output_emb, correct_emb)
+                        )
+
                     val_losses.append(loss.item())
 
                 val_loss = sum(val_losses) / len(val_losses)
@@ -229,7 +235,8 @@ def train(args: argparse.Namespace) -> None:
                     torch.save(encoder, args.out_path)
                     best_val_loss = val_loss
 
-                model.train()
+                encoder.train()
+                classifier.train()
 
         if best_val_loss >= prev_best_val_loss:
             epochs_no_improvement += 1
@@ -254,7 +261,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=22)
     parser.add_argument("--epochs", type=int, default=20)
     parser.add_argument("--out-path", type=str, required=True)
-    parser.add_argument("--stem", action="store_true")
     return parser.parse_args()
 
 

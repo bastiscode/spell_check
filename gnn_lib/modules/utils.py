@@ -34,9 +34,11 @@ def cuda_or_cpu(force_cpu: bool = False) -> torch.device:
     from torch import distributed
     return torch.device(
         "cpu" if force_cpu or not torch.cuda.is_available()
-        else (f"cuda:{torch.distributed.get_rank()}"
-              if torch.distributed.is_available() and torch.distributed.is_initialized()
-              else "cuda")
+        else (
+            f"cuda:{torch.distributed.get_rank()}"
+            if torch.distributed.is_available() and torch.distributed.is_initialized()
+            else "cuda"
+        )
     )
 
 

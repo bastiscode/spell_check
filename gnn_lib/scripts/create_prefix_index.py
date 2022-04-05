@@ -33,5 +33,6 @@ def create(args: argparse.Namespace) -> None:
         end = time.perf_counter()
         logger.info(f"Retrieving with prefix {prefix} took on avg {(end - start) * 1000 / 1000:.2f}ms")
 
+
 if __name__ == "__main__":
     create(parse_args())

@@ -87,8 +87,11 @@ setup_dictionaries:
 setup_spell_check_index:
 	cd .. && \
 	python gnn_lib/scripts/create_spell_check_index.py \
-	--in-file data/cleaned/wikidump/train_files.txt data/cleaned/bookcorpus/train_files.txt --context-length 0 \
-	--out-dir data/spell_check_index/ctx_0_ned_string --dist norm_edit_distance --vectorizer string \
+	--in-file data/cleaned/wikidump/train_files.txt data/cleaned/bookcorpus/train_files.txt \
+	--context-length 0 \
+	--out-dir data/spell_check_index/ctx_0_ned_string \
+	--dist norm_edit_distance \
+	--vectorizer string \
 	--dictionary-file data/dictionaries/merged_train_100k.txt \
 	--max-files 2000
 
