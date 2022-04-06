@@ -1,3 +1,4 @@
+import collections
 import json
 import os
 import pickle
@@ -18,18 +19,18 @@ from gnn_lib.modules import utils as mod_utils, embedding, encoders
 from gnn_lib.utils import common, io, to
 
 
+WORD_PLACEHOLDER = "[W]"
+
+
 class Vectorizer:
     def __init__(self, context_length: int, **kwargs: Any) -> None:
         self.context_length = context_length
 
-    def vectorize(self, left_context: str, word: str, right_context: str) -> np.array:
+    def vectorize(self, left_context: str, right_context: str) -> np.array:
         raise NotImplementedError
 
-    def vectorize_batch(self, inputs: List[Tuple[str, str, str]]) -> np.array:
-        vectors = []
-        for input_ in inputs:
-            vectors.append(self.vectorize(*input_))
-        return np.stack(vectors)
+    def vectorize_batch(self, inputs: List[Tuple[str, str]]) -> np.array:
+        return np.stack([self.vectorize(*ipt) for ipt in inputs])
 
     def to_device(self, device: torch.device) -> None:
         pass
@@ -43,102 +44,87 @@ class _BaseWordToVecVectorizer(Vectorizer):
     def __init__(
             self,
             context_length: int,
-            mode: str = "center",
-            center_weight: float = 3.0,
-            use_positional_encodings: bool = False,
+            mode: str = "center_distance",
             **kwargs: Any
     ) -> None:
         super().__init__(context_length, **kwargs)
 
         self.total_length = 2 * context_length + 1
-        # transformer sinusoidal positional embeddings
-        self.pe = np.zeros((self.total_length, self.dim), dtype=float)
-        position = np.arange(0, self.total_length, dtype=float)[:, None]
-        div_term = np.exp(np.arange(0, self.dim, 2, dtype=float) * -(np.log(10000.0) / self.dim))
-        self.pe[:, 0::2] = np.sin(position * div_term)
-        self.pe[:, 1::2] = np.cos(position * div_term)
 
-        assert mode in {"uniform", "center"}
-        # always use uniform when context_length == 0
-        self.mode = mode if context_length > 0 else "uniform"
-        self.word_weight = 1.0 if self.mode == "uniform" else center_weight
-        # never use positional encoding when context_length == 0
-        self.use_positional_encodings = use_positional_encodings and context_length > 0
+        self.mode = mode
+        if self.mode == "uniform":
+            # every word is equally weighted, ignoring distance from center word
+            self.left_context_weights = self.right_context_weights = np.array([1] * context_length)[:, None]
+        elif self.mode == "center_distance":
+            # words close to center word are weighted more
+            self.left_context_weights = np.array([i + 1 for i in range(0, context_length)])[:, None]
+            self.right_context_weights = np.array([i for i in range(context_length, 0, -1)])[:, None]
+        else:
+            raise RuntimeError(f"unknown vectorizer mode {mode}")
 
-    def _words_to_vectors(self, words: List[str]) -> np.array:
+    def _words_to_vectors(self, contexts: List[str]) -> np.array:
         raise NotImplementedError
 
-    def vectorize_batch(self, inputs: List[Tuple[str, str, str]]) -> np.array:
+    def vectorize_batch(self, inputs: List[Tuple[str, str]]) -> np.array:
         batch_left_context_words = []
-        batch_words = []
         batch_right_context_words = []
-        for left_context, word, right_context in inputs:
+        for left_context, right_context in inputs:
             left_context_words = utils.tokenize_words_regex(left_context)[0]
             batch_left_context_words.append(left_context_words)
             right_context_words = utils.tokenize_words_regex(right_context)[0]
             batch_right_context_words.append(right_context_words)
-            batch_words.append(word)
+            assert len(left_context_words) <= self.context_length and len(right_context_words) <= self.context_length
 
         num_batch_left_context_words = [len(words) for words in batch_left_context_words]
+        total_batch_left_context_words = sum(num_batch_left_context_words)
         num_batch_right_context_words = [len(words) for words in batch_right_context_words]
+        total_batch_right_context_words = sum(num_batch_right_context_words)
 
-        batch_left_context_vectors = mod_utils.split(
-            self._words_to_vectors(flatten(batch_left_context_words)),
-            num_batch_left_context_words
-        )
-        batch_word_vectors = self._words_to_vectors(batch_words)
-        batch_right_context_vectors = mod_utils.split(
-            self._words_to_vectors(flatten(batch_right_context_words)),
-            num_batch_right_context_words
+        batch_left_context_vectors, batch_right_context_vectors = mod_utils.split(
+            self._words_to_vectors(flatten(batch_left_context_words) + flatten(batch_right_context_words)),
+            [total_batch_left_context_words, total_batch_right_context_words]
         )
 
-        if self.use_positional_encodings:
-            left_pe = np.stack([self.pe[i] for i in range(self.context_length)])
-            batch_left_context_vectors = [
-                context_vectors + left_pe for context_vectors in batch_left_context_vectors
-            ]
-            batch_word_vectors = batch_word_vectors + self.pe[self.context_length][None, :]
-            right_pe = np.stack([self.pe[i] for i in range(self.context_length + 1, self.total_length)])
-            batch_right_context_vectors = [
-                context_vectors + right_pe for context_vectors in batch_right_context_vectors
-            ]
+        batch_left_context_vectors = mod_utils.split(batch_left_context_vectors, num_batch_left_context_words)
+        batch_right_context_vectors = mod_utils.split(batch_right_context_vectors, num_batch_right_context_words)
 
         output_vectors = []
-        for left_context, word, right_context in zip(
-                batch_left_context_vectors, batch_word_vectors, batch_right_context_vectors
+        for left_context, right_context in zip(
+                batch_left_context_vectors, batch_right_context_vectors
         ):
+            left_context_weights = self.left_context_weights[self.context_length - len(left_context):]
+            right_context_weights = self.right_context_weights[:len(right_context)]
+
             vectors = []
             if len(left_context):
-                vectors.append(np.mean(left_context, axis=0))
-            vectors.append(word * self.word_weight)
+                vectors.append(np.mean(left_context * left_context_weights, axis=0))
             if len(right_context):
-                vectors.append(np.mean(right_context, axis=0))
-            vectors = np.stack(vectors)
+                vectors.append(np.mean(right_context * right_context_weights, axis=0))
 
-            if self.mode == "uniform":
-                vector = np.mean(vectors, axis=0)
-            elif self.mode == "center":
-                vector = np.sum(vectors, axis=0) / (len(vectors) - 1 + self.word_weight)
+            if len(vectors):
+                vector = np.sum(np.stack(vectors), axis=0) / (
+                        np.sum(left_context_weights) + np.sum(right_context_weights)
+                )
             else:
-                raise ValueError(f"Unknown mode {self.mode}")
+                # if there are no context vectors, return zero vector
+                vector = np.zeros(self.dim, dtype=float)
             output_vectors.append(vector)
+
         return np.stack(output_vectors)
 
-    def vectorize(self, left_context: str, word: str, right_context: str) -> np.array:
-        return self.vectorize_batch([(left_context, word, right_context)])[0]
+    def vectorize(self, left_context: str, right_context: str) -> np.array:
+        return self.vectorize_batch([(left_context, right_context)])[0]
 
 
 class FastTextVectorizer(_BaseWordToVecVectorizer):
     def __init__(
             self,
             context_length: int,
-            mode: str = "center",
-            center_weight: float = 3.0,
-            use_positional_encodings: bool = False,
+            mode: str = "center_distance",
             model_path: Optional[str] = "cc.en.300.bin",
             **kwargs: Any
     ) -> None:
-        super().__init__(context_length, mode, center_weight, use_positional_encodings)
+        super().__init__(context_length, mode)
         import fasttext
         self.ft = fasttext.load_model(model_path)
 
@@ -187,11 +173,8 @@ class FastTextVectorizer(_BaseWordToVecVectorizer):
 
 
 class StringVectorizer(Vectorizer):
-    def __init__(self, context_length: int, **kwargs: Any) -> None:
-        super().__init__(context_length)
-
-    def vectorize(self, left_context: str, word: str, right_context: str) -> np.array:
-        return left_context + word + right_context
+    def vectorize(self, left_context: str, right_context: str) -> np.array:
+        return left_context + WORD_PLACEHOLDER + right_context
 
     def vectorize_batch(self, inputs: List[Tuple[str, str, str]]) -> np.array:
         return [self.vectorize(*item) for item in inputs]
@@ -202,7 +185,8 @@ class StringVectorizer(Vectorizer):
 
 
 class CustomNeuralVectorizerModel(nn.Module):
-    def words_to_vectors(self, inputs: List[str]) -> np.array:
+    @torch.inference_mode()
+    def contexts_to_vectors(self, contexts: List[Tuple[str, str]]) -> np.array:
         raise NotImplementedError
 
     @property
@@ -210,29 +194,27 @@ class CustomNeuralVectorizerModel(nn.Module):
         raise NotImplementedError
 
 
-class CustomNeuralVectorizer(_BaseWordToVecVectorizer):
+class CustomNeuralVectorizer(Vectorizer):
     def __init__(
             self,
             context_length: int,
-            mode: str = "center",
-            center_weight: float = 3.0,
-            use_positional_encodings: bool = True,
             vectorizer_path: Optional[str] = None,
             force_cpu: bool = True,
             **kwargs: Any
     ) -> None:
+        super().__init__(context_length)
+
         assert vectorizer_path is not None
         self.device = mod_utils.cuda_or_cpu(force_cpu=force_cpu)
         self.model: CustomNeuralVectorizerModel = torch.load(vectorizer_path, map_location=self.device)
         self.model.to(self.device)
         self.model.eval()
 
-        super().__init__(context_length, mode, center_weight, use_positional_encodings)
+    def vectorize(self, left_context: str, right_context: str) -> np.array:
+        return self.vectorize_batch([(left_context, right_context)])[0]
 
-    def _words_to_vectors(self, words: List[str]) -> np.array:
-        if not len(words):
-            return np.empty((0, self.dim))
-        return self.model.words_to_vectors(words)
+    def vectorize_batch(self, inputs: List[Tuple[str, str]]) -> np.array:
+        return self.model.contexts_to_vectors(inputs)
 
     @property
     def dim(self) -> int:
@@ -242,7 +224,8 @@ class CustomNeuralVectorizer(_BaseWordToVecVectorizer):
 class CharTransformer(CustomNeuralVectorizerModel):
     def __init__(self) -> None:
         super().__init__()
-        self.max_length = 64
+        self.max_length = 128 - len(WORD_PLACEHOLDER)
+        self.max_length_half = self.max_length // 2
         self.hidden_dim = 128
         self.tok = tokenization.CharTokenizer()
         self.pad_token_id = self.tok.token_to_id(tokenization.PAD)
@@ -266,7 +249,7 @@ class CharTransformer(CustomNeuralVectorizerModel):
         token_ids = []
         lengths = []
         for i, ipt in enumerate(inputs):
-            tokens = self.tok.tokenize(ipt[:self.max_length])
+            tokens = self.tok.tokenize(ipt)
             token_ids.append(torch.tensor(tokens, dtype=torch.long))
             lengths.append(len(tokens))
 
@@ -281,8 +264,10 @@ class CharTransformer(CustomNeuralVectorizerModel):
         return torch.stack(outputs)
 
     @torch.inference_mode()
-    def words_to_vectors(self, inputs: List[str]) -> np.array:
-        return self.forward(inputs).cpu().numpy()
+    def contexts_to_vectors(self, contexts: List[Tuple[str, str]]) -> np.array:
+        return self.forward(
+            [l[-self.max_length_half:] + WORD_PLACEHOLDER + r[:self.max_length_half] for l, r in contexts]
+        ).cpu().numpy()
 
     @property
     def dim(self) -> int:
@@ -344,6 +329,7 @@ class NNIndex:
         self.txn = self.lmdb.begin()
 
         self.params = pickle.loads(self.txn.get("params".encode("utf8")))
+        self.size = pickle.loads(self.txn.get("num_elements".encode("utf8")))
         self.num_threads = num_threads
 
         if self.params["vectorizer"] == "custom":
@@ -373,10 +359,14 @@ class NNIndex:
             ef_construction: int = 200,
             m: int = 16,
             post: int = 0,
+            min_freq: int = 0,
             **kwargs: Any
     ) -> None:
+        assert context_length > 0, "context length must be larger than 0"
+
         logger = common.get_logger("NN_INDEX_CREATION")
-        logger.info(f"Creating index with {vectorizer_name} vectorizer and {dist} distance at {out_directory}")
+        logger.info(f"Creating index with context length {context_length}, "
+                    f"{vectorizer_name} vectorizer and {dist} distance at {out_directory}")
 
         os.makedirs(out_directory, exist_ok=True)
         index_out_file = os.path.join(out_directory, "index")
@@ -415,9 +405,10 @@ class NNIndex:
         txn = lmdb.begin(write=True)
         txn.drop(lmdb.open_db())
 
-        counts = {}
+        contexts: Dict[Tuple[str, str], Dict[str, int]] = {}
+        context_counts: Dict[Tuple[str, str], int] = {}
 
-        logger.info(f"Processing {len(files)} files")
+        logger.info(f"Processing {len(files):,} files")
 
         total = 0
         invalid = 0
@@ -426,20 +417,33 @@ class NNIndex:
                 for line in tqdm(inf, total=io.line_count(file), leave=False, disable=common.disable_tqdm()):
                     sequence = json.loads(line)["sequence"]
                     batch = NNIndex.prepare_sequence(sequence, context_length)
-                    for sample in batch:
+                    for left_context, word, right_context in batch:
                         total += 1
-                        if dictionary is not None and sample[1] not in dictionary:
+                        # if dictionary is given only record stats for words that are in the dictionary
+                        if dictionary is not None and word not in dictionary:
                             invalid += 1
                             continue
 
-                        # do not add the same things multiple times to the index, just increase its count
-                        if sample in counts:
-                            counts[sample] += 1
-                            continue
+                        # do not add the same context multiple times to the index, just increase its word counts
+                        seen_context = (left_context, right_context) in contexts
+                        if not seen_context:
+                            contexts[(left_context, right_context)] = {word: 1}
+                            context_counts[(left_context, right_context)] = 1
+                        else:
+                            if word not in contexts[(left_context, right_context)]:
+                                contexts[(left_context, right_context)][word] = 1
+                            else:
+                                contexts[(left_context, right_context)][word] += 1
+                            context_counts[(left_context, right_context)] += 1
 
-                        counts[sample] = 1
+        contexts = {
+            ctx: words
+            for ctx, words in contexts.items()
+            if context_counts[ctx] >= min_freq
+        }
 
-        logger.info(f"Adding {len(counts)} elements to index")
+        num_elements = len(contexts)
+        logger.info(f"Adding {num_elements:,} elements to index")
 
         indices = []
         samples = []
@@ -450,15 +454,17 @@ class NNIndex:
             nonlocal samples
             nonlocal frequencies
 
-            context_vectors = vectorizer.vectorize_batch(samples)
+            context_vectors = vectorizer.vectorize_batch([ctx for (ctx, _) in samples])
             index.addDataPointBatch(ids=indices, data=context_vectors)
 
-            for (left_context, word, right_context), idx in zip(samples, indices):
+            for ((left_context, right_context), words_and_frequencies), idx, freq in zip(
+                    samples, indices, frequencies
+            ):
                 data = pickle.dumps({
-                    "word": word,
                     "left_context": left_context,
                     "right_context": right_context,
-                    "frequency": freq
+                    "context_frequency": freq,
+                    "word_list": words_and_frequencies,
                 })
                 data = lz4.frame.compress(data, compression_level=16)
                 assert txn.put(f"{idx}".encode("utf8"), data)
@@ -467,16 +473,21 @@ class NNIndex:
             samples = []
             frequencies = []
 
-        for i, (sample, freq) in tqdm(
-                enumerate(counts.items()),
-                total=len(counts),
+        for i, (ctx, word_frequencies) in tqdm(
+                enumerate(contexts.items()),
+                total=len(contexts),
                 desc="adding elements to index",
                 leave=False,
                 disable=common.disable_tqdm()
         ):
             indices.append(i)
-            samples.append(sample)
-            frequencies.append(freq)
+            frequencies.append(context_counts[ctx])
+
+            words_and_frequencies = [(w, f) for w, f in word_frequencies.items()]
+            # sort descending by frequency
+            words_and_frequencies = sorted(words_and_frequencies, key=lambda item: -item[1])
+
+            samples.append((ctx, words_and_frequencies))
 
             if len(indices) % 64 == 0:
                 add_batch()
@@ -488,7 +499,7 @@ class NNIndex:
             logger.info(f"{100 * invalid / total:.2f}% of all unique (left_context, word, right_context) items "
                         f"were invalid and thus not added to index")
 
-        logger.info(f"Computing index with {len(counts)} elements")
+        logger.info(f"Computing index with {num_elements:,} elements")
         index_time_params = {
             "M": m,
             "indexThreadQty": int(os.getenv("GNN_LIB_INDEX_NUM_THREADS", len(os.sched_getaffinity(0)))),
@@ -504,11 +515,11 @@ class NNIndex:
                           "space": space,
                           "vectorizer": vectorizer_name})
         )
-        assert txn.put("num_elements".encode("utf8"), pickle.dumps(len(counts)))
+        assert txn.put("num_elements".encode("utf8"), pickle.dumps(num_elements))
         txn.commit()
         lmdb.close()
 
-        logger.info(f"Saved {len(counts)} items in the index")
+        logger.info(f"Saved {num_elements:,} items in the index")
 
     @staticmethod
     def prepare_sequence(sequence: str, context_length: int) -> List[Tuple[str, str, str]]:
@@ -518,10 +529,7 @@ class NNIndex:
 
     @staticmethod
     def prepare_words(words: List[str], whitespaces: List[bool], context_length: int) -> List[Tuple[str, str, str]]:
-        if context_length <= 0:
-            return [("", word, "") for word in words]
-
-        # pad words and whitespaces
+        assert len(words) == len(whitespaces)
         whitespaces[-1] = False
         words = [""] * context_length + words + [""] * context_length
         whitespaces = [False] * context_length + whitespaces + [False] * context_length
@@ -531,16 +539,17 @@ class NNIndex:
             left_context = utils.de_tokenize_words(
                 words[i - context_length:i],
                 whitespaces[i - context_length: i]
-            ).lstrip()
+            ).lstrip().lower()
             right_context = " " * whitespaces[i] + utils.de_tokenize_words(
                 words[i + 1: i + context_length + 1],
                 whitespaces[i + 1: i + context_length + 1]
-            ).rstrip()
+            ).rstrip().lower()
             outputs.append((left_context, word, right_context))
         return outputs
 
-    def batch_retrieve(self, words_batch: List[Tuple[str, str, str]], n_neighbors: int) -> List[utils.Neighbors]:
-        vectors_batch = self.vectorizer.vectorize_batch(words_batch)
+    def batch_retrieve(self, batch: List[Tuple[str, str]], n_neighbors: int) -> List[utils.Neighbors]:
+        batch = [(l.lstrip().lower(), r.rstrip().lower()) for l, r in batch]
+        vectors_batch = self.vectorizer.vectorize_batch(batch)
 
         neighbors_batch = self.index.knnQueryBatch(
             queries=vectors_batch, k=n_neighbors, num_threads=self.num_threads
@@ -549,16 +558,16 @@ class NNIndex:
         return [self._to_neighbors(neighbors, distances) for neighbors, distances in neighbors_batch]
 
     def batch_retrieve_from_docs(self, doc_batch: List[Doc], n_neighbors: int) -> List[List[utils.Neighbors]]:
-        all_words_batch = []
+        all_batch = []
         lengths = []
         for doc in doc_batch:
             words = list(t.text for t in doc)
             whitespaces = list(t.whitespace_ == " " for t in doc)
-            words_batch = self.prepare_words(words, whitespaces, self.params["context_length"])
-            all_words_batch.extend(words_batch)
-            lengths.append(len(words_batch))
+            batch = self.prepare_words(words, whitespaces, self.params["context_length"])
+            all_batch.extend([(left_context, right_context) for left_context, _, right_context in batch])
+            lengths.append(len(batch))
 
-        neighbors_list = self.batch_retrieve(all_words_batch, n_neighbors)
+        neighbors_list = self.batch_retrieve(all_batch, n_neighbors)
         return mod_utils.split(neighbors_list, lengths)
 
     def _get_item(self, idx: int) -> Dict:
@@ -573,24 +582,25 @@ class NNIndex:
         data = [self._get_item(neighbor_id) for neighbor_id in neighbor_ids]
 
         # sort the indices according to distance, then frequency
-        indices = sorted(list(range(len(data))), key=lambda idx: (distances[idx], -data[idx]["frequency"]))
+        indices = sorted(list(range(len(data))), key=lambda idx: (distances[idx], -data[idx]["context_frequency"]))
 
         # create neighbor object with correct ordering
-        words = [data[idx]["word"] for idx in indices]
+        word_lists = [data[idx]["word_list"] for idx in indices]
         left_contexts = [data[idx]["left_context"] for idx in indices]
         right_contexts = [data[idx]["right_context"] for idx in indices]
-        frequencies = [data[idx]["frequency"] for idx in indices]
+        frequencies = [data[idx]["context_frequency"] for idx in indices]
         distances = [distances[idx] for idx in indices]
         return utils.Neighbors(
-            words=words,
             left_contexts=left_contexts,
             right_contexts=right_contexts,
-            frequencies=frequencies,
+            context_frequencies=frequencies,
+            word_lists=word_lists,
             distances=distances
         )
 
-    def retrieve(self, words: Tuple[str, str, str], n_neighbors: int) -> utils.Neighbors:
-        context_vec = self.vectorizer.vectorize(*words)
+    def retrieve(self, context: Tuple[str, str], n_neighbors: int) -> utils.Neighbors:
+        l, r = context
+        context_vec = self.vectorizer.vectorize(l.lstrip().lower(), r.rstrip().lower())
         neighbors, distances = self.index.knnQuery(context_vec, k=n_neighbors)
         return self._to_neighbors(neighbors, distances)
 

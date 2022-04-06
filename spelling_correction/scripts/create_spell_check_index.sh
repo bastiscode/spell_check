@@ -33,30 +33,43 @@ else
 fi
 
 python gnn_lib/scripts/create_spell_check_index.py \
-  --in-file data/cleaned/wikidump_paragraphs/train_files.txt data/cleaned/bookcorpus_paragraphs/train_files.txt \
-	--context-length 0 \
-	--out-dir data/spell_check_index/ctx_0_ned_string \
+	--in-file data/cleaned/wikidump_paragraphs/train_files.txt data/cleaned/bookcorpus_paragraphs/train_files.txt \
+	--context-length 1 \
+	--out-dir data/spell_check_index/ctx_1_ned_string \
 	--dist norm_edit_distance \
 	--vectorizer string \
 	--dictionary-file data/dictionaries/merged_train_100k.txt \
-	--max-files 2000
-
-python gnn_lib/scripts/create_spell_check_index.py \
-  --in-file data/cleaned/wikidump_paragraphs/train_files.txt data/cleaned/bookcorpus_paragraphs/train_files.txt \
-	--context-length 0 \
-	--out-dir data/spell_check_index/ctx_0_euclidean_custom \
-	--dist euclidean \
-	--vectorizer custom \
-	--custom-vectorizer-path data/spell_check_index/custom_vectorizers/char_transformer.pt \
-	--dictionary-file data/dictionaries/merged_train_100k.txt \
-	--max-files 2000
+	--max-files 2000 \
+	--min-freq 2
 
 python gnn_lib/scripts/create_spell_check_index.py \
 	--in-file data/cleaned/wikidump_paragraphs/train_files.txt data/cleaned/bookcorpus_paragraphs/train_files.txt \
 	--context-length 1 \
-	--out-dir data/spell_check_index/ctx_0_euclidean_custom \
+	--out-dir data/spell_check_index/ctx_1_euclidean_custom \
 	--dist euclidean \
 	--vectorizer custom \
-	--custom-vectorizer-path data/spell_check_index/custom_vectorizers/char_transformer.pt \
+	--vectorizer-path data/spell_check_index/custom_vectorizers/context_char_transformer.pt \
 	--dictionary-file data/dictionaries/merged_train_100k.txt \
-	--max-files 2000
+	--max-files 2000 \
+	--min-freq 2
+
+python gnn_lib/scripts/create_spell_check_index.py \
+	--in-file data/cleaned/wikidump_paragraphs/train_files.txt data/cleaned/bookcorpus_paragraphs/train_files.txt \
+	--context-length 2 \
+	--out-dir data/spell_check_index/ctx_2_ned_string \
+	--dist norm_edit_distance \
+	--vectorizer string \
+	--dictionary-file data/dictionaries/merged_train_100k.txt \
+	--max-files 2000 \
+	--min-freq 2
+
+python gnn_lib/scripts/create_spell_check_index.py \
+	--in-file data/cleaned/wikidump_paragraphs/train_files.txt data/cleaned/bookcorpus_paragraphs/train_files.txt \
+	--context-length 1 \
+	--out-dir data/spell_check_index/ctx_2_euclidean_custom \
+	--dist euclidean \
+	--vectorizer custom \
+	--vectorizer-path data/spell_check_index/custom_vectorizers/context_char_transformer.pt \
+	--dictionary-file data/dictionaries/merged_train_100k.txt \
+	--max-files 2000 \
+	--min-freq 2

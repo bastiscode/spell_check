@@ -20,7 +20,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--out-dir", type=str, required=True)
     parser.add_argument("--dictionary-file", type=str, default=None)
     parser.add_argument("--dist", choices=["euclidean", "cosine", "edit_distance", "norm_edit_distance"], required=True)
-    parser.add_argument("--vectorizer", choices=["ft", "bert", "string", "custom"], required=True)
+    parser.add_argument("--vectorizer", choices=["ft", "string", "custom"], required=True)
     parser.add_argument("--vectorizer-path", type=str, default=None)
     parser.add_argument("--m", type=int, default=16)
     parser.add_argument("--ef-construction", type=int, default=200)
@@ -28,6 +28,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--seed", type=int, default=22)
     parser.add_argument("--interactive", action="store_true")
+    parser.add_argument("--min-freq", type=int, default=0)
+    parser.add_argument("--max-elements", type=int, default=-1)
     return parser.parse_args()
 
 
@@ -62,20 +64,22 @@ def create(args: argparse.Namespace) -> None:
             ef_construction=args.ef_construction,
             m=args.m,
             post=args.post,
+            min_freq=args.min_freq,
+            max_elements=args.max_elements,
             vectorizer_path=args.vectorizer_path
         )
 
     index = NNIndex(args.out_dir)
-    total_context_length = 2 * index.params["context_length"] + 1
 
     num_iterations = 1000
     neighbours = [3, 5, 10, 25, 50, 100]
-    context_str = " ".join("this" for _ in range(index.params["context_length"]))
+    left_context_str = " ".join("this" for _ in range(index.params["context_length"])) + " "
+    right_context_str = " " + " ".join("this" for _ in range(index.params["context_length"]))
     for n_neighbors in neighbours:
         times = []
         for i in range(num_iterations):
             start = time.perf_counter()
-            _ = index.retrieve((context_str, "this", context_str), n_neighbors)
+            _ = index.retrieve((left_context_str, right_context_str), n_neighbors)
             end = time.perf_counter()
 
             times.append((end - start) * 1000)
@@ -85,20 +89,15 @@ def create(args: argparse.Namespace) -> None:
 
     if args.interactive:
         while True:
-            sequence = input("Input a sequence you want to retrieve from the index: ")
-            if sequence == "quit":
+            left_context = input("Input a left context: ")
+            if left_context == "quit":
+                break
+            right_context = input("Input a right context: ")
+            if right_context == "quit":
                 break
 
-            sequence = utils.clean_sequence(sequence)
-            contexts = index.prepare_sequence(sequence, index.params["context_length"])
-            if len(contexts) != total_context_length:
-                logger.warning(f"Number of context from input {sequence} "
-                               f"does not match the index context length of {total_context_length}")
-                continue
-
-            for context in contexts:
-                neighbors = index.retrieve(context, 5)
-                logger.info(f"Neighbors for context: {context}\n{neighbors}")
+            neighbors = index.retrieve((left_context, right_context), 5)
+            logger.info(f"Neighbors for context: '{left_context}' + '{right_context}'\n{neighbors}")
 
 
 if __name__ == "__main__":

@@ -1,18 +1,19 @@
 import json
 import os
 import re
-from typing import List, Optional, Dict, Iterable, Any
+from typing import List, Optional, Dict, Iterable, Any, Tuple
 
 import Levenshtein
 import numpy as np
 import pkg_resources
 import requests
 import torch
+from spacy.tokens import Doc
 
-from gnn_lib.data import utils
+from gnn_lib.data import utils, index
 from gnn_lib.utils import io
 
-from spelling_correction import DICTIONARIES_DIR
+from spelling_correction import DICTIONARIES_DIR, SPELL_CHECK_INDEX_DIR
 from spelling_correction.baselines import Baseline
 
 
@@ -56,6 +57,35 @@ class SECCTDBaseline(Baseline):
                     closest_words = self._closest_words_in_dict(word.text)
                     cw_idx = np.random.randint(len(closest_words))
                     predicted_words.append(closest_words[cw_idx])
+            predictions.append(utils.de_tokenize_words(predicted_words, doc))
+        return predictions
+
+
+class SECSpellCheckIndexBaseline(Baseline):
+    def __init__(self, seed: Optional[int] = None):
+        super().__init__(seed)
+        self.index = index.NNIndex(
+            os.path.join(SPELL_CHECK_INDEX_DIR, os.environ.get("BASELINE_SPELL_CHECK_INDEX", "ctx_0_ned_string"))
+        )
+
+    @property
+    def name(self) -> str:
+        return "sci"
+
+    def inference(self, sequences: List[str], **kwargs: Dict[str, Any]) -> List[str]:
+        batch: List[Tuple[List[str], Doc]] = utils.tokenize_words_batch(sequences, return_docs=True)
+        docs = [b[1] for b in batch]
+        neighbors_lists = self.index.batch_retrieve_from_docs(docs, 10)
+        predictions = []
+        for doc, neighbor_list in zip(docs, neighbors_lists):
+            assert len(doc) == len(neighbor_list)
+            predicted_words = []
+            for word, neighbors in zip(doc, neighbor_list):
+                if utils.is_special_token(word):
+                    predicted_words.append(word.text)
+                else:
+                    # print(word.text, "\n", neighbors)
+                    predicted_words.append(neighbors.words[0])
             predictions.append(utils.de_tokenize_words(predicted_words, doc))
         return predictions
 

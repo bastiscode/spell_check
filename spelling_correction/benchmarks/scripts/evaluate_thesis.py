@@ -113,6 +113,7 @@ def get_sec_models_and_metrics() -> Tuple[Dict[int, List[Tuple[str, str]]], Set[
                    ("jamspell", "baseline_jamspell"),
                    ("language_tool", "baseline_languagetool"),
                    ("close_to_dictionary", "baseline_ctd"),
+                   ("spell_check_index", "baseline_sci"),
                    ("do_nothing", "baseline_dummy")
                ],
                1: [

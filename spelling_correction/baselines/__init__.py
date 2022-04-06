@@ -22,6 +22,7 @@ class Baselines(enum.IntEnum):
     SEC_NORVIG = 12
     SEC_SYMSPELL = 13
     SEC_LANGUAGETOOL = 14
+    SEC_SPELL_CHECK_INDEX = 15
 
 
 class Baseline:
@@ -51,7 +52,8 @@ def get_baseline(baseline: Baselines, seed: int, **kwargs: Any) -> Baseline:
         SECNeuspellBaseline,
         SECNorvigBaseline,
         SECDummyBaseline,
-        SECLanguagetoolBaseline
+        SECLanguagetoolBaseline,
+        SECSpellCheckIndexBaseline
     )
 
     if baseline == Baselines.SED_SEQUENCE_OOD:
@@ -80,6 +82,7 @@ def get_baseline(baseline: Baselines, seed: int, **kwargs: Any) -> Baseline:
         return SECNeuspellBaseline(model_name="sclstm_elmo")
     elif baseline == Baselines.SEC_LANGUAGETOOL:
         return SECLanguagetoolBaseline(edit_whitespaces=False)
+    elif baseline == Baselines.SEC_SPELL_CHECK_INDEX:
+        return SECSpellCheckIndexBaseline()
     else:
         raise ValueError(f"Unknown baseline {baseline.name}")
-

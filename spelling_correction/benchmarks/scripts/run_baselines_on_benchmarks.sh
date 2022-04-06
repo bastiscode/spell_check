@@ -14,8 +14,8 @@ benchmark_dir=$(realpath $script_dir/../$split)
 baselines_dir=$(realpath $script_dir/../../baselines)
 
 benchmarks="sed_sequence sed_words sec"
-sec_baselines="SEC_ASPELL SEC_JAMSPELL SEC_DUMMY SEC_CTD SEC_LANGUAGETOOL SEC_NEUSPELL_BERT"
-sed_from_sec_baselines="SEC_ASPELL SEC_JAMSPELL SEC_DUMMY SEC_CTD SEC_LANGUAGETOOL SEC_NEUSPELL_BERT"
+sec_baselines="SEC_ASPELL SEC_JAMSPELL SEC_DUMMY SEC_CTD SEC_LANGUAGETOOL SEC_NEUSPELL_BERT SEC_SPELL_CHECK_INDEX"
+sed_from_sec_baselines="SEC_ASPELL SEC_JAMSPELL SEC_DUMMY SEC_CTD SEC_LANGUAGETOOL SEC_NEUSPELL_BERT SEC_SPELL_CHECK_INDEX"
 declare -A baselines=(
   ["sec"]=$sec_baselines
   ["sed_sequence"]="SED_SEQUENCE_FROM_SEC SED_SEQUENCE_OOD"
