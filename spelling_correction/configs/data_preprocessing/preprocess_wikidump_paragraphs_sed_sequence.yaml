@@ -1,7 +1,7 @@
 data:
   - ${oc.env:GNN_LIB_DATA_DIR}/cleaned/wikidump_paragraphs/train_files.txt
 
-output_dir: ${oc.env:GNN_LIB_DATA_DIR}/processed/wikidump_paragraphs_sed_sequence_no_prefix_space
+output_dir: ${oc.env:GNN_LIB_DATA_DIR}/processed/wikidump_paragraphs_sed_sequence
 seed: 22
 limit: ${oc.env:GNN_LIB_LIMIT,100000000}
 

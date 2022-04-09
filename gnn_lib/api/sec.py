@@ -237,21 +237,20 @@ class SpellingErrorCorrector(_APIBase):
                     and all(len(det) == len(ipt.split()) for det, ipt in zip(detections, inputs))
             ), "expected one detection for every word in every input sequence"
             new_detections = []
-            input_idx = 0
-            prev_info = None
+            input_idx = -1
             for info in dataset.sample_infos:
-                if prev_info and info.window_idx == prev_info.window_idx:
+                if info.window_idx == 0:
                     input_idx += 1
                 sequence = inputs[input_idx]
                 detection = detections[input_idx]
-                num_left_words = len(sequence[:info.window_start].split())
-                num_window_words = len(sequence[info.window_start:info.window_end].split())
-                assert num_left_words + num_window_words == len(sequence[:info.window_end].split()), \
-                    "when using detections for spelling error correction, too long sequences must be split between " \
-                    "and not within whitespace separated words"
-                new_detections.append(detection[num_left_words:num_left_words + num_window_words])
-
-                prev_info = info
+                num_words_before_context = len(sequence[:info.ctx_start].split())
+                num_words_until_context_end = len(sequence[:info.ctx_end].split())
+                assert (
+                        num_words_before_context + len(sequence[info.ctx_start:info.ctx_end].split())
+                        == num_words_until_context_end
+                ), "when using detections for spelling error correction, too long sequences must be split between " \
+                   "and not within whitespace separated words"
+                new_detections.append(detection[num_words_before_context:num_words_until_context_end])
 
             assert input_idx == len(inputs) - 1
             detections = new_detections

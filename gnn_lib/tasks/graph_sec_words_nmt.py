@@ -22,6 +22,14 @@ class GraphSECWordsNMT(MultiNode2Seq):
         decoder_node_type = model_cfg.decoder_node_types[0]
 
         batch = self._batch_sequences_for_inference(inputs)
+        inputs = [str(ipt) for ipt in inputs]
+
+        detections = kwargs.get("detections", [[1] * len(ipt.split()) for ipt in inputs])
+        assert all(all(d in {0, 1} for d in det) for det in detections)
+
+        num_nodes_to_decode = [sum(det) for det in detections]
+        if sum(num_nodes_to_decode) == 0:
+            return [[ipt] for ipt in inputs]
 
         g = model.encode(batch.data)
 
@@ -34,17 +42,6 @@ class GraphSECWordsNMT(MultiNode2Seq):
             model_cfg.hidden_feature,
             model_cfg.align_positions_with[decoder_node_type] if model_cfg.align_positions_with is not None else None
         )
-
-        org_num_nodes_to_decode = [len(enc_output) for enc_output in encoder_outputs[decoder_node_type]]
-        detections = kwargs.get("detections", [[1] * to_decode for to_decode in org_num_nodes_to_decode])
-
-        assert len(detections) == len(org_num_nodes_to_decode)
-        assert all(len(det) == to_decode for det, to_decode in zip(detections, org_num_nodes_to_decode))
-        assert all(all(d in {0, 1} for d in det) for det in detections)
-
-        num_nodes_to_decode = [sum(det) for det in detections]
-        if sum(num_nodes_to_decode) == 0:
-            return inputs
 
         # filter the input words based on detections
         input_strings = []
@@ -95,17 +92,15 @@ class GraphSECWordsNMT(MultiNode2Seq):
         results = mod_utils.split(results, num_nodes_to_decode)
 
         all_results = []
-        for input_str, batch_word_results, word_detections, num_nodes, org_num_nodes in zip(
+        for input_str, batch_word_results, word_detections, num_nodes in zip(
                 inputs,
                 results,
                 detections,
-                num_nodes_to_decode,
-                org_num_nodes_to_decode
+                num_nodes_to_decode
         ):
             assert len(batch_word_results) == num_nodes
 
             input_words = input_str.split()
-            assert len(input_words) == org_num_nodes
 
             batch_result_str = []
             if len(batch_word_results) == 0:

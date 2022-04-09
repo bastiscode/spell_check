@@ -99,6 +99,7 @@ class SEDSequenceConfig(DatasetVariantConfig):
     # options for data_scheme not in {token_graph, tensor}
     index: Optional[str] = None
     index_num_neighbors: int = 5
+    add_edit_distance_neighbors: bool = False
     add_dependency_info: bool = True
     word_fully_connected: bool = True
     token_fully_connected: bool = False

@@ -2,11 +2,12 @@ import collections
 import json
 import random
 import re
+import unicodedata
 from collections import Counter
 from typing import Union, List, Tuple, Optional, Iterator, Any, Dict, Iterable, Callable
 
 import dgl
-import ftfy
+import Levenshtein
 import lmdb
 import spacy
 import torch
@@ -149,6 +150,22 @@ def tokenize_words(
 
 TokenizationFn = Callable[[Doc], List[List[int]]]
 NeighborFn = Callable[[List[Doc]], List[List[Neighbors]]]
+
+
+def get_edit_distance_neighbor_fn(dictionary: Dict[str, int], num_neighbors: int, normalized: bool = True) -> NeighborFn:
+    def _neigh(docs: List[Doc]) -> List[List[Neighbors]]:
+        neighbor_lists = []
+        for doc in docs:
+            neighbor_list = []
+            for word in doc:
+                pass
+                # closest_words =
+                # neighbors = Neighbors(
+                #     left_contexts=[""],
+                #       right_contexts=[""],
+                #       word_lists=closest_words,
+                #       distances=0
+                # )
 
 
 def prepare_samples(
@@ -562,13 +579,8 @@ def get_character_groups_from_repaired_doc(
 
 def clean_sequence(sequence: str, fix_unicode_errors: bool = False) -> str:
     if fix_unicode_errors:
-        sequence = fix_unicode(sequence)
+        sequence = "".join(ch for ch in sequence if unicodedata.category(ch)[0] != "C")
     return " ".join(sequence.strip().split())
-
-
-def fix_unicode(sequence: str) -> str:
-    # sequence = "".join(ch for ch in sequence if unicodedata.category(ch)[0] != "C")
-    return ftfy.fix_text(sequence)
 
 
 def is_valid_sequence(sequence: str, min_length: int = 0, max_length: int = -1, min_words: int = 0) -> bool:

@@ -1,14 +1,15 @@
+import collections
 import json
 import os
 import re
 from typing import List, Optional, Dict, Iterable, Any, Tuple
 
-import Levenshtein
 import numpy as np
 import pkg_resources
 import requests
 import torch
 from spacy.tokens import Doc
+import Levenshtein
 
 from gnn_lib.data import utils, index
 from gnn_lib.utils import io
@@ -62,20 +63,27 @@ class SECCTDBaseline(Baseline):
 
 
 class SECSpellCheckIndexBaseline(Baseline):
-    def __init__(self, seed: Optional[int] = None):
+    def __init__(
+            self,
+            seed: Optional[int] = None,
+            index_name: str = "ctx_1_euclidean_custom",
+            num_neighbors: int = 10
+    ) -> None:
         super().__init__(seed)
-        self.index = index.NNIndex(
-            os.path.join(SPELL_CHECK_INDEX_DIR, os.environ.get("BASELINE_SPELL_CHECK_INDEX", "ctx_0_ned_string"))
+        self.index_dir = os.path.join(
+            SPELL_CHECK_INDEX_DIR, os.environ.get("BASELINE_SPELL_CHECK_INDEX", index_name)
         )
+        self.index = index.NNIndex(self.index_dir)
+        self.num_neighbors = num_neighbors
 
     @property
     def name(self) -> str:
-        return "sci"
+        return f"sci_{os.path.basename(self.index_dir)}"
 
     def inference(self, sequences: List[str], **kwargs: Dict[str, Any]) -> List[str]:
         batch: List[Tuple[List[str], Doc]] = utils.tokenize_words_batch(sequences, return_docs=True)
         docs = [b[1] for b in batch]
-        neighbors_lists = self.index.batch_retrieve_from_docs(docs, 10)
+        neighbors_lists = self.index.batch_retrieve_from_docs(docs, self.num_neighbors)
         predictions = []
         for doc, neighbor_list in zip(docs, neighbors_lists):
             assert len(doc) == len(neighbor_list)
@@ -84,8 +92,22 @@ class SECSpellCheckIndexBaseline(Baseline):
                 if utils.is_special_token(word):
                     predicted_words.append(word.text)
                 else:
-                    # print(word.text, "\n", neighbors)
-                    predicted_words.append(neighbors.words[0])
+                    joined_neighbor_words = collections.defaultdict(int)
+
+                    for word_list in neighbors.word_lists:
+                        for w, freq in word_list:
+                            joined_neighbor_words[w] += freq
+
+                    neighbor_words = [
+                        (w, freq, Levenshtein.distance(w, word.text))
+                        for w, freq in joined_neighbor_words.items()
+                    ]
+                    neighbor_words = sorted(neighbor_words, key=lambda item: (item[2], -item[1]))
+                    if len(neighbor_words):
+                        predicted_words.append(neighbor_words[0][0])
+                    else:
+                        predicted_words.append(word.text)
+
             predictions.append(utils.de_tokenize_words(predicted_words, doc))
         return predictions
 
@@ -197,6 +219,11 @@ class SECNeuspellBaseline(Baseline):
 
         self.model_name = model_name
 
+        # bert checker just cuts off sequences longer than 510 tokens so have to do the splitting ourselves
+        self.max_num_words = 128
+        self.word_context = self.max_num_words // 8
+        self.word_window = self.max_num_words - 2 * self.word_context
+
     @property
     def name(self) -> str:
         return f"neuspell_{self.model_name}"
@@ -205,7 +232,7 @@ class SECNeuspellBaseline(Baseline):
     def match_tokens_backtracking(a: List[str], b: List[str]) -> List[bool]:
         assert len(a) <= len(b)
         a_str = " ".join(a)
-        b_esc = [re.escape(tok) if tok != "[UNK]" else ".*" for tok in b]
+        b_esc = [re.escape(tok) if tok != "[UNK]" else "\\S+?" for tok in b]
 
         whitespaces: List[Optional[bool]] = [None] * len(b)
 
@@ -213,45 +240,66 @@ class SECNeuspellBaseline(Baseline):
             b_str = "^"
             for tok, ws_ in zip(b_esc[:idx + 1], whitespaces[:idx + 1]):
                 b_str += tok + " " * ws_
-            is_match = re.match(b_str, a_str) is not None
+            is_match = re.match(b_str, a_str, re.UNICODE) is not None
             return is_match
 
-        def match(idx: int) -> int:
+        def match(idx: int) -> bool:
             for ws in [True, False]:
                 whitespaces[idx] = ws
                 if prefix_match(idx):
                     if idx >= len(b) - 1 or match(idx + 1):
-                        return 1
-            return 0
+                        return True
+            if idx == 0:
+                raise RuntimeError(f"should not happen:\n{a}\n{b}")
+            return False
 
         match(0)
 
-        for i in range(len(whitespaces)):
-            if whitespaces[i] is None:
-                whitespaces[i] = False
-
         assert all(w is not None for w in whitespaces), f"{whitespaces}\n{a}\n{b}"
+        whitespaces[-1] = False
         return whitespaces
 
     def inference(self, sequences: List[str], **kwargs: Dict[str, Any]) -> List[str]:
         sequences = [utils.clean_sequence(seq, fix_unicode_errors=True) for seq in sequences]
-        tokenized_sequences, corrected_sequences = self.spell_checker.correct_strings(sequences, return_all=True)
 
         batch_detections = kwargs.get("detections", [[1] * len(seq.split()) for seq in sequences])
 
+        input_sequences = []
+        input_windows = []
+        input_detections = []
+        for sequence, detections in zip(sequences, batch_detections):
+            words = sequence.split()
+            if len(words) <= self.max_num_words:
+                input_sequences.append(sequence)
+                input_windows.append((0, len(words), 0))
+                input_detections.append(detections)
+            else:
+                for window_idx, i in enumerate(range(0, len(words), self.word_window)):
+                    input_sequences.append(
+                        " ".join(words[max(0, i - self.word_context):i + self.word_window + self.word_context]))
+                    start_idx = 0 if i == 0 else self.word_context
+                    input_windows.append(
+                        (start_idx, start_idx + self.word_window, window_idx)
+                    )
+                    input_detections.append(
+                        detections[max(0, i - self.word_context):i + self.word_window + self.word_context]
+                    )
+
+        tokenized_sequences, corrected_sequences = self.spell_checker.correct_strings(input_sequences, return_all=True)
+
         outputs = []
         for sequence, tokenized, corrected, detections in zip(
-                sequences, tokenized_sequences, corrected_sequences, batch_detections
+                input_sequences, tokenized_sequences, corrected_sequences, input_detections
         ):
             sequence_tokens = sequence.split()
             assert len(detections) == len(sequence_tokens)
             tokenized_tokens = tokenized.split()
             corrected_tokens = corrected.split()
-            # assert len(sequence_tokens) <= len(tokenized_tokens) == len(corrected_tokens)
-            # assert re.fullmatch(
-            #     "".join(re.escape(tok) if tok != "[UNK]" else ".*" for tok in tokenized_tokens),
-            #     "".join(sequence_tokens)
-            # )
+            assert len(sequence_tokens) <= len(tokenized_tokens) == len(corrected_tokens)
+            assert re.fullmatch(
+                "".join(re.escape(tok) if tok != "[UNK]" else "\\S+?" for tok in tokenized_tokens),
+                "".join(sequence_tokens)
+            ), (sequence_tokens, tokenized_tokens)
 
             whitespaces = SECNeuspellBaseline.match_tokens_backtracking(sequence_tokens, tokenized_tokens)
 
@@ -261,9 +309,21 @@ class SECNeuspellBaseline(Baseline):
                 output_str += (corrected_token if detections[ws_idx] else input_token) + " " * whitespace
                 if whitespace:
                     ws_idx += 1
+            assert ws_idx == len(sequence_tokens) - 1, (ws_idx, len(sequence_tokens))
             outputs.append(output_str)
 
-        return outputs
+        merged_outputs = []
+        for output, input_sequence, (from_word, to_word, window_idx) in zip(outputs, input_sequences, input_windows):
+            output_words = output.split()
+            assert len(input_sequence.split()) == len(output_words)
+            if window_idx == 0:
+                merged_outputs.append(output_words[from_word:to_word])
+            else:
+                merged_outputs[-1].extend(output_words[from_word:to_word])
+
+        assert [len(merged) == len(ipt.split()) for ipt, merged in zip(sequences, merged_outputs)]
+
+        return [" ".join(output) for output in merged_outputs]
 
 
 class SECNorvigBaseline(Baseline):

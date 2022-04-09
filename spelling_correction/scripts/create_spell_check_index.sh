@@ -65,7 +65,7 @@ python gnn_lib/scripts/create_spell_check_index.py \
 
 python gnn_lib/scripts/create_spell_check_index.py \
 	--in-file data/cleaned/wikidump_paragraphs/train_files.txt data/cleaned/bookcorpus_paragraphs/train_files.txt \
-	--context-length 1 \
+	--context-length 2 \
 	--out-dir data/spell_check_index/ctx_2_euclidean_custom \
 	--dist euclidean \
 	--vectorizer custom \

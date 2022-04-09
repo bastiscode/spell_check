@@ -7,7 +7,6 @@ import numpy as np
 
 from gnn_lib.data.index import NNIndex
 from gnn_lib.utils import common
-from gnn_lib.data import utils
 
 
 def parse_args() -> argparse.Namespace:

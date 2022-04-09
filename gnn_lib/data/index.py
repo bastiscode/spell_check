@@ -14,10 +14,9 @@ from torch import nn
 from tqdm import tqdm
 
 from gnn_lib.data import utils, tokenization
-from gnn_lib.data.utils import flatten
+from gnn_lib.data.utils import flatten, NeighborFn
 from gnn_lib.modules import utils as mod_utils, embedding, encoders
 from gnn_lib.utils import common, io, to
-
 
 WORD_PLACEHOLDER = "[W]"
 
@@ -249,7 +248,7 @@ class CharTransformer(CustomNeuralVectorizerModel):
         token_ids = []
         lengths = []
         for i, ipt in enumerate(inputs):
-            tokens = self.tok.tokenize(ipt)
+            tokens = self.tok.tokenize(ipt[:self.max_length])
             token_ids.append(torch.tensor(tokens, dtype=torch.long))
             lengths.append(len(tokens))
 
@@ -412,7 +411,7 @@ class NNIndex:
 
         total = 0
         invalid = 0
-        for file in tqdm(files, desc="processing files", disable=common.disable_tqdm()):
+        for i, file in tqdm(enumerate(files), total=len(files), desc="processing files", disable=common.disable_tqdm()):
             with open(file, "r", encoding="utf8") as inf:
                 for line in tqdm(inf, total=io.line_count(file), leave=False, disable=common.disable_tqdm()):
                     sequence = json.loads(line)["sequence"]
@@ -435,6 +434,13 @@ class NNIndex:
                             else:
                                 contexts[(left_context, right_context)][word] += 1
                             context_counts[(left_context, right_context)] += 1
+
+            if common.disable_tqdm() and (i + 1) % max(1, len(files) // 10) == 0:
+                logger.info(f"Processed {100 * (i + 1) / len(files):.1f}% of all files")
+
+        if dictionary is not None:
+            logger.info(f"{100 * invalid / total:.2f}% of all unique (left_context, word, right_context) items "
+                        f"were invalid and thus will not be added to index")
 
         contexts = {
             ctx: words
@@ -492,12 +498,11 @@ class NNIndex:
             if len(indices) % 64 == 0:
                 add_batch()
 
+            if common.disable_tqdm() and (i + 1) % max(1, num_elements // 10) == 0:
+                logger.info(f"Added {100 * (i + 1) / num_elements:.1f}% of all elements to index")
+
         if len(indices):
             add_batch()
-
-        if dictionary is not None:
-            logger.info(f"{100 * invalid / total:.2f}% of all unique (left_context, word, right_context) items "
-                        f"were invalid and thus not added to index")
 
         logger.info(f"Computing index with {num_elements:,} elements")
         index_time_params = {
@@ -537,7 +542,7 @@ class NNIndex:
         for i in range(context_length, len(words) - context_length):
             word = words[i]
             left_context = utils.de_tokenize_words(
-                words[i - context_length:i],
+                words[i - context_length: i],
                 whitespaces[i - context_length: i]
             ).lstrip().lower()
             right_context = " " * whitespaces[i] + utils.de_tokenize_words(
@@ -605,7 +610,7 @@ class NNIndex:
         return self._to_neighbors(neighbors, distances)
 
 
-def get_neighbor_fn(index: NNIndex, num_neighbors: int) -> Callable[[List[Doc]], List[List[utils.Neighbors]]]:
+def get_neighbor_fn(index: NNIndex, num_neighbors: int) -> NeighborFn:
     def _neigh(docs: List[Doc]) -> List[List[utils.Neighbors]]:
         return index.batch_retrieve_from_docs(docs, num_neighbors)
 

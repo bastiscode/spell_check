@@ -1,27 +1,30 @@
 from typing import List, Optional, Set, Tuple
 
-
 __all__ = ["generate_table"]
 
 
 def generate_table(
-        header: List[str],
+        headers: List[List[str]],
         data: List[List[str]],
         alignments: Optional[List[str]] = None,
-        horizontal_lines: Optional[List[bool]] = None,
+        horizontal_lines: Optional[List[int]] = None,
         bold_cells: Optional[Set[Tuple[int, int]]] = None,
         fmt: str = "markdown"
 ) -> str:
     assert fmt in {"markdown", "latex"}
 
-    assert all(len(header) == len(item) for item in data), \
-        f"header has length {len(header)}, but data items have lengths {[len(item) for item in data]}"
+    assert len(headers), "got no headers"
+    assert len(set(len(header) for header in headers)) == 1, "all headers must have the same length"
+    header_length = len(headers[0])
+
+    assert all(header_length == len(item) for item in data), \
+        f"header has length {header_length}, but data items have lengths {[len(item) for item in data]}"
 
     if alignments is None:
-        alignments = ["left"] + ["right"] * (len(header) - 1)
+        alignments = ["left"] + ["right"] * (header_length - 1)
 
     if horizontal_lines is None or fmt == "markdown":
-        horizontal_lines = [False] * len(data)
+        horizontal_lines = [0] * len(data)
     horizontal_lines[-1] = fmt == "latex"  # always a horizontal line after last line for latex, but not for markdown
 
     if bold_cells is None:
@@ -35,13 +38,16 @@ def generate_table(
     if opening_str:
         tables_lines.append(opening_str)
 
-    header_str = _table_row(fmt, header, [False] * len(header)) + _table_horizontal_line(fmt, len(header), alignments)
-    tables_lines.append(header_str)
+    tables_lines.extend([
+        _table_row(fmt, header, [False] * header_length)
+        + (_table_horizontal_line(fmt, header_length, alignments, 2) if i == len(headers) - 1 else "")
+        for i, header in enumerate(headers)
+    ])
 
     for item, horizontal_line, bold in zip(data, horizontal_lines, bold_cells):
         line = _table_row(fmt, item, bold)
-        if horizontal_line:
-            line += _table_horizontal_line(fmt, len(item), alignments)
+        if horizontal_line > 0:
+            line += _table_horizontal_line(fmt, len(item), alignments, horizontal_line)
         tables_lines.append(line)
 
     closing_str = _close_table(fmt)
@@ -68,7 +74,7 @@ def _open_table(fmt: str, alignments: List[str]) -> str:
     if fmt == "markdown":
         return ""
     else:
-        return "\\begin{tabular}{" + "".join(_LATEX_ALIGNMENTS[align] for align in alignments) + "} \\hline"
+        return "\\begin{tabular}{|" + "|".join(_LATEX_ALIGNMENTS[align] for align in alignments) + "|} \\hline"
 
 
 def _close_table(fmt: str) -> str:
@@ -78,7 +84,7 @@ def _close_table(fmt: str) -> str:
         return "\\end{tabular}"
 
 
-_LATEX_ESCAPE_CHARS = {"&", "%", "$", "#", "_", "{", "}"}
+_LATEX_ESCAPE_CHARS = {"_", "%"}  # "&", "%", "$", "#", "_", "{", "}"}
 
 
 def _format_latex(s: str, bold: bool) -> str:
@@ -103,10 +109,11 @@ def _table_row(fmt: str, data: List[str], bold: List[bool]) -> str:
         return " & ".join(_format_latex(s, b) for s, b in zip(data, bold)) + " \\\\ "
 
 
-def _table_horizontal_line(fmt: str, num_cols: int, alignments: List[str]) -> str:
+def _table_horizontal_line(fmt: str, num_cols: int, alignments: List[str], num_lines: int) -> str:
     assert num_cols == len(alignments) and all(align in {"left", "right", "center"} for align in alignments)
 
     if fmt == "markdown":
         return "\n| " + " | ".join(_MARK_DOWN_ALIGNMENTS[align] for align in alignments) + " |"
     else:
-        return "\\hline"
+        assert num_lines in {1, 2}
+        return "\\hline" * num_lines

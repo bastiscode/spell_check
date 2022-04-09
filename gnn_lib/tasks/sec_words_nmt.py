@@ -25,28 +25,28 @@ class SECWordsNMT(Token2Seq):
         batch = self._batch_sequences_for_inference(inputs)
         inputs = [str(ipt) for ipt in inputs]
 
+        encoder_group_lengths: List[torch.Tensor] = batch.info["encoder_group_lengths"]
+        detections = kwargs.get("detections", [[1] * len(group_lengths) for group_lengths in encoder_group_lengths])
+
+        detections_flattened = flatten(detections)
+        assert all(det in {0, 1} for det in detections_flattened)
+        if sum(detections_flattened) == 0:
+            return [[ipt] for ipt in inputs]
+
+        detection_mask = torch.tensor(detections_flattened, dtype=torch.bool)
+
+        input_words = flatten([ipt.split() for ipt in inputs])
+        assert len(detections_flattened) == len(input_words), (len(detections_flattened), len(input_words))
+
         encoder_lengths = [len(t) for t in batch.data]
         encoder_inputs, encoder_padding_mask = model.pad_inputs(batch.data)
         encoder_outputs = model.encode(encoder_inputs, encoder_padding_mask)
         encoder_outputs = [encoder_outputs[i, :l, :] for i, l in enumerate(encoder_lengths)]
 
-        encoder_group_lengths: List[torch.Tensor] = batch.info["encoder_group_lengths"]
-        if "detections" in kwargs:
-            detections = [detection for i, detection in enumerate(kwargs["detections"])]
-        else:
-            detections = [[1] * len(group_lengths) for group_lengths in encoder_group_lengths]
-
         decoder_positions = torch.cat([
             torch.cat([torch.tensor([0]), torch.cumsum(group_lengths, dim=0)[:-1]])
             for group_lengths in encoder_group_lengths
         ])
-
-        input_words = flatten([ipt.split() for ipt in inputs])
-        detections_flattened = flatten(detections)
-        assert len(detections_flattened) == len(input_words)
-        assert all(det in {0, 1} for det in detections_flattened)
-
-        detection_mask = torch.tensor(detections_flattened, dtype=torch.bool)
 
         encoder_outputs = mod_utils.pad(
             [

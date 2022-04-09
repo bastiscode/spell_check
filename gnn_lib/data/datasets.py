@@ -69,7 +69,6 @@ def write_lmdb(
         preprocessing,
         tok_fn,
         neighbor_fn,
-        split_only_on_ws=False,
         with_pos_tags=preprocess_cfg.with_pos_tags,
         with_ner=preprocess_cfg.with_ner,
         with_dep_parser=preprocess_cfg.with_dep_parser,

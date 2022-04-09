@@ -1,9 +1,11 @@
 import collections
-from typing import Optional, Callable, Tuple, List, Any, Set, Dict
+import string
+from typing import Optional, Callable, Tuple, List, Any, Dict
 
 import numpy as np
-import torch
 from Levenshtein import distance as ed
+
+from gnn_lib.data import utils
 
 
 def check_same_length(*args: Any) -> None:
@@ -104,10 +106,13 @@ def binary_f1_prec_rec(
     return _tp_fp_fn_to_f1_prec_rec(tp, fp, fn)
 
 
-def text_f1_prec_rec(sequences: List[str],
-                     target_sequences: List[str],
-                     split_fn: Optional[Callable] = None) -> Tuple[float, float, float]:
-    check_same_length(sequences, target_sequences)
+def correction_f1_prec_rec(
+        input_sequences: List[str],
+        predicted_sequences: List[str],
+        target_sequences: List[str],
+        split_fn: Optional[Callable] = None
+) -> Tuple[float, float, float]:
+    check_same_length(input_sequences, predicted_sequences, target_sequences)
 
     if split_fn is None:
         def _split_fn(s: str) -> List[str]:
@@ -119,17 +124,29 @@ def text_f1_prec_rec(sequences: List[str],
     fp = 0
     fn = 0
 
-    for sequence, target_sequence in zip(sequences, target_sequences):
-        tokens = split_fn(sequence)
+    for input_sequence, predicted_sequence, target_sequence in zip(
+            input_sequences, predicted_sequences, target_sequences
+    ):
+        input_tokens = split_fn(input_sequence)
+        predicted_tokens = split_fn(predicted_sequence)
         target_tokens = split_fn(target_sequence)
+        assert len(input_tokens) == len(target_tokens)
 
-        tokens_count = collections.Counter(tokens)
-        target_tokens_count = collections.Counter(target_tokens)
-
-        tokens_in_common = sum((tokens_count & target_tokens_count).values())
-
-        tp += tokens_in_common
-        fp += len(tokens) - tokens_in_common
-        fn += len(target_tokens) - tokens_in_common
+        misspelled = set(i for i in range(len(input_tokens)) if input_tokens[i] != target_tokens[i])
+        # restored = set(i for i in range(len(input_tokens)) if )
+        #
+        # tokens_count = collections.Counter(tokens)
+        # target_tokens_count = collections.Counter(target_tokens)
+        #
+        # tokens_in_common = sum((tokens_count & target_tokens_count).values())
+        #
+        # tp += tokens_in_common
+        # fp += len(tokens) - tokens_in_common
+        # fn += len(target_tokens) - tokens_in_common
 
     return _tp_fp_fn_to_f1_prec_rec(tp, fp, fn)
+
+
+def is_real_word(word: str, dictionary: Dict[str, int]) -> bool:
+    corrupt_word_split = utils.tokenize_words_regex(word)[0]
+    return all(c in dictionary or c in string.punctuation for c in corrupt_word_split)

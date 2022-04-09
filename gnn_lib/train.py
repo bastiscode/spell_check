@@ -2,13 +2,10 @@ import argparse
 import datetime
 import os
 import pickle
-import shutil
-import signal
-import sys
-import time
-import zipfile
-from typing import Optional
 import resource
+import shutil
+import time
+from typing import Optional
 
 import torch
 from omegaconf import OmegaConf
@@ -430,5 +427,6 @@ def de_initialize() -> None:
 
 if __name__ == "__main__":
     mp.set_sharing_strategy("file_system")
+    # cProfile.runctx("train(parse_args(), initialize())", globals(), locals(), filename="train.pstat")
     train(parse_args(), initialize())
     de_initialize()

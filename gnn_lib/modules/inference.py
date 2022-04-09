@@ -1,5 +1,6 @@
 import math
 import queue
+import time
 from typing import Callable, Tuple, Dict, List, Any, Union, Optional
 
 # import Levenshtein
@@ -57,6 +58,7 @@ def sample_select_fn(sample_top_k: int) -> BeamSelectFn:
     return _sample
 
 
+TokFn = Callable[[str], List[int]]
 DeTokFn = Callable[[List[int]], str]
 ScoreFn = Callable[
     [
@@ -137,15 +139,6 @@ def spelling_correction_score(
             elif mode == "dictionary_or_eq_input":
                 valid_pred |= input_str.startswith(pred_str)
 
-            # check if current predicted string has a smaller prefix edit distance to input string than a
-            # given threshold
-            # elif mode == "dictionary_or_close_input":
-            #     valid_pred |= (
-            #             Levenshtein.distance(pred_str, input_str[:len(pred_str)])
-            #             <
-            #             kwargs.get("max_prefix_edit_distance", 5)
-            #     )
-
             else:
                 raise RuntimeError(f"unknown spell check score mode {mode}")
 
@@ -179,6 +172,9 @@ def token_inference(
         score_fn: ScoreFn = spelling_correction_score(),
         input_strings: Optional[List[str]] = None,
         decoder_positions: Optional[torch.Tensor] = None,
+        tok_fn: Optional[TokFn] = None,
+        output_strings: Optional[List[str]] = None,
+        stop_fn: Optional[Callable[[List[int]], bool]] = None,
         **kwargs: Any
 ) -> List[List[int]]:
     model.eval()
@@ -187,10 +183,22 @@ def token_inference(
     batch_size = len(next(iter(encoder_outputs.values())))
 
     log_prob = torch.full((batch_size, max_length), fill_value=-1.0, device=device)
-    log_prob[:, 0] = 0.0
     token_ids = torch.full((batch_size, max_length), fill_value=-1.0, dtype=torch.long, device=device)
-    token_ids[:, 0] = bos_token_id
-    lengths = torch.ones(batch_size, dtype=torch.long, device=device)
+    if output_strings is None:
+        log_prob[:, 0] = 0.0
+        token_ids[:, 0] = bos_token_id
+        lengths = torch.ones(batch_size, dtype=torch.long, device=device)
+    else:
+        assert tok_fn is not None, "tokenization function must be given when output strings are specified"
+        assert len(output_strings) == batch_size
+        lengths = []
+        for i, output_string in enumerate(output_strings):
+            output_token_ids = tok_fn(output_string)
+            token_ids[i, :len(output_token_ids)] = output_token_ids
+            log_prob[i, :len(output_token_ids)] = 0.0
+            lengths.append(len(output_token_ids))
+        lengths = torch.tensor(lengths, dtype=torch.long, device=device)
+
     if decoder_positions is not None:
         positions = torch.stack([
             torch.arange(pos, pos + max_length, device=device)
@@ -202,7 +210,8 @@ def token_inference(
     non_eos_mask = torch.ones(batch_size, dtype=torch.bool, device=device)
     smaller_max_length_mask = torch.ones(batch_size, dtype=torch.bool, device=device)
     smaller_max_length_mask[lengths + positions[:, 0] >= max_length] = False
-    indices_to_decode = non_eos_mask & smaller_max_length_mask
+    stop_mask = torch.ones(batch_size, dtype=torch.bool, device=device)
+    indices_to_decode = non_eos_mask & smaller_max_length_mask & stop_mask
 
     while True:
         decoder_lengths = _sub_select(lengths, indices_to_decode)
@@ -362,7 +371,7 @@ def best_first_inference(
 
             log_softmax_scores = torch.log_softmax(decoder_output, dim=1)[0].tolist()
 
-            min_log_prob = math.log(1 / len(log_softmax_scores))
+            min_log_prob = -1_000_000  # math.log(1 / len(log_softmax_scores))
             for i, score in enumerate(log_softmax_scores):
                 if score < min_log_prob:
                     continue
@@ -457,26 +466,34 @@ def beam_inference(
 
             log_softmax_scores = torch.log_softmax(decoder_output, dim=1)
 
-            min_log_prob = math.log(1 / log_softmax_scores.shape[1])
-            valid_indices = torch.nonzero(log_softmax_scores >= min_log_prob, as_tuple=True)
-            valid_log_prob = log_softmax_scores[valid_indices].tolist()
-            valid_indices = torch.stack(valid_indices, dim=-1).tolist()
+            # min_log_prob = math.log(1 / log_softmax_scores.shape[1])
+            # valid_indices = torch.nonzero(log_softmax_scores >= min_log_prob, as_tuple=True)
+            # valid_log_prob = log_softmax_scores[valid_indices].tolist()
+            # valid_indices = torch.stack(valid_indices, dim=-1).tolist()
 
+            top_k = torch.topk(log_softmax_scores, max(10, log_softmax_scores.shape[-1] // 100), dim=-1)
+            top_k_indices = top_k.indices.tolist()
+            top_k_log_p = top_k.values.tolist()
+
+            start = time.perf_counter()
             beam_candidates = []
-            for (beam_idx, token_id), log_p in zip(valid_indices, valid_log_prob):
-                beam_candidate = Beam.from_beam(
-                    current_beams[beam_idx],
-                    log_p=log_p,
-                    token_id=token_id
-                )
-                beam_candidates.append(
-                    (
-                        beam_candidate, -score_fn(
-                            beam_candidate,
-                            input_strings[b] if input_strings is not None else None
+            for beam_idx in range(len(top_k_indices)):
+                for token_id, log_p in zip(top_k_indices[beam_idx], top_k_log_p[beam_idx]):
+                    beam_candidate = Beam.from_beam(
+                        current_beams[beam_idx],
+                        log_p=log_p,
+                        token_id=token_id
+                    )
+                    beam_candidates.append(
+                        (
+                            beam_candidate, -score_fn(
+                                beam_candidate,
+                                input_strings[b] if input_strings is not None else None
+                            )
                         )
                     )
-                )
+            end = time.perf_counter()
+            # print(f"scoring beams at depth {search_depth} took {1000 * (end - start):.2f}ms")
 
             beam_candidates = sorted(beam_candidates, key=lambda e: e[1])[:2 * beam_width]
 
@@ -516,6 +533,13 @@ def beam_inference(
     return all_beams
 
 
+def get_tok_fn(output_tokenizer: tokenization.Tokenizer, bos_token_id: int) -> Callable[[str], List[int]]:
+    def tokenize(string: str) -> List[int]:
+        return [bos_token_id] + output_tokenizer.tokenize(string)
+
+    return tokenize
+
+
 def get_de_tok_fn(output_tokenizer: tokenization.Tokenizer, bos_token_id: int, eos_token_id: int) \
         -> Callable[[List[int]], str]:
     def de_tokenize(token_ids: List[int]) -> str:
@@ -543,6 +567,7 @@ def run_inference(
         **kwargs: Any) -> List[List[str]]:
     bos_token_id = output_tokenizer.token_to_id(tokenization.BOS)
     eos_token_id = output_tokenizer.token_to_id(tokenization.EOS)
+    tok_fn = get_tok_fn(output_tokenizer, bos_token_id)
     de_tok_fn = get_de_tok_fn(output_tokenizer, bos_token_id, eos_token_id)
 
     if search_mode == "greedy":
@@ -556,6 +581,7 @@ def run_inference(
             select_fn=greedy_select_fn(),
             score_fn=score_fn,
             input_strings=input_strings,
+            tok_fn=tok_fn,
             **kwargs
         )
     elif search_mode == "sample":

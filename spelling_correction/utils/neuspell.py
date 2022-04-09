@@ -1,14 +1,37 @@
-from typing import Tuple
+from typing import Tuple, List
 
+import spacy
+from spacy import Vocab
 from spacy.lang.en.tokenizer_exceptions import TOKENIZER_EXCEPTIONS
+from spacy.tokens import Doc
 
 from gnn_lib.data import utils
+
+
+class SpacyWhitespaceTokenizer:
+    def __init__(self, vocab: Vocab) -> None:
+        self.vocab = vocab
+
+    def __call__(self, text: str) -> Doc:
+        words = text.split()
+        whitespaces = [True] * len(words)
+        whitespaces[-1] = False
+        return Doc(self.vocab, words=words, spaces=whitespaces)
+
+
+SPACY_TOKENIZER_WS = spacy.load("en_core_web_lg")
+SPACY_TOKENIZER_WS.tokenizer = SpacyWhitespaceTokenizer(SPACY_TOKENIZER_WS.vocab)
+
+
+def tokenize_words_ws(sequence: str) -> Tuple[List[str], Doc]:
+    doc = SPACY_TOKENIZER_WS(sequence)
+    return [w.text for w in doc], doc
 
 
 def clean_sequences(correct_sequence: str, corrupt_sequence: str) -> Tuple[str, str]:
     words = []
     whitespaces = []
-    _words, doc = utils.tokenize_words(correct_sequence, return_doc=True, split_only_on_ws=True)
+    _words, doc = tokenize_words_ws(correct_sequence)
     assert _words == correct_sequence.split(), f"{_words} <--> {correct_sequence.split()}"
     assert len(correct_sequence.split()) == len(corrupt_sequence.split())
 
