@@ -40,7 +40,26 @@ class Beam:
         return f"Beam(token_ids={self.token_ids}, log_prob={self.log_prob})"
 
 
+TokFn = Callable[[str], List[int]]
+DeTokFn = Callable[[List[int]], str]
+ScoreFn = Callable[
+    [
+        # beam with token ids and log probs
+        Beam,
+        # input string
+        Optional[str]
+    ],
+    float
+]
+StopFn = Callable[[List[int], Optional[str]], bool]
 BeamSelectFn = Callable[[List[Tuple[Beam, float]]], Beam]
+
+
+def eos_stop_fn(eos_token_id: int) -> StopFn:
+    def _stop(token_ids: List[int], output_str: Optional[str] = None) -> bool:
+        return token_ids[-1] == eos_token_id
+
+    return _stop
 
 
 def greedy_select_fn() -> BeamSelectFn:
@@ -56,19 +75,6 @@ def sample_select_fn(sample_top_k: int) -> BeamSelectFn:
         return beams[sample_idx][0]
 
     return _sample
-
-
-TokFn = Callable[[str], List[int]]
-DeTokFn = Callable[[List[int]], str]
-ScoreFn = Callable[
-    [
-        # beam with token ids and log probs
-        Beam,
-        # input string
-        Optional[str]
-    ],
-    float
-]
 
 
 def log_likelihood_score(normalize_by_length: bool = True, alpha: float = 1.0) -> Callable[[Beam], float]:
@@ -92,8 +98,7 @@ def spelling_correction_score(
         de_tok_fn: Optional[DeTokFn] = None,
         # arguments for log likelihood scoring
         normalize_by_length: bool = True,
-        alpha: float = 1.0,
-        **kwargs: Any
+        alpha: float = 1.0
 ) -> ScoreFn:
     log_likelihood_score_fn = log_likelihood_score(normalize_by_length, alpha)
 
@@ -150,7 +155,7 @@ def spelling_correction_score(
     return _score
 
 
-def _sub_select(inputs: Union[torch.Tensor, Dict[str, torch.Tensor]], mask: Union[int, torch.Tensor]) -> \
+def sub_select(inputs: Union[torch.Tensor, Dict[str, torch.Tensor]], mask: Union[int, torch.Tensor]) -> \
         Union[torch.Tensor, Dict[str, torch.Tensor]]:
     if isinstance(inputs, torch.Tensor):
         return inputs[mask]
@@ -166,16 +171,14 @@ def token_inference(
         encoder_outputs: Dict[str, torch.Tensor],
         encoder_lengths: Dict[str, torch.Tensor],
         bos_token_id: int,
-        eos_token_id: int,
         max_length: int,
-        select_fn: BeamSelectFn = greedy_select_fn(),
-        score_fn: ScoreFn = spelling_correction_score(),
+        select_fn: BeamSelectFn,
+        score_fn: ScoreFn,
+        stop_fn: StopFn,
         input_strings: Optional[List[str]] = None,
         decoder_positions: Optional[torch.Tensor] = None,
         tok_fn: Optional[TokFn] = None,
-        output_strings: Optional[List[str]] = None,
-        stop_fn: Optional[Callable[[List[int]], bool]] = None,
-        **kwargs: Any
+        output_strings: Optional[List[str]] = None
 ) -> List[List[int]]:
     model.eval()
     device = utils.device_from_model(model)
@@ -194,7 +197,7 @@ def token_inference(
         lengths = []
         for i, output_string in enumerate(output_strings):
             output_token_ids = tok_fn(output_string)
-            token_ids[i, :len(output_token_ids)] = output_token_ids
+            token_ids[i, :len(output_token_ids)] = torch.tensor(output_token_ids, dtype=torch.long, device=token_ids.device)
             log_prob[i, :len(output_token_ids)] = 0.0
             lengths.append(len(output_token_ids))
         lengths = torch.tensor(lengths, dtype=torch.long, device=device)
@@ -207,22 +210,21 @@ def token_inference(
     else:
         positions = einops.repeat(torch.arange(max_length, device=device), "l -> b l", b=batch_size)
 
-    non_eos_mask = torch.ones(batch_size, dtype=torch.bool, device=device)
     smaller_max_length_mask = torch.ones(batch_size, dtype=torch.bool, device=device)
     smaller_max_length_mask[lengths + positions[:, 0] >= max_length] = False
-    stop_mask = torch.ones(batch_size, dtype=torch.bool, device=device)
-    indices_to_decode = non_eos_mask & smaller_max_length_mask & stop_mask
+    non_stop_mask = torch.ones(batch_size, dtype=torch.bool, device=device)
+    indices_to_decode = non_stop_mask & smaller_max_length_mask
 
     while True:
-        decoder_lengths = _sub_select(lengths, indices_to_decode)
+        decoder_lengths = sub_select(lengths, indices_to_decode)
         max_decoder_length = max(decoder_lengths)
-        decoder_positions = _sub_select(positions, indices_to_decode)[:, :max_decoder_length]
+        decoder_positions = sub_select(positions, indices_to_decode)[:, :max_decoder_length]
 
         decoder_output = model.decode(
-            decoder_inputs=_sub_select(token_ids, indices_to_decode)[:, :max_decoder_length],
+            decoder_inputs=sub_select(token_ids, indices_to_decode)[:, :max_decoder_length],
             decoder_lengths=decoder_lengths,
-            encoder_outputs=_sub_select(encoder_outputs, indices_to_decode),
-            encoder_lengths=_sub_select(encoder_lengths, indices_to_decode),
+            encoder_outputs=sub_select(encoder_outputs, indices_to_decode),
+            encoder_lengths=sub_select(encoder_lengths, indices_to_decode),
             decoder_positions=decoder_positions
         )
 
@@ -263,16 +265,20 @@ def token_inference(
 
         lengths[indices_to_decode] += 1
 
-        inferred_eos_indices = torch.where(inferred_token_ids == eos_token_id)[0]
-        new_eos_indices = torch.where(indices_to_decode)[0][inferred_eos_indices]
-        non_eos_mask[new_eos_indices] = False
-
         max_length_indices = torch.where(lengths + positions[:, 0] >= max_length)[0]
         smaller_max_length_mask[max_length_indices] = False
 
-        indices_to_decode = non_eos_mask & smaller_max_length_mask
+        indices = torch.where(indices_to_decode)[0]
 
-        # all sequences are at max length or all finished with eos token
+        new_stop_indices = []
+        for idx, ids, length in zip(indices, token_ids[indices_to_decode], lengths[indices_to_decode]):
+            if stop_fn(ids[:length].tolist(), output_strings[idx] if output_strings is not None else None):
+                new_stop_indices.append(idx)
+        non_stop_mask[torch.tensor(new_stop_indices, dtype=torch.long)] = False
+
+        indices_to_decode = non_stop_mask & smaller_max_length_mask
+
+        # all sequences are at max length or stopped by stop_fn
         if torch.sum(indices_to_decode) == 0:
             break
 
@@ -292,13 +298,13 @@ def best_first_inference(
         encoder_outputs: Dict[str, torch.Tensor],
         encoder_lengths: Dict[str, torch.Tensor],
         bos_token_id: int,
-        eos_token_id: int,
         max_length: int,
         score_fn: ScoreFn,
+        stop_fn: StopFn,
         top_k: int,
         input_strings: Optional[List[str]] = None,
-        decoder_positions: Optional[torch.Tensor] = None,
-        **kwargs: Any
+        output_strings: Optional[List[str]] = None,
+        decoder_positions: Optional[torch.Tensor] = None
 ) -> List[List[Beam]]:
     model.eval()
     device = utils.device_from_model(model)
@@ -311,8 +317,8 @@ def best_first_inference(
 
     for b in range(batch_size):
         # encoder_outputs_b: shape [L, H]
-        encoder_outputs_b = _sub_select(encoder_outputs, b)
-        encoder_lengths_b = _sub_select(encoder_lengths, b)
+        encoder_outputs_b = sub_select(encoder_outputs, b)
+        encoder_lengths_b = sub_select(encoder_lengths, b)
 
         # initialize beams
         beam_queue = queue.PriorityQueue()
@@ -336,7 +342,7 @@ def best_first_inference(
         while len(finished_beams) < top_k and positions[b] + search_depth < max_length and not beam_queue.empty():
             beam: Beam = beam_queue.get()[1]
 
-            if beam.is_eos(eos_token_id):
+            if stop_fn(beam.token_ids, output_strings[b] if output_strings is not None else None):
                 finished_beams.append(beam)
                 continue
 
@@ -401,13 +407,13 @@ def beam_inference(
         encoder_outputs: Dict[str, torch.Tensor],
         encoder_lengths: Dict[str, torch.Tensor],
         bos_token_id: int,
-        eos_token_id: int,
         max_length: int,
         score_fn: ScoreFn,
+        stop_fn: StopFn,
         beam_width: int,
         input_strings: Optional[List[str]] = None,
+        output_strings: Optional[List[str]] = None,
         decoder_positions: Optional[torch.Tensor] = None,
-        **kwargs: Any
 ) -> List[List[Beam]]:
     model.eval()
     device = utils.device_from_model(model)
@@ -420,8 +426,8 @@ def beam_inference(
 
     for b in range(batch_size):
         # encoder_outputs_b: shape [L, H]
-        encoder_outputs_b = _sub_select(encoder_outputs, b)
-        encoder_lengths_b = _sub_select(encoder_lengths, b)
+        encoder_outputs_b = sub_select(encoder_outputs, b)
+        encoder_lengths_b = sub_select(encoder_lengths, b)
 
         # initialize beams
         beam_queue = queue.PriorityQueue()
@@ -499,7 +505,7 @@ def beam_inference(
 
             current_beams = []
             for beam, score in beam_candidates:
-                if beam.is_eos(eos_token_id):
+                if stop_fn(beam.token_ids, output_strings[b] if output_strings is not None else None):
                     beam_queue.put((score, beam))
                 else:
                     current_beams.append(beam)
@@ -563,12 +569,17 @@ def run_inference(
         max_length: int,
         search_mode: str = "greedy",
         score_fn: ScoreFn = spelling_correction_score(),
+        stop_fn: Optional[StopFn] = None,
         input_strings: Optional[List[str]] = None,
-        **kwargs: Any) -> List[List[str]]:
+        output_strings: Optional[List[str]] = None,
+        decoder_positions: Optional[torch.Tensor] = None,
+        **kwargs: Any
+) -> List[List[str]]:
     bos_token_id = output_tokenizer.token_to_id(tokenization.BOS)
     eos_token_id = output_tokenizer.token_to_id(tokenization.EOS)
     tok_fn = get_tok_fn(output_tokenizer, bos_token_id)
     de_tok_fn = get_de_tok_fn(output_tokenizer, bos_token_id, eos_token_id)
+    stop_fn = stop_fn or eos_stop_fn(eos_token_id)
 
     if search_mode == "greedy":
         outputs = token_inference(
@@ -576,13 +587,14 @@ def run_inference(
             encoder_outputs=encoder_outputs,
             encoder_lengths=encoder_lengths,
             bos_token_id=bos_token_id,
-            eos_token_id=eos_token_id,
             max_length=max_length,
             select_fn=greedy_select_fn(),
             score_fn=score_fn,
+            stop_fn=stop_fn,
             input_strings=input_strings,
             tok_fn=tok_fn,
-            **kwargs
+            output_strings=output_strings,
+            decoder_positions=decoder_positions
         )
     elif search_mode == "sample":
         sample_top_k = kwargs.pop("sample_top_k", 5)
@@ -591,12 +603,14 @@ def run_inference(
             encoder_outputs=encoder_outputs,
             encoder_lengths=encoder_lengths,
             bos_token_id=bos_token_id,
-            eos_token_id=eos_token_id,
             max_length=max_length,
             select_fn=sample_select_fn(sample_top_k),
             score_fn=score_fn,
+            stop_fn=stop_fn,
             input_strings=input_strings,
-            **kwargs
+            tok_fn=tok_fn,
+            output_strings=output_strings,
+            decoder_positions=decoder_positions
         )
     elif search_mode == "beam":
         beam_width = kwargs.pop("beam_width", 5)
@@ -605,12 +619,13 @@ def run_inference(
             encoder_outputs=encoder_outputs,
             encoder_lengths=encoder_lengths,
             bos_token_id=bos_token_id,
-            eos_token_id=eos_token_id,
             max_length=max_length,
             score_fn=score_fn,
+            stop_fn=stop_fn,
             beam_width=beam_width,
             input_strings=input_strings,
-            **kwargs
+            output_strings=output_strings,
+            decoder_positions=decoder_positions
         )
     elif search_mode == "best_first":
         top_k = kwargs.pop("best_first_top_k", 1)
@@ -622,9 +637,11 @@ def run_inference(
             eos_token_id=eos_token_id,
             max_length=max_length,
             score_fn=score_fn,
+            stop_fn=stop_fn,
             top_k=top_k,
             input_strings=input_strings,
-            **kwargs
+            output_strings=output_strings,
+            decoder_positions=decoder_positions
         )
     else:
         raise ValueError(f"unknown search mode {search_mode}")

@@ -9,7 +9,7 @@ with open("gnn_lib/version.py", "r", encoding="utf8") as vf:
 setup(
     name="gsc",
     version=version,
-    description="Spell checking using Graph Neural Networks and Transformers",
+    description="Spell checking using Transformers and Graph Neural Networks",
     long_description=long_description,
     long_description_content_type="text/markdown",
     author="Sebastian Walter",
@@ -18,10 +18,11 @@ setup(
     packages=["gnn_lib"],
     scripts=[
         "bin/gsec",
-        "bin/gsed"
+        "bin/gsed",
+        "bin/trt"
     ],
     install_requires=[
-        "torch>=1.8.0",
+        "torch>=1.11.0",
         "dgl>=0.8.0",
         "einops>=0.3.0",
         "networkx[all]>=2.6.3",

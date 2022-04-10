@@ -150,7 +150,8 @@ class SpellingErrorCorrector(_APIBase):
                 or isinstance(task, sec_nmt.SECNMT)
                 or isinstance(task, graph_sec_words_nmt.GraphSECWordsNMT)
                 or isinstance(task, sec_words_nmt.SECWordsNMT)
-        ), f"expected experiment to be of type SECNMT or SECWordsNMT, but got {type(task)}"
+        ), f"expected experiment to be of type SECNMT, GraphSECNMT, SECWordsNMT or GraphSECWordsNMT, " \
+           f"but got {type(task)}"
 
         self.max_length = model.cfg.max_length
 
@@ -227,10 +228,7 @@ class SpellingErrorCorrector(_APIBase):
             **inference_kwargs
         )
 
-        if (detections is not None and (
-                isinstance(self.task, sec_words_nmt.SECWordsNMT)
-                or isinstance(self.task, graph_sec_words_nmt.GraphSECWordsNMT)
-        )):
+        if detections is not None:
             # prepare detections based on inference infos from inference dataset
             assert (
                     len(detections) == len(inputs)

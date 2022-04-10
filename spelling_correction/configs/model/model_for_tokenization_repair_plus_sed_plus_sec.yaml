@@ -17,4 +17,4 @@ fix_tokenization_repair: ${oc.env:GNN_LIB_FIX_TOKENIZATION_REPAIR,false}
 
 num_sec_layers: ${oc.env:GNN_LIB_NUM_SEC_LAYERS,6}
 sec_tokenizer: ${from_file:tokenizer/bpe_no_prefix_space.yaml}
-sec_max_output_length: 1024
+sec_max_output_length: 2048

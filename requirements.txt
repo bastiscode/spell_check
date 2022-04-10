@@ -1,5 +1,5 @@
 # core libraries
-torch==1.10.0 # (tensor ops and neural network modules)
+torch==1.11.0 # (tensor ops and neural network modules)
 einops==0.4.0 # (einstein operators)
 dgl-cu113==0.8.0 # (graph neural network library)
 networkx[all]==2.6.3 # (general purpose graph library)
