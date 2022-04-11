@@ -171,6 +171,7 @@ def token_inference(
         encoder_outputs: Dict[str, torch.Tensor],
         encoder_lengths: Dict[str, torch.Tensor],
         bos_token_id: int,
+        pad_token_id: int,
         max_length: int,
         select_fn: BeamSelectFn,
         score_fn: ScoreFn,
@@ -186,7 +187,7 @@ def token_inference(
     batch_size = len(next(iter(encoder_outputs.values())))
 
     log_prob = torch.full((batch_size, max_length), fill_value=-1.0, device=device)
-    token_ids = torch.full((batch_size, max_length), fill_value=-1.0, dtype=torch.long, device=device)
+    token_ids = torch.full((batch_size, max_length), fill_value=pad_token_id, dtype=torch.long, device=device)
     if output_strings is None:
         log_prob[:, 0] = 0.0
         token_ids[:, 0] = bos_token_id
@@ -197,7 +198,8 @@ def token_inference(
         lengths = []
         for i, output_string in enumerate(output_strings):
             output_token_ids = tok_fn(output_string)
-            token_ids[i, :len(output_token_ids)] = torch.tensor(output_token_ids, dtype=torch.long, device=token_ids.device)
+            token_ids[i, :len(output_token_ids)] = torch.tensor(
+                output_token_ids, dtype=torch.long, device=token_ids.device)
             log_prob[i, :len(output_token_ids)] = 0.0
             lengths.append(len(output_token_ids))
         lengths = torch.tensor(lengths, dtype=torch.long, device=device)
@@ -235,14 +237,15 @@ def token_inference(
             length = lengths[indices_to_decode][i]
             log_softmax_scores = torch.log_softmax(decoder_output[i, length - 1], dim=0)
 
+            top_k = torch.topk(log_softmax_scores, max(10, log_softmax_scores.shape[-1] // 100), dim=-1)
+            top_k_indices = top_k.indices.tolist()
+            top_k_log_p = top_k.values.tolist()
+
             batch_idx = batch_indices[i]
             beams_and_scores = []
-            min_log_prob = math.log(1 / len(log_softmax_scores))
             current_token_ids = token_ids[batch_idx, :length].tolist()
             current_log_prob = log_prob[batch_idx, :length].tolist()
-            for token_id, lp in enumerate(log_softmax_scores.tolist()):
-                if lp < min_log_prob:
-                    continue
+            for token_id, lp in zip(top_k_indices, top_k_log_p):
                 beam = Beam()
                 beam.token_ids = current_token_ids + [token_id]
                 beam.log_prob = current_log_prob + [lp]
@@ -303,8 +306,9 @@ def best_first_inference(
         stop_fn: StopFn,
         top_k: int,
         input_strings: Optional[List[str]] = None,
-        output_strings: Optional[List[str]] = None,
-        decoder_positions: Optional[torch.Tensor] = None
+        decoder_positions: Optional[torch.Tensor] = None,
+        tok_fn: Optional[TokFn] = None,
+        output_strings: Optional[List[str]] = None
 ) -> List[List[Beam]]:
     model.eval()
     device = utils.device_from_model(model)
@@ -324,9 +328,16 @@ def best_first_inference(
         beam_queue = queue.PriorityQueue()
         finished_beams = []
 
+        if output_strings is not None:
+            token_ids = tok_fn(output_strings[b])
+            log_prob = [0.0] * len(token_ids)
+        else:
+            token_ids = [bos_token_id]
+            log_prob = [0.0]
+
         beam = Beam()
-        beam.token_ids.append(bos_token_id)
-        beam.log_prob.append(0.0)
+        beam.token_ids = token_ids
+        beam.log_prob = log_prob
         beam_queue.put(
             (
                 -score_fn(
@@ -337,7 +348,7 @@ def best_first_inference(
             )
         )
 
-        search_depth = 1
+        search_depth = len(token_ids)
 
         while len(finished_beams) < top_k and positions[b] + search_depth < max_length and not beam_queue.empty():
             beam: Beam = beam_queue.get()[1]
@@ -373,15 +384,16 @@ def best_first_inference(
                 encoder_outputs=beam_encoder_feats_b,
                 encoder_lengths=beam_encoder_lengths_b,
                 decoder_positions=decoder_positions
-            )[:, -1, ...]
+            )[0, -1, ...]
 
-            log_softmax_scores = torch.log_softmax(decoder_output, dim=1)[0].tolist()
+            log_softmax_scores = torch.log_softmax(decoder_output, dim=0)
 
-            min_log_prob = -1_000_000  # math.log(1 / len(log_softmax_scores))
-            for i, score in enumerate(log_softmax_scores):
-                if score < min_log_prob:
-                    continue
-                new_beam = Beam.from_beam(beam, score, i)
+            top_k = torch.topk(log_softmax_scores, max(10, log_softmax_scores.shape[-1] // 100), dim=-1)
+            top_k_indices = top_k.indices.tolist()
+            top_k_log_p = top_k.values.tolist()
+
+            for token_id, score in zip(top_k_indices.tolist(), top_k_log_p.tolist()):
+                new_beam = Beam.from_beam(beam, score, token_id)
                 beam_queue.put(
                     (
                         -score_fn(
@@ -412,8 +424,9 @@ def beam_inference(
         stop_fn: StopFn,
         beam_width: int,
         input_strings: Optional[List[str]] = None,
-        output_strings: Optional[List[str]] = None,
         decoder_positions: Optional[torch.Tensor] = None,
+        tok_fn: Optional[TokFn] = None,
+        output_strings: Optional[List[str]] = None
 ) -> List[List[Beam]]:
     model.eval()
     device = utils.device_from_model(model)
@@ -430,14 +443,21 @@ def beam_inference(
         encoder_lengths_b = sub_select(encoder_lengths, b)
 
         # initialize beams
+        if output_strings is not None:
+            token_ids = tok_fn(output_strings[b])
+            log_prob = [0.0] * len(token_ids)
+        else:
+            token_ids = [bos_token_id]
+            log_prob = [0.0]
+
         beam_queue = queue.PriorityQueue()
         current_beams = []
         beam = Beam()
-        beam.token_ids.append(bos_token_id)
-        beam.log_prob.append(0.0)
+        beam.token_ids = token_ids
+        beam.log_prob = log_prob
         current_beams.append(beam)
 
-        search_depth = 1
+        search_depth = len(token_ids)
 
         while beam_queue.qsize() < beam_width and positions[b] + search_depth < max_length and len(current_beams) > 0:
             decoder_inputs = torch.tensor(
@@ -471,11 +491,6 @@ def beam_inference(
             )[:, -1, ...]
 
             log_softmax_scores = torch.log_softmax(decoder_output, dim=1)
-
-            # min_log_prob = math.log(1 / log_softmax_scores.shape[1])
-            # valid_indices = torch.nonzero(log_softmax_scores >= min_log_prob, as_tuple=True)
-            # valid_log_prob = log_softmax_scores[valid_indices].tolist()
-            # valid_indices = torch.stack(valid_indices, dim=-1).tolist()
 
             top_k = torch.topk(log_softmax_scores, max(10, log_softmax_scores.shape[-1] // 100), dim=-1)
             top_k_indices = top_k.indices.tolist()
@@ -577,6 +592,7 @@ def run_inference(
 ) -> List[List[str]]:
     bos_token_id = output_tokenizer.token_to_id(tokenization.BOS)
     eos_token_id = output_tokenizer.token_to_id(tokenization.EOS)
+    pad_token_id = output_tokenizer.token_to_id(tokenization.PAD)
     tok_fn = get_tok_fn(output_tokenizer, bos_token_id)
     de_tok_fn = get_de_tok_fn(output_tokenizer, bos_token_id, eos_token_id)
     stop_fn = stop_fn or eos_stop_fn(eos_token_id)
@@ -587,6 +603,7 @@ def run_inference(
             encoder_outputs=encoder_outputs,
             encoder_lengths=encoder_lengths,
             bos_token_id=bos_token_id,
+            pad_token_id=pad_token_id,
             max_length=max_length,
             select_fn=greedy_select_fn(),
             score_fn=score_fn,

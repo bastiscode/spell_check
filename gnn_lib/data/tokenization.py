@@ -46,6 +46,9 @@ class Tokenizer:
     def vocab_size(self) -> int:
         raise NotImplementedError
 
+    def normalize(self, sequence: str) -> str:
+        raise NotImplementedError
+
     def split(self, sequence: str) -> List[str]:
         raise NotImplementedError
 
@@ -60,10 +63,6 @@ class Tokenizer:
 
     def de_tokenize(self, token_ids: List[int], **kwargs: Any) -> str:
         raise NotImplementedError
-
-    @property
-    def cfg_string(self) -> str:
-        return str(hashlib.sha1(pickle.dumps((self.__class__.__name__, self.vocab_size))).hexdigest())
 
     @property
     def name(self) -> str:
@@ -135,8 +134,11 @@ class ByteTokenizer(Tokenizer):
     def vocab_size(self) -> int:
         return len(self.vocab)
 
+    def normalize(self, sequence: str) -> str:
+        return sequence
+
     def split(self, sequence: str) -> List[str]:
-        return list(chr(b) for b in sequence.encode("utf8"))
+        return list(chr(b) for b in self.normalize(sequence).encode("utf8"))
 
     def token_to_id(self, token: str) -> int:
         return self.vocab[token]
@@ -177,8 +179,11 @@ class CharTokenizer(Tokenizer):
     def vocab_size(self) -> int:
         return len(self.vocab)
 
+    def normalize(self, sequence: str) -> str:
+        return sequence
+
     def split(self, sequence: str) -> List[str]:
-        return list(sequence)
+        return list(self.normalize(sequence))
 
     def token_to_id(self, token: str) -> int:
         return self.vocab.get(token, self.unk_id)
@@ -245,7 +250,8 @@ class WordTokenizer(Tokenizer):
 
         word_freq = Counter()
         with ctx.Pool(
-                processes=min(int(os.getenv("GNN_LIB_NUM_PROCESSES", min(os.cpu_count(), 8))), len(files))) as pool:
+                processes=min(int(os.getenv("GNN_LIB_NUM_PROCESSES", min(len(os.sched_getaffinity(0)), 8))), len(files))
+        ) as pool:
             for i, d in tqdm(enumerate(pool.imap_unordered(utils.get_word_frequencies_from_file, files, chunksize=16)),
                              total=len(files),
                              desc="Calculating word frequencies from files"):
@@ -261,8 +267,11 @@ class WordTokenizer(Tokenizer):
         with open(save_path, "wb") as f:  # type: ignore
             pickle.dump(vocab, f)  # type: ignore
 
+    def normalize(self, sequence: str) -> str:
+        return sequence
+
     def split(self, sequence: str) -> List[str]:
-        return utils.tokenize_words_regex(sequence)[0]
+        return utils.tokenize_words_regex(self.normalize(sequence))[0]
 
     def token_to_id(self, token: str) -> int:
         return self.vocab.get(token, self.unk_id)
@@ -281,12 +290,10 @@ class WordTokenizer(Tokenizer):
         return token_ids
 
     def de_tokenize(self, token_ids: List[int], **kwargs: Any) -> str:
-        return utils.de_tokenize_words([self.id_to_token(token_id) for token_id in token_ids],
-                                       kwargs.get("whitespaces", kwargs.get("doc")))
-
-    @property
-    def cfg_string(self) -> str:
-        return str(hashlib.sha1(pickle.dumps((self.__class__.__name__, self.vocab_size, self.file_path))).hexdigest())
+        return utils.de_tokenize_words(
+            [self.id_to_token(token_id) for token_id in token_ids],
+            kwargs.get("whitespaces", kwargs.get("doc"))
+        )
 
     @property
     def name(self) -> str:
@@ -337,22 +344,6 @@ class BPETokenizer(Tokenizer):
         num_sequences = 0
         for file in files:
             with open(file, "r", encoding="utf8") as in_f:
-                # if train_method != "default":
-                #     lines = [line.strip() for line in in_f.readlines()]
-                #     docs = utils.tokenize_words_batch(
-                #         lines,
-                #         return_docs=True,
-                #         batch_size=2048
-                #     )
-                #     for _, doc in docs:
-                #         for i, token in enumerate(doc):
-                #             # convert spacy trailing whitespace to bpe leading whitespaces
-                #             if i == 0 or doc[i - 1].whitespace_ == "" or train_method == "words_without_whitespace":
-                #                 yield token.text
-                #             else:
-                #                 yield " " + token.text
-                #         num_sequences += 1
-                # else:
                 for line in in_f:
                     yield line.strip()
                     num_sequences += 1
@@ -363,6 +354,9 @@ class BPETokenizer(Tokenizer):
     @property
     def vocab_size(self) -> int:
         return self.tokenizer.get_vocab_size()
+
+    def normalize(self, sequence: str) -> str:
+        return self.tokenizer.normalizer.normalize_str(sequence)
 
     def split(self, sequence: str) -> List[str]:
         return self.tokenizer.encode(sequence).tokens
@@ -382,14 +376,14 @@ class BPETokenizer(Tokenizer):
         return token_ids
 
     def de_tokenize(self, token_ids: List[int], **kwargs: Any) -> str:
-        return self.tokenizer.decode(
+        de_tokenized = self.tokenizer.decode(
             token_ids,
             skip_special_tokens=False
-        ).strip()
-
-    @property
-    def cfg_string(self) -> str:
-        return str(hashlib.sha1(pickle.dumps((self.__class__.__name__, self.vocab_size, self.file_path))).hexdigest())
+        )
+        if self.tokenizer.pre_tokenizer.add_prefix_space:
+            return de_tokenized.lstrip()
+        else:
+            return de_tokenized
 
     @property
     def name(self) -> str:

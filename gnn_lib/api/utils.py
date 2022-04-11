@@ -506,7 +506,7 @@ def generate_report(
         raise ValueError(f"expected precision to be one of torch.float16, torch.bfloat16 or torch.float32")
 
     report = tables.generate_table(
-        header=[
+        headers=[[
             "Task",
             "Model",
             "Input size",
@@ -519,7 +519,7 @@ def generate_report(
             "Batch size",
             "Sorted",
             "Device"
-        ],
+        ]],
         data=[
             [
                 task,

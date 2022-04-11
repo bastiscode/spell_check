@@ -160,13 +160,13 @@ def train(args: argparse.Namespace, device: DistributedDevice) -> None:
     # model = model.to(device.device)
     # torch.cuda.set_device(device.device)
     unused_parameters = task.disable_unused_parameters(model, device)
-    # static makes sure we can use DDP with parameter sharing and gradient checkpointing,
-    # but we have to make sure that our models to not have any control flow in them (e.g. if statements),
-    # which is not the case for most of our models
+    # static graph makes sure we can use DDP with parameter sharing and gradient checkpointing,
+    # but we have to make sure that our models do not have any control flow in them (e.g. if statements) that changes
+    # the parameters receiving gradients in each iteration, which is not the case for most of our models
     # see: https://github.com/pytorch/pytorch/blob/master/torch/nn/parallel/distributed.py#L1627
     model = DistributedDataParallel(
         model,
-        static_graph=os.getenv("GNN_LIB_STATIC_GRAPH", "false") == "true"
+        static_graph=os.getenv("GNN_LIB_STATIC_GRAPH", "true") == "true"
     )
 
     train_dataset, val_dataset = gnn_lib.data.get_train_val_datasets(
