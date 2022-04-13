@@ -14,7 +14,7 @@ class GraphSECNMT(Graph2Seq):
                   inputs: List[Union[str, Sample]],
                   **kwargs: Any) -> List[List[str]]:
         kwargs.update({
-            "input_strings": [str(ipt) for ipt in inputs]
+            "input_strings": [model.input_tokenizers["token"].normalize(str(ipt)) for ipt in inputs]
         })
 
         return super().inference(model, inputs, **kwargs)

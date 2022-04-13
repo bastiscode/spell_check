@@ -157,8 +157,6 @@ def train(args: argparse.Namespace, device: DistributedDevice) -> None:
         if device.is_main_process:
             logger.info(f"Successfully loaded weights from {cfg.start_from_checkpoint}")
 
-    # model = model.to(device.device)
-    # torch.cuda.set_device(device.device)
     unused_parameters = task.disable_unused_parameters(model, device)
     # static graph makes sure we can use DDP with parameter sharing and gradient checkpointing,
     # but we have to make sure that our models do not have any control flow in them (e.g. if statements) that changes

@@ -150,8 +150,7 @@ def get_sed_models_and_metrics(is_sed_words: bool) -> Tuple[Dict[int, List[Tuple
         ],
         3: [
             ("transformer+", "transformer"),
-            ("gnn+", "gnn_cliques_wfc"),
-            # ("gnn++", "gnn_cliques_wfc_dep_gating")
+            ("gnn+", "gnn_cliques_wfc")
         ]
     }
     metric_names = {"binary_f1"}
@@ -191,12 +190,14 @@ def get_sec_advanced_models_and_metrics():
                    ("gnn+ --> neuspell_bert", "gnn_cliques_wfc_plus_baseline_neuspell_bert")
                ],
                2: [
+                   ("gnn+ --> transformer", "gnn_cliques_wfc_plus_transformer_sec_nmt"),
                    ("gnn+ --> transformer_word", "gnn_cliques_wfc_plus_transformer_sec_words_nmt")
                ],
                3: [
-                   ("gnn+ --> transformer_word spell check", "transformer_sec_words_nmt_best_first_sc")
+                   ("new transformer_word + baseline_ood", "baseline_ood_plus_transformer_sec_words_nmt"),
+                   ("old transformer_word + baseline_ood", "transformer_sec_words_nmt_with_sed_baseline_ood")
                ]
-           }, {"mean_normalized_edit_distance"}
+           }, {"sequence_accuracy", "mean_normalized_edit_distance"}
 
 
 if __name__ == "__main__":

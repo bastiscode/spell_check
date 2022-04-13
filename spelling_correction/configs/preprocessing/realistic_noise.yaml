@@ -1,4 +1,0 @@
-type: REALISTIC_NOISE
-edit_token_p: 0.2
-word_misspellings_file: ${oc.env:GNN_LIB_DATA_DIR}/misspellings/train_misspellings.json
-re_weight_edit_token_p: true

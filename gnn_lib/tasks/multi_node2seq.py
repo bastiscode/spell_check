@@ -6,9 +6,8 @@ import torch
 from torch.nn import functional as F
 
 from gnn_lib import models, tasks
-from gnn_lib.modules import utils, inference
 from gnn_lib.modules.utils import pad
-from gnn_lib.utils import Batch
+from gnn_lib.utils import Batch, to
 
 
 class MultiNode2Seq(tasks.Task):
@@ -19,47 +18,41 @@ class MultiNode2Seq(tasks.Task):
             batch: Batch,
             device: torch.device
     ) -> Tuple[Dict[str, Any], Any]:
-        decoder_inputs = collections.defaultdict(list)
-        decoder_labels = collections.defaultdict(list)
-        decoder_lengths = collections.defaultdict(list)
+        decoder_inputs = {}
+        decoder_labels = {}
+        decoder_group_lengths = {}
 
-        for label_dict in batch.info.pop("label"):
-            for node_type, labels in label_dict.items():
+        for node_type_labels in batch.info.pop("label"):
+            for node_type, labels in node_type_labels.items():
+                if node_type not in decoder_inputs:
+                    decoder_inputs[node_type] = []
+                    decoder_labels[node_type] = []
+                    decoder_group_lengths[node_type] = []
                 graph_decoder_labels = []
                 graph_decoder_inputs = []
-                graph_decoder_lengths = []
+                graph_decoder_group_lengths = []
                 for label in labels:
                     graph_decoder_inputs.extend(label[:-1])
                     graph_decoder_labels.extend(label[1:])
-                    graph_decoder_lengths.append(len(label) - 1)
-                decoder_inputs[node_type].append(
-                    torch.tensor(graph_decoder_inputs, device=device, dtype=torch.long)
-                )
-                decoder_labels[node_type].append(
-                    torch.tensor(graph_decoder_labels, device=device, dtype=torch.long)
-                )
-                decoder_lengths[node_type].append(
-                    torch.tensor(graph_decoder_lengths, device=device, dtype=torch.long)
-                )
+                    graph_decoder_group_lengths.append(len(label) - 1)
+                decoder_inputs[node_type].append(torch.tensor(graph_decoder_inputs, dtype=torch.long))
+                decoder_labels[node_type].append(torch.tensor(graph_decoder_labels, dtype=torch.long))
+                decoder_group_lengths[node_type].append(torch.tensor(graph_decoder_group_lengths, dtype=torch.long))
 
         pad_token_ids = {
             node_type: pad_token_id for node_type, pad_token_id in batch.info["pad_token_id"][0].items()
         }
 
-        decoder_inputs = {
-            node_type: pad(ipt, float(pad_token_ids[node_type])).long()
-            for node_type, ipt in decoder_inputs.items()
-        }
-        decoder_labels = {
-            node_type: pad(lab, float(pad_token_ids[node_type])).long()
+        decoder_labels = to({
+            node_type: pad(lab, val=pad_token_ids[node_type]).long()
             for node_type, lab in decoder_labels.items()
-        }
+        }, device)
 
         return (
             {
                 "g": batch.data,
                 "decoder_inputs": decoder_inputs,
-                "decoder_lengths": dict(decoder_lengths),
+                "decoder_group_lengths": decoder_group_lengths,
                 **batch.info
             },
             {"labels": decoder_labels, "pad_token_id": pad_token_ids}
@@ -71,8 +64,8 @@ class MultiNode2Seq(tasks.Task):
                    additional_losses: Dict[str, torch.Tensor]) -> torch.Tensor:
         return sum(
             F.cross_entropy(
-                input=output.reshape(-1, output.shape[-1]),
-                target=labels["labels"][node_type].reshape(-1),
+                input=output.view(-1, output.shape[-1]),
+                target=labels["labels"][node_type].view(-1),
                 ignore_index=labels["pad_token_id"][node_type]
             ) for node_type, output in model_output.items()
         ) + sum(additional_losses.values())

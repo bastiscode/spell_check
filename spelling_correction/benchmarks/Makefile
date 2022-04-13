@@ -32,23 +32,38 @@ evaluate_sed_words:
 	--benchmark-dir $(SPLIT)/sed_words \
 	--benchmark-type sed_words \
 	--result-dir $(SPLIT)/sed_words/results \
-	--save-dir $(SPLIT)/sed_words_tables
+	--save-dir $(SPLIT)/sed_words_tables \
+	--dictionary ../../data/dictionaries/merged_train_100k.txt
 
 	@glow -w 150 $(SPLIT)/sed_words_tables/*.md
 
 .PHONY: evaluate_sec
 evaluate_sec:
-	@python scripts/evaluate_thesis.py \
-	--benchmark-dir $(SPLIT)/sec \
-	--benchmark-type sec \
-	--result-dir $(SPLIT)/sec/results \
-	--save-dir $(SPLIT)/sec_tables
+	@#python scripts/evaluate_thesis.py \
+#	--benchmark-dir $(SPLIT)/sec \
+#	--benchmark-type sec \
+#	--result-dir $(SPLIT)/sec/results \
+#	--save-dir $(SPLIT)/sec_tables
 
 	@glow -w 150 $(SPLIT)/sec_tables/*.md
 
+	@python scripts/evaluate_thesis.py \
+	--benchmark-dir $(SPLIT)/sec \
+	--benchmark-type sec_advanced \
+	--result-dir $(SPLIT)/sec/results \
+	--save-dir $(SPLIT)/sec_advanced_tables
+
+	@glow -w 150 $(SPLIT)/sec_advanced_tables/*.md
+
 .PHONY: evaluate_tokenization_repair
 evaluate_tokenization_repair:
-	echo "to be implemented"
+	@python scripts/evaluate_thesis.py \
+	--benchmark-dir $(SPLIT)/tokenization_repair \
+	--benchmark-type tokenization_repair \
+	--result-dir $(SPLIT)/tokenization_repair/results \
+	--save-dir $(SPLIT)/tokenization_repair_tables
+
+	@glow -w 150 $(SPLIT)/tokenization_repair_tables/*.md
 
 .PHONY: evaluate_benchmark_statistics
 evaluate_benchmark_statistics:
@@ -56,19 +71,19 @@ evaluate_benchmark_statistics:
 	--benchmark-dir $(SPLIT)/sed_words \
 	--benchmark-type sed_words \
 	--dictionary ../../data/dictionaries/merged_train_100k.txt \
-	--out-file $(SPLIT)/benchmark_statistics_tables/sed_words_benchmark_statistics.tex
+	--out-dir $(SPLIT)/benchmark_statistics_tables/sed_words_benchmark_statistics
 
 	@python scripts/generate_statistics_thesis.py \
 	--benchmark-dir $(SPLIT)/sed_sequence \
 	--benchmark-type sed_sequence \
 	--dictionary ../../data/dictionaries/merged_train_100k.txt \
-	--out-file $(SPLIT)/benchmark_statistics_tables/sed_sequence_benchmark_statistics.tex
+	--out-dir $(SPLIT)/benchmark_statistics_tables/sed_sequence_benchmark_statistics
 
 	@python scripts/generate_statistics_thesis.py \
 	--benchmark-dir $(SPLIT)/sec \
 	--benchmark-type sec \
 	--dictionary ../../data/dictionaries/merged_train_100k.txt \
-	--out-file $(SPLIT)/benchmark_statistics_tables/sec_benchmark_statistics.tex
+	--out-dir $(SPLIT)/benchmark_statistics_tables/sec_benchmark_statistics
 
 .PHONY: evaluate_all
 evaluate_all: evaluate_benchmark_statistics evaluate_sed_words evaluate_sed_sequence evaluate_sec evaluate_tokenization_repair

@@ -22,7 +22,7 @@ class GraphSECWordsNMT(MultiNode2Seq):
         decoder_node_type = model_cfg.decoder_node_types[0]
 
         batch = self._batch_sequences_for_inference(inputs)
-        inputs = [str(ipt) for ipt in inputs]
+        inputs = [model.input_tokenizers["token"].normalize(str(ipt)) for ipt in inputs]
 
         detections = kwargs.get("detections", [[1] * len(ipt.split()) for ipt in inputs])
         assert all(all(d in {0, 1} for d in det) for det in detections)
@@ -74,7 +74,7 @@ class GraphSECWordsNMT(MultiNode2Seq):
         else:
             decoder_positions = torch.zeros(detections_mask.sum(), dtype=torch.long, device=g.device)
 
-        output_tokenizer = model.tokenizers[f"{decoder_node_type}_output_tokenizer"]
+        output_tokenizer = model.output_tokenizers[decoder_node_type]
 
         decoder: mod_utils.DecoderMixin = model.head[decoder_node_type]
 

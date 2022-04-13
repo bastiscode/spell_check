@@ -3,7 +3,7 @@ from typing import Dict, List, Union, Any, Tuple
 import torch
 
 from gnn_lib import models
-from gnn_lib.data import variants, tokenization
+from gnn_lib.data import variants
 from gnn_lib.data.utils import Sample, InferenceInfo
 from gnn_lib.tasks import utils as task_utils
 from gnn_lib.tasks.multi_node_classification import MultiNodeClassification
@@ -18,13 +18,9 @@ class GraphSEDWords(MultiNodeClassification):
 
         stats = {
             f"{node_type}_accuracy": data_containers.AverageScalarContainer(name="word_accuracy"),
-            f"{node_type}_f1_prec_rec": data_containers.F1PrecRecContainer(
-                name="fpr",
+            f"{node_type}_fpr": data_containers.F1PrecRecContainer(
+                name="f1_prec_rec",
                 class_names={1: "word"}
-            ),
-            "text": data_containers.MultiTextContainer(
-                name="text_samples",
-                max_samples=4
             )
         }
         return stats
@@ -38,35 +34,9 @@ class GraphSEDWords(MultiNodeClassification):
                       step: int,
                       total_steps: int) -> None:
         super()._update_stats(model, inputs, labels, model_output, stats, step, total_steps)
-
-        text_container: data_containers.MultiTextContainer = stats["text"]  # type: ignore
-        if (
-                step % max(total_steps // text_container.max_samples, 1) != 0
-                or len(text_container.samples) >= text_container.max_samples
-        ):
-            return
-
-        token_ids = task_utils.get_token_ids_from_graphs(inputs["g"])
-        tokenizer: tokenization.Tokenizer = model.tokenizers["token"]
-        input_text = tokenizer.de_tokenize(token_ids[0])
-
-        node_type = list(model_output)[0]
-
-        batch_num_words = inputs["g"].batch_num_nodes(node_type)
-        word_lengths = [len(w) for w in input_text.split()]
-        labels = labels[node_type][:batch_num_words[0]].tolist()
-        labels_str = " ".join(str(l).ljust(pad) for l, pad in zip(labels, word_lengths))
-        pred = torch.argmax(model_output[node_type][:batch_num_words[0]], 1).tolist()
-        pred_str = " ".join(str(p).ljust(pad) for p, pad in zip(pred, word_lengths))
-
-        text_container.add(
-            f"""
-    input:\t{input_text}
-    label:\t{labels_str}
-    pred:\t{pred_str}
----
-            """
-        )
+        for node_type, pred in model_output.items():
+            predictions = torch.argmax(pred, dim=1)
+            stats[f"{node_type}_f1_prec_rec"].add((labels[node_type].cpu(), predictions))
 
     @torch.inference_mode()
     def inference(

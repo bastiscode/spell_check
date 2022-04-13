@@ -32,8 +32,8 @@ class Seq2Seq(tasks.Task):
         decoder_inputs = []
         decoder_labels = []
         for labels in batch.info.pop("label"):
-            decoder_inputs.append(labels[:-1])
-            decoder_labels.append(labels[1:])
+            decoder_inputs.append(torch.tensor(labels[:-1], dtype=torch.long))
+            decoder_labels.append(torch.tensor(labels[1:], dtype=torch.long))
 
         decoder_labels = to(utils.pad(decoder_labels, val=batch.info["pad_token_id"][0]).long(), device)
 
@@ -51,8 +51,8 @@ class Seq2Seq(tasks.Task):
                    model_output: torch.Tensor,
                    additional_losses: Dict[str, torch.Tensor]) -> torch.Tensor:
         return F.cross_entropy(
-            input=model_output.reshape(-1, model_output.shape[-1]),
-            target=labels["labels"].reshape(-1),
+            input=model_output.view(-1, model_output.shape[-1]),
+            target=labels["labels"].view(-1),
             ignore_index=labels["pad_token_id"]
         ) + sum(additional_losses.values())
 

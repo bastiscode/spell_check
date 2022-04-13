@@ -1,4 +1,0 @@
-type: ARTIFICIAL_NOISE
-edit_token_p: 0.2
-num_edits_p: 0.8
-re_weight_edit_token_p: true

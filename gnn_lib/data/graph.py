@@ -256,9 +256,6 @@ def sequence_to_word_graph(
     if add_dependency_info:
         types.add(("word", "dep", "word"))
         types.add(("word", "head", "word"))
-        # for tag in utils.SPACY_DEP_TAG_MAP.keys():
-        #     types.add(("word", f"{tag}_dep", "word"))
-        #     types.add(("word", f"{tag}_head", "word"))
 
     data = HeterogeneousDGLData(types=types)
 

@@ -8,5 +8,3 @@ limit: ${oc.env:GNN_LIB_LIMIT,100000000}
 max_length: 512
 tokenizer: ${from_file:tokenizer/bpe_no_prefix_space.yaml}
 preprocessing: ${from_file:preprocessing/mixed_noise_sed_sequence.yaml}
-
-with_dep_parser: true

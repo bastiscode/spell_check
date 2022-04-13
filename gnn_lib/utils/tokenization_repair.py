@@ -133,26 +133,26 @@ def match_string_ignoring_space(
         window: str,
         right_context: str
 ) -> Tuple[int, int]:
-    left_context_pattern = r"\s*".join(
+    left_context_pattern = r"\s?".join(
         re.escape(char) for char in left_context.replace(" ", "")
     )
-    right_context_pattern = r"\s*".join(
+    right_context_pattern = r"\s?".join(
         re.escape(char) for char in right_context.replace(" ", "")
     )
-    window_pattern = r"\s*".join(
+    window_pattern = r"\s?".join(
         re.escape(char) for char in window.replace(" ", "")
     )
     if window.startswith(" "):
-        window_pattern = r"(\s*" + window_pattern
+        window_pattern = r"(\s?" + window_pattern
     else:
-        window_pattern = r"\s*(" + window_pattern
+        window_pattern = r"\s?(" + window_pattern
     if window.endswith(" "):
-        window_pattern = window_pattern + r"\s*)"
+        window_pattern = window_pattern + r"\s?)"
     else:
-        window_pattern = window_pattern + r")\s*"
+        window_pattern = window_pattern + r")\s?"
 
     pattern = re.compile(left_context_pattern + window_pattern + right_context_pattern)
     match = pattern.search(search_str)
-    assert match is not None, f"could no match the following two strings:" \
+    assert match is not None, f"could no match the following two strings (make sure they only differ in whitespaces):" \
                               f"\n{left_context + window + right_context}\n{search_str}"
     return match.start(1), match.end(1)

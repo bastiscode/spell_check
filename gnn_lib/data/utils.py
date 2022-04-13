@@ -59,7 +59,9 @@ PreprocessingFn = Callable[[List[str], List[Optional[str]], bool], List[Tuple[Sa
 
 
 def tokenize_words_regex(sequence: str) -> Tuple[List[str], List[bool]]:
-    pattern = re.compile(r"\w+\S*\w+|\w+|\S")
+    # modified pattern from whitespace pre-tokenizer at
+    # https://huggingface.co/docs/tokenizers/python/latest/components.html#pre-tokenizers
+    pattern = re.compile(r"\w\S+\w|\w+|[^\w\s]+")
     words = []
     whitespaces = []
     last_end = -1

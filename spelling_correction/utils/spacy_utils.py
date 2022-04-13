@@ -1,15 +1,17 @@
+import argparse
 from typing import Tuple, List
 
+from tqdm import tqdm
 import spacy
-from spacy import Vocab
 from spacy.lang.en.tokenizer_exceptions import TOKENIZER_EXCEPTIONS
 from spacy.tokens import Doc
 
+from gnn_lib.api.utils import load_text_file, save_text_file
 from gnn_lib.data import utils
 
 
 class SpacyWhitespaceTokenizer:
-    def __init__(self, vocab: Vocab) -> None:
+    def __init__(self, vocab: spacy.Vocab) -> None:
         self.vocab = vocab
 
     def __call__(self, text: str) -> Doc:
@@ -18,6 +20,8 @@ class SpacyWhitespaceTokenizer:
         whitespaces[-1] = False
         return Doc(self.vocab, words=words, spaces=whitespaces)
 
+
+SPACY_TOKENIZER = spacy.load("en_core_web_lg")
 
 SPACY_TOKENIZER_WS = spacy.load("en_core_web_lg")
 SPACY_TOKENIZER_WS.tokenizer = SpacyWhitespaceTokenizer(SPACY_TOKENIZER_WS.vocab)
@@ -28,13 +32,9 @@ def tokenize_words_ws(sequence: str) -> Tuple[List[str], Doc]:
     return [w.text for w in doc], doc
 
 
-def clean_sequences(correct_sequence: str, corrupt_sequence: str) -> Tuple[str, str]:
-    words = []
+def fix_sequence(sequence: str) -> Tuple[str, List[bool]]:
     whitespaces = []
-    _words, doc = tokenize_words_ws(correct_sequence)
-    assert _words == correct_sequence.split(), f"{_words} <--> {correct_sequence.split()}"
-    assert len(correct_sequence.split()) == len(corrupt_sequence.split())
-
+    words, doc = tokenize_words_ws(sequence)
     num_quotes = 0
     for i, token in enumerate(doc):
         next_token = doc[i + 1] if i < len(doc) - 1 else None
@@ -66,9 +66,36 @@ def clean_sequences(correct_sequence: str, corrupt_sequence: str) -> Tuple[str, 
         else:
             add_with_ws = False
 
-        words.append(token.text)
         whitespaces.append(add_with_ws)
 
-    new_correct_sequence = utils.de_tokenize_words(words, whitespaces)
-    new_corrupt_sequence = utils.de_tokenize_words(corrupt_sequence.split(), whitespaces)
-    return new_correct_sequence, new_corrupt_sequence
+    return utils.de_tokenize_words(words, whitespaces), whitespaces
+
+
+def fix_sequences(correct_sequence: str, corrupt_sequence: str) -> Tuple[str, str]:
+    assert len(correct_sequence.split()) == len(corrupt_sequence.split())
+    correct_sequence, whitespaces = fix_sequence(correct_sequence)
+    corrupt_sequence = utils.de_tokenize_words(corrupt_sequence.split(), whitespaces)
+    return correct_sequence, corrupt_sequence
+
+
+def split_sequence(sequence: str) -> str:
+    doc = SPACY_TOKENIZER(sequence)
+    return " ".join(token.text for token in doc)
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--in-file", type=str, required=True)
+    parser.add_argument("--out-file", type=str, required=True)
+    parser.add_argument("--action", choices=["fix", "split"], required=True)
+    return parser.parse_args()
+
+
+if __name__ == "__main__":
+    args = parse_args()
+    inputs = load_text_file(args.in_file)
+    if args.action == "fix":
+        outputs = [fix_sequence(line)[0] for line in tqdm(inputs)]
+    else:
+        outputs = [split_sequence(line) for line in tqdm(inputs)]
+    save_text_file(args.out_file, outputs)

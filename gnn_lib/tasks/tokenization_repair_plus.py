@@ -47,16 +47,16 @@ class TokenizationRepairPlus(tasks.Task):
             decoder_inputs = []
             decoder_labels = []
             decoder_group_lengths = []
-            for labels, splits in zip(batch.info.pop("sec_label"), batch.info.pop("sec_label_splits")):
+            for labels in batch.info.pop("sec_label"):
                 word_decoder_inputs = []
                 word_decoder_labels = []
                 word_decoder_lengths = []
-                for word_labels in torch.split(labels, splits):
-                    word_decoder_inputs.append(word_labels[:-1])
-                    word_decoder_labels.append(word_labels[1:])
+                for word_labels in labels:
+                    word_decoder_inputs.extend(word_labels[:-1])
+                    word_decoder_labels.extend(word_labels[1:])
                     word_decoder_lengths.append(len(word_labels) - 1)
-                decoder_inputs.append(torch.cat(word_decoder_inputs))
-                decoder_labels.append(torch.cat(word_decoder_labels))
+                decoder_inputs.append(torch.tensor(word_decoder_inputs, dtype=torch.long))
+                decoder_labels.append(torch.tensor(word_decoder_labels, dtype=torch.long))
                 decoder_group_lengths.append(torch.tensor(word_decoder_lengths, dtype=torch.long))
 
             label_dict["sec_labels"] = to(
@@ -65,7 +65,10 @@ class TokenizationRepairPlus(tasks.Task):
             label_dict["sec_pad_token_id"] = batch.info["sec_pad_token_id"][0]
             data_dict["sec_decoder_inputs"] = decoder_inputs
             data_dict["sec_decoder_group_lengths"] = decoder_group_lengths
-            print([torch.sum(lengths).item() for lengths in decoder_group_lengths])
+            self.logger.warning(
+                f"input lengths: {[len(t) for t in batch.data]}, "
+                f"target lengths: {[torch.sum(lengths).item() for lengths in decoder_group_lengths]}"
+            )
 
         return {**data_dict, **batch.info}, label_dict
 
@@ -88,8 +91,8 @@ class TokenizationRepairPlus(tasks.Task):
             loss = loss + tokenization_repair_loss
         if "sec_labels" in labels:
             sec_loss = F.cross_entropy(
-                input=model_output["sec"].reshape(-1, model_output["sec"].shape[-1]),
-                target=labels["sec_labels"].reshape(-1),
+                input=model_output["sec"].view(-1, model_output["sec"].shape[-1]),
+                target=labels["sec_labels"].view(-1),
                 ignore_index=labels["sec_pad_token_id"]
             )
             loss = loss + sec_loss

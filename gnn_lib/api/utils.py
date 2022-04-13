@@ -6,23 +6,18 @@ import pickle
 import platform
 import re
 import shutil
-import time
 import zipfile
-from typing import Optional, Union, List, Tuple, Dict, Callable, Any, Iterator
+from typing import Optional, Union, List, Tuple, Dict, Any, Iterator
 
 import requests
-from omegaconf import OmegaConf
 import torch
-from spacy.tokens import Doc
-from torch import nn
+from omegaconf import OmegaConf
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
 from gnn_lib import tasks, models
 from gnn_lib.api import tables
 from gnn_lib.data import utils
-from gnn_lib.data.utils import clean_sequence, flatten
-from gnn_lib.data.variants import DatasetVariant
 from gnn_lib.tasks import Task
 from gnn_lib.utils import config, common
 
@@ -31,12 +26,16 @@ _CONFIGS_URL = f"{_BASE_URL}/configs.zip"
 _DATA_URL = f"{_BASE_URL}/data.zip"
 _TASK_AND_NAME_TO_URL = {
     "sed_sequence": {
-        "gnn_default": f"{_BASE_URL}/sed_sequence_gnn_default.zip",
+        "gnn_no_feat": f"{_BASE_URL}/sed_sequence_gnn_no_feat.zip",
         "gnn_cliques_wfc": f"{_BASE_URL}/sed_sequence_gnn_cliques_wfc.zip",
+        "transformer_no_feat": f"{_BASE_URL}/sed_sequence_transformer_no_feat.zip",
+        "transformer": f"{_BASE_URL}/sed_sequence_transformer.zip",
     },
     "sed_words": {
-        "gnn_default": f"{_BASE_URL}/sed_words_gnn_default.zip",
+        "gnn_no_feat": f"{_BASE_URL}/sed_words_gnn_no_feat.zip",
         "gnn_cliques_wfc": f"{_BASE_URL}/sed_words_gnn_cliques_wfc.zip",
+        "transformer_no_feat": f"{_BASE_URL}/sed_words_transformer_no_feat.zip",
+        "transformer": f"{_BASE_URL}/sed_words_transformer.zip",
     },
     "sec": {
         "transformer_nmt": f"{_BASE_URL}/sec_transformer_nmt.zip",

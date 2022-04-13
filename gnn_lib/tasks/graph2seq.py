@@ -1,6 +1,5 @@
 from typing import Union, List, Any, Dict, Tuple
 
-import dgl
 import torch
 from torch.nn import functional as F
 
@@ -9,7 +8,7 @@ from gnn_lib.data import tokenization
 from gnn_lib.data.utils import Sample
 from gnn_lib.modules import inference, utils
 from gnn_lib.tasks import utils as task_utils
-from gnn_lib.utils import data_containers, Batch
+from gnn_lib.utils import data_containers, Batch, to
 
 
 class Graph2Seq(tasks.Task):
@@ -30,30 +29,16 @@ class Graph2Seq(tasks.Task):
     ) -> Tuple[Dict[str, Any], Any]:
         decoder_inputs = []
         decoder_labels = []
-        decoder_lengths = []
         for labels in batch.info.pop("label"):
-            decoder_inputs.append(torch.tensor(labels[:-1], device=device, dtype=torch.long))
-            decoder_labels.append(torch.tensor(labels[1:], device=device, dtype=torch.long))
-            decoder_lengths.append(len(labels) - 1)
+            decoder_inputs.append(torch.tensor(labels[:-1], dtype=torch.long))
+            decoder_labels.append(torch.tensor(labels[1:], dtype=torch.long))
 
-        pad_token_id = float(batch.info["pad_token_id"][0])
-        decoder_inputs = torch.nn.utils.rnn.pad_sequence(
-            decoder_inputs,
-            padding_value=pad_token_id,
-            batch_first=True
-        ).long()
-        decoder_labels = torch.nn.utils.rnn.pad_sequence(
-            decoder_labels,
-            padding_value=pad_token_id,
-            batch_first=True
-        ).long()
-        decoder_lengths = torch.tensor(decoder_lengths, device=device, dtype=torch.long)
+        decoder_labels = to(utils.pad(decoder_labels, val=batch.info["pad_token_id"][0]).long(), device)
 
         return (
             {
                 "g": batch.data,
                 "decoder_inputs": decoder_inputs,
-                "decoder_lengths": decoder_lengths,
                 **batch.info
             },
             {"labels": decoder_labels, "pad_token_id": batch.info["pad_token_id"][0]}
@@ -64,8 +49,8 @@ class Graph2Seq(tasks.Task):
                    model_output: torch.Tensor,
                    additional_losses: Dict[str, torch.Tensor]) -> torch.Tensor:
         return F.cross_entropy(
-            input=model_output.reshape(-1, model_output.shape[-1]),
-            target=labels["labels"].reshape(-1),
+            input=model_output.view(-1, model_output.shape[-1]),
+            target=labels["labels"].view(-1),
             ignore_index=labels["pad_token_id"]
         ) + sum(additional_losses.values())
 
@@ -89,7 +74,7 @@ class Graph2Seq(tasks.Task):
         token_ids = task_utils.get_token_ids_from_graphs(inputs["g"])
         input_str = token_tokenizer.de_tokenize(token_ids[0])
 
-        length = inputs["decoder_lengths"][0]
+        length = len(inputs["decoder_inputs"][0])
         label_ids = labels["labels"][0, :length].tolist()
         output_ids = torch.argmax(model_output[0, :length], dim=1).tolist()
 
@@ -120,7 +105,7 @@ class Graph2Seq(tasks.Task):
         batch = self._batch_sequences_for_inference(inputs)
 
         g = model.encode(batch.data)
-        encoder_outputs, encoder_lengths = utils.graph2seq_encoder_outputs_from_graph(
+        encoder_outputs, encoder_lengths = utils.encoder_outputs_from_graph(
             g, model_cfg.context_node_types, model_cfg.hidden_feature
         )
 

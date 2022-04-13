@@ -79,7 +79,7 @@ class TestVariants:
         for i in range(iterations):
             sequence = rand.choice(self.test_sequences)["sequence"]
             start = time.monotonic()
-            new_sequence, g, label = variant.prepare_sequence(sequence, is_inference=is_inference)
+            new_sequence, g, label = variant.get_inputs(sequence, is_inference=is_inference)
             end = time.monotonic()
             if is_inference:
                 assert new_sequence == sequence

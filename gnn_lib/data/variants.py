@@ -1,7 +1,7 @@
 import enum
 import hashlib
 from dataclasses import dataclass
-from typing import Tuple, List, Union, Optional, Dict, Any
+from typing import Tuple, Union, Optional, Dict, Any
 
 import dgl
 import numpy as np
@@ -12,7 +12,7 @@ from omegaconf import MISSING, OmegaConf
 from gnn_lib.data import graph, tokenization, utils, index
 from gnn_lib.data.preprocessing import get_preprocessing_from_config, PreprocessingConfig, get_preprocessing_fn
 from gnn_lib.data.tokenization import TokenizerConfig, get_tokenizer_from_config
-from gnn_lib.utils import tokenization_repair, io, Batch, DataInput
+from gnn_lib.utils import tokenization_repair, io, DataInput
 
 
 class DatasetVariants(enum.IntEnum):
@@ -191,7 +191,6 @@ class SEDSequence(DatasetVariant):
 
         info = {}
         if not is_inference:
-            assert target_sequence is not None
             label = int(str(input_sample) != target_sequence)
             info["label"] = torch.tensor([label], dtype=torch.long)
 
@@ -359,9 +358,8 @@ class SEDWords(DatasetVariant):
             is_inference
         )
 
-        info = {}
+        info: Dict[str, Any] = {}
         if not is_inference:
-            assert target_sequence is not None
             input_words = str(input_sample).split()
             target_words = target_sequence.split()
             assert len(input_words) == len(target_words), \
@@ -379,9 +377,10 @@ class SEDWords(DatasetVariant):
                     }
                 ]
             }
-            info["label"] = {
-                "word": label
-            }
+            if label is not None:
+                info["label"] = {
+                    "word": label
+                }
 
         elif self.cfg.data_scheme == "token_graph":
             if self.cfg.add_word_features:
@@ -411,9 +410,10 @@ class SEDWords(DatasetVariant):
                         }
                     ]
                 }
-            info["label"] = {
-                "token": label
-            }
+            if label is not None:
+                info["label"] = {
+                    "token": label
+                }
 
         elif self.cfg.data_scheme == "tensor":
             if self.cfg.add_word_features:
@@ -440,7 +440,8 @@ class SEDWords(DatasetVariant):
                         "groups": utils.get_word_whitespace_groups(input_sample)
                     }
                 ]
-            info["label"] = label
+            if label is not None:
+                info["label"] = label
 
         else:
             raise RuntimeError(f"unknown data scheme {self.cfg.data_scheme}")
@@ -501,7 +502,6 @@ class TokenizationRepair(DatasetVariant):
 
         info = {}
         if not is_inference:
-            assert target_sequence is not None
             # get the whitespace operations to turn input_sample into target_sequence
             label = tokenization_repair.get_whitespace_operations(
                 str(input_sample), target_sequence
@@ -606,27 +606,46 @@ class SECWordsNMT(DatasetVariant):
             is_inference
         )
 
-        info = {"pad_token_id": self.output_pad_token_id}
         input_words = str(input_sample).split()
+        token_group_lengths = [0] * len(input_words)
+        word_ws_group_lengths = [0] * len(input_words)
+        word_ws_idx = 0
+        for tokens, word in zip(input_sample.tokens, input_sample.doc):
+            token_group_lengths[word_ws_idx] += len(tokens)
+            word_ws_group_lengths[word_ws_idx] += 1
+            if word.whitespace_ == " ":
+                word_ws_idx += 1
+        token_group_lengths = torch.tensor(token_group_lengths, dtype=torch.long)
+        word_ws_group_lengths = torch.tensor(word_ws_group_lengths, dtype=torch.long)
+
+        info: Dict[str, Any] = {}
         if not is_inference:
-            assert target_sequence is not None
             target_words = target_sequence.split()
             assert len(input_words) == len(target_words)
             label = [
                 self.output_tokenizer.tokenize(word, add_bos_eos=True)
                 for word in target_words
             ]
-            label_splits = [len(labels) for labels in label]
-            info["label"] = torch.tensor(utils.flatten(label), dtype=torch.long)
-            info["label_splits"] = label_splits
+        else:
+            label = None
 
-        encoder_group_lengths = [0] * len(input_words)
-        word_ws_idx = 0
-        for tokens, word in zip(input_sample.tokens, input_sample.doc):
-            encoder_group_lengths[word_ws_idx] += len(tokens)
-            if word.whitespace_ == " ":
-                word_ws_idx += 1
-        info["encoder_group_lengths"] = torch.tensor(encoder_group_lengths, dtype=torch.long)
+        if self.cfg.data_scheme == "tensor":
+            info["encoder_group_lengths"] = token_group_lengths
+            if label is not None:
+                info["label"] = label
+                info["pad_token_id"] = self.output_pad_token_id
+        elif self.cfg.data_scheme == "token_graph":
+            info["encoder_group_lengths"] = {"token": {"token": token_group_lengths}}
+            if label is not None:
+                info["label"] = {"token": label}
+                info["pad_token_id"] = {"token": self.output_pad_token_id}
+        elif self.cfg.data_scheme == "word_graph":
+            info["encoder_group_lengths"] = {"word": {"token": token_group_lengths, "word": word_ws_group_lengths}}
+            if label is not None:
+                info["label"] = {"word": label}
+                info["pad_token_id"] = {"word": self.output_pad_token_id}
+        else:
+            raise RuntimeError(f"unknown data scheme {self.cfg.data_scheme}")
 
         return self._construct_input(input_sample), info
 
@@ -726,11 +745,10 @@ class SECNMT(DatasetVariant):
             is_inference
         )
 
-        info = {"pad_token_id": self.output_pad_token_id}
+        info = {}
         if not is_inference:
-            assert target_sequence is not None
-            label = torch.tensor(self.output_tokenizer.tokenize(target_sequence, add_bos_eos=True), dtype=torch.long)
-            info["label"] = label
+            info["label"] = self.output_tokenizer.tokenize(target_sequence, add_bos_eos=True)
+            info["pad_token_id"] = self.output_pad_token_id
 
         return self._construct_input(input_sample), info
 
@@ -789,7 +807,6 @@ class TokenizationRepairPlus(TokenizationRepair):
 
         info = {}
         if not is_inference:
-            assert target_sequence is not None
             if not self.cfg.fix_tokenization_repair:
                 # get the whitespace operations to turn input_sample into target_sequence
                 tokenization_repair_label = tokenization_repair.get_whitespace_operations(
@@ -844,9 +861,7 @@ class TokenizationRepairPlus(TokenizationRepair):
                     self.sec_tokenizer.tokenize(word, add_bos_eos=True)
                     for word in org_words
                 ]
-                label_splits = [len(labels) for labels in label]
-                info["sec_label"] = torch.tensor(utils.flatten(label), dtype=torch.long)
-                info["sec_label_splits"] = label_splits
+                info["sec_label"] = label
                 info["sec_pad_token_id"] = self.sec_pad_token_id
 
         return self._construct_input(input_sample), info

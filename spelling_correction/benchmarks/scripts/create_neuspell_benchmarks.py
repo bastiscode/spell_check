@@ -5,7 +5,8 @@ import numpy as np
 from tqdm import tqdm
 
 from gnn_lib.utils import io
-from spelling_correction.utils import neuspell
+
+from spelling_correction.utils import spacy_utils
 
 
 def parse_args() -> argparse.Namespace:
@@ -71,7 +72,7 @@ if __name__ == "__main__":
                     if corrupt_line == "" or correct_line == "":
                         continue
 
-                    correct_line, corrupt_line = neuspell.clean_sequences(correct_line, corrupt_line)
+                    correct_line, corrupt_line = spacy_utils.fix_sequences(correct_line, corrupt_line)
 
                     if output_type == "sed_sequence":
                         correct_seq_b_file.write(correct_line + "\n")

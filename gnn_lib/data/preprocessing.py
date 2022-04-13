@@ -15,17 +15,17 @@ from spacy.tokens import Doc
 from gnn_lib.data import utils
 from gnn_lib.data.utils import PreprocessingFn, Sample, TokenizationFn, NeighborFn
 
-
 _INCLUDE_ALL = tuple(i for i in range(4))
 _EDIT_CHARS = tuple(string.ascii_letters)
 
 
-def edit_token(token: str,
-               rand: np.random.Generator,
-               include: Tuple[int, ...] = _INCLUDE_ALL,
-               edit_chars: Tuple[str, ...] = _EDIT_CHARS,
-               exclude_indices: Optional[Set[int]] = None) -> \
-        Tuple[str, List[int], Set[int]]:
+def edit_token(
+        token: str,
+        rand: np.random.Generator,
+        include: Tuple[int, ...] = _INCLUDE_ALL,
+        edit_chars: Tuple[str, ...] = _EDIT_CHARS,
+        exclude_indices: Optional[Set[int]] = None
+) -> Tuple[str, Set[int]]:
     """
 
     Perform a random edit operation from
@@ -42,43 +42,64 @@ def edit_token(token: str,
     :return: token with one random edit, list of ints
     indicating the edits for the positions in the token, updated exclude indices
     """
-    exclude_indices = set() if exclude_indices is None else exclude_indices
+    exclude_indices = exclude_indices or set()
     if len(token) == 0:
-        return token, [], set()
+        return token, set()
 
     # edit methods: 0 -> insert, 1 -> delete, 2 -> swap, 3 -> replace
+    # pre-filter edit methods based on token length
+    def _valid_edit_method(m: int) -> bool:
+        assert m in {0, 1, 2, 3}, f"invalid edit method {m}, must be in {{0, 1, 2, 3}}"
+        # only delete if there is more than one character
+        if m == 1 and len(token) <= 1:
+            return False
+        # only swap if there is more than one character
+        elif m == 2 and len(token) <= 1:
+            return False
+        # we can always replace or insert
+        return True
+
+    include = list(filter(lambda m: _valid_edit_method(m), include))
     edit_method = rand.choice(include)
-    edits = [-1] * len(token)
 
     if edit_method == 0:
-        insert_indices = set(range(len(token) + 1)) - exclude_indices
+        insert_indices = set()
+        # only insert between two not excluded characters (or at beginning or at end)
+        for i in range(-1, len(token)):
+            if i in exclude_indices or i + 1 in exclude_indices:
+                continue
+            insert_indices.add(i + 1)
+
         if len(insert_indices) > 0:
             char_idx = rand.integers(len(edit_chars))
             _insert_char = edit_chars[char_idx]
             assert len(_insert_char) > 0, "dont insert empty string, this is equal to leaving the token unchanged"
 
             token_idx = rand.choice(list(insert_indices))
+            assert token_idx not in exclude_indices
 
             token = token[:token_idx] + _insert_char + token[token_idx:]
 
-            edits.extend([-1] * len(_insert_char))
+            # we insert some chars, so the length of the token changed
+            # adjust exclude indices accordingly: indices right of the inserted chars must be increased by
+            # the number of inserted chars
+            exclude_indices = set(idx + len(_insert_char) if idx >= token_idx else idx for idx in exclude_indices)
             for i in range(len(_insert_char)):
-                edits[token_idx + i] = 0
                 exclude_indices.add(token_idx + i)
 
-    elif edit_method == 1 and len(token) > 1:
+    elif edit_method == 1:
         delete_indices = set(range(len(token))) - exclude_indices
+
         if len(delete_indices) > 0:
             token_idx = rand.choice(list(delete_indices))
+            assert token_idx not in exclude_indices
             token = token[:token_idx] + token[token_idx + 1:]
 
-            edits.pop()
-            edits[max(token_idx - 1, 0)] = 1
-            edits[min(token_idx, len(token) - 1)] = 1
+            # we deleted a character, so the length of the token changed
+            # adjust exclude indices accordingly: indices right of the deleted char must be decreased by 1
+            exclude_indices = set(idx - 1 if idx > token_idx else idx for idx in exclude_indices)
 
-            # for delete we dont add anything to exclude indices
-
-    elif edit_method == 2 and len(token) > 1:
+    elif edit_method == 2:
         swap_indices = set()
         for i in range(len(token) - 1):
             if i in exclude_indices or i + 1 in exclude_indices:
@@ -87,18 +108,21 @@ def edit_token(token: str,
 
         if len(swap_indices) > 0:
             token_idx = rand.choice(list(swap_indices))
+            assert token_idx not in exclude_indices and token_idx + 1 not in exclude_indices
 
             token = token[:token_idx] + token[token_idx + 1] + token[token_idx] + token[token_idx + 2:]
 
-            edits[token_idx] = 2
-            edits[token_idx + 1] = 2
+            # we swapped two characters, length of the token did not change, just add the token indices to the
+            # exclude indices
             exclude_indices.add(token_idx)
             exclude_indices.add(token_idx + 1)
 
     else:
         replace_indices = set(range(len(token))) - exclude_indices
+
         if len(replace_indices) > 0:
             token_idx = rand.choice(list(replace_indices))
+            assert token_idx not in exclude_indices
 
             new_char = token[token_idx]
             while new_char == token[token_idx]:
@@ -107,29 +131,42 @@ def edit_token(token: str,
 
             token = token[:token_idx] + new_char + token[token_idx + 1:]
 
-            edits.extend([-1] * (len(new_char) - 1))
+            exclude_indices = set(idx + len(new_char) - 1 if idx >= token_idx + 1 else idx for idx in exclude_indices)
             for i in range(len(new_char)):
-                edits[token_idx + i] = 3
                 exclude_indices.add(token_idx + i)
 
-    assert len(token) == len(edits)
-    return token, edits, exclude_indices
+    return token, exclude_indices
 
 
 def find_substring_ignoring_spaces(
         substring: str,
         search_str: str
 ) -> Tuple[int, int]:
-    pattern = r"\s*".join(re.escape(char) for char in substring.replace(" ", ""))
+    pattern = r"\s?".join(re.escape(char) for char in substring.replace(" ", ""))
     match = re.search(pattern, search_str)
     assert match is not None
     return match.start(), match.end()
 
 
+def find_word_boundaries_ignoring_space(
+        sequence: str,
+        search_str: str
+) -> List[Tuple[int, int]]:
+    pattern = r"\s?"
+    for word in sequence.split():
+        pattern += "(" + r"\s?".join(re.escape(char) for char in word) + r")\s?"
+    match = re.fullmatch(pattern, search_str)
+    assert match is not None
+    word_boundaries = []
+    for g in range(len(match.groups())):
+        word_boundaries.append((match.start(g + 1), match.end(g + 1)))
+    return word_boundaries
+
+
 def artificial_edits(word: str, num_edits: int, rand: np.random.Generator) -> str:
     exclude_indices = set()
     for _ in range(num_edits):
-        word, edits, exclude_indices = edit_token(
+        word, exclude_indices = edit_token(
             token=word,
             rand=rand,
             exclude_indices=exclude_indices
@@ -148,6 +185,10 @@ def realistic_edits(
         return word
 
 
+# tokens_edited = 0
+# tokens_seen = 0
+
+
 def corrupt_words(
         words: List[str],
         doc: Doc,
@@ -157,7 +198,8 @@ def corrupt_words(
         rand: np.random.Generator,
         word_misspellings: Optional[Dict[str, List[str]]] = None,
         mixed_artificial_p: float = 0.2,
-        re_weight_edit_token_p: bool = False
+        re_weight_edit_token_p: bool = False,
+        min_edit_tokens: Optional[int] = None
 ) -> List[str]:
     assert len(words) == len(doc) and len(words) > 0
 
@@ -190,7 +232,8 @@ def corrupt_words(
             else:
                 artificial_p = edit_token_p * (len(words) / max(1, num_non_special_tokens)) * mixed_artificial_p
                 realistic_p = artificial_p + edit_token_p * (
-                        len(words) / max(1, num_non_special_and_in_misspellings_tokens)) * (1 - mixed_artificial_p)
+                        len(words) / max(1, num_non_special_and_in_misspellings_tokens)
+                ) * (1 - mixed_artificial_p)
     else:
         if corrupt_method == "artificial":
             artificial_p = edit_token_p
@@ -201,11 +244,12 @@ def corrupt_words(
             # equal to edit_token_p but here for clarity
             realistic_p = artificial_p + edit_token_p * (1 - mixed_artificial_p)
 
+    edited_words = copy.deepcopy(words)
     for word_idx in range(len(words)):
         if special_tokens_mask[word_idx]:  # do not edit special tokens
             continue
 
-        word = words[word_idx]
+        word = edited_words[word_idx]
 
         r = rand.random()
         if corrupt_method == "artificial":
@@ -222,11 +266,36 @@ def corrupt_words(
             elif r < realistic_p:
                 word = realistic_edits(word, rand, word_misspellings)
         else:
-            raise ValueError(f"Unknown corrupt method {corrupt_method}")
+            raise ValueError(f"unknown corrupt method {corrupt_method}")
 
-        words[word_idx] = word
+        edited_words[word_idx] = word
 
-    return words
+    if min_edit_tokens is not None:
+        assert min_edit_tokens > 0
+        min_edit_tokens = min(min_edit_tokens, len(words))
+        edited = [edited_word != word for edited_word, word in zip(edited_words, words)]
+        if sum(edited) < min_edit_tokens:
+            editable_indices = [
+                i for i, was_edited in enumerate(edited)
+                if not was_edited and not special_tokens_mask[i]
+            ]
+            edit_indices = rand.choice(
+                editable_indices,
+                size=min(len(editable_indices), min_edit_tokens - sum(edited)),
+                replace=False
+            )
+            for idx in edit_indices:
+                edited_words[idx] = artificial_edits(edited_words[idx], 1, rand)
+
+            # print(f"min edit tokens: {min_edit_tokens}, {sum(edited)}, {editable_indices}, {edit_indices}"
+            #       f"\n{words}\n{edited_words}")
+
+    # global tokens_edited, tokens_seen
+    # tokens_seen += len(words)
+    # tokens_edited += sum(w != e for w, e in zip(words, edited_words))
+    # print(f"ratio: {100 * tokens_edited / tokens_seen:.2f}%")
+
+    return edited_words
 
 
 def corrupt_whitespace(
@@ -236,9 +305,10 @@ def corrupt_whitespace(
         no_ws_p: float,
         full_ws_p: float,
         rand: np.random.Generator) -> str:
-    if rand.random() < no_ws_p:
+    r = rand.random()
+    if r < no_ws_p:
         return sequence.replace(" ", "")
-    elif rand.random() < no_ws_p + full_ws_p:
+    elif r < no_ws_p + full_ws_p:
         return " ".join(sequence.replace(" ", ""))
     else:
         new_s = ""
@@ -292,10 +362,9 @@ class Preprocessing:
     def apply(
             self,
             sequences: List[str],
-            target_sequences: List[Optional[str]],
-            infos: List[Dict[str, Any]],
-            is_inference: bool = False
-    ) -> Tuple[List[str], List[Optional[str]], List[Dict[str, Any]]]:
+            target_sequences: List[str],
+            infos: List[Dict[str, Any]]
+    ) -> Tuple[List[str], List[str], List[Dict[str, Any]]]:
         raise NotImplementedError
 
     @property
@@ -314,12 +383,11 @@ class Save(Preprocessing):
     def apply(
             self,
             sequences: List[str],
-            target_sequences: List[Optional[str]],
-            infos: List[Dict[str, Any]],
-            is_inference: bool = False
-    ) -> Tuple[List[str], List[Optional[str]], List[Dict[str, Any]]]:
+            target_sequences: List[str],
+            infos: List[Dict[str, Any]]
+    ) -> Tuple[List[str], List[str], List[Dict[str, Any]]]:
         self.cfg: SaveConfig
-        if is_inference or (self.cfg.save_sequence_as is None and self.cfg.save_target_sequence_as is None):
+        if self.cfg.save_sequence_as is None and self.cfg.save_target_sequence_as is None:
             return sequences, target_sequences, infos
 
         new_infos = []
@@ -336,6 +404,7 @@ class Save(Preprocessing):
 @dataclass
 class NoiseConfig(PreprocessingConfig):
     edit_token_p: float = MISSING
+    min_edit_tokens: Optional[int] = None
     re_weight_edit_token_p: bool = True
 
 
@@ -346,23 +415,15 @@ class Noise(Preprocessing):
     def apply(
             self,
             sequences: List[str],
-            target_sequences: List[Optional[str]],
-            infos: List[Dict[str, Any]],
-            is_inference: bool = False
-    ) -> Tuple[List[str], List[Optional[str]], List[Dict[str, Any]]]:
-        if is_inference:
-            return sequences, target_sequences, infos
-
+            target_sequences: List[str],
+            infos: List[Dict[str, Any]]
+    ) -> Tuple[List[str], List[str], List[Dict[str, Any]]]:
         self.cfg: NoiseConfig
         batch_corrupted = [
             utils.de_tokenize_words(self._noise_words(words, doc), doc)
             for words, doc in utils.tokenize_words_batch(sequences, return_docs=True)
         ]
-        return (
-            batch_corrupted,
-            target_sequences,
-            infos
-        )
+        return batch_corrupted, target_sequences, infos
 
 
 @dataclass
@@ -379,6 +440,7 @@ class ArtificialNoise(Noise):
             words=words,
             doc=doc,
             edit_token_p=self.cfg.edit_token_p,
+            min_edit_tokens=self.cfg.min_edit_tokens,
             num_edits_p=self.cfg.num_edits_p,
             corrupt_method="artificial",
             rand=self.rand,
@@ -406,6 +468,7 @@ class RealisticNoise(Noise):
             words=words,
             doc=doc,
             edit_token_p=self.cfg.edit_token_p,
+            min_edit_tokens=self.cfg.min_edit_tokens,
             num_edits_p=0,  # not used for realistic noise
             corrupt_method="realistic",
             rand=self.rand,
@@ -436,6 +499,7 @@ class MixedNoise(Noise):
             words=words,
             doc=doc,
             edit_token_p=self.cfg.edit_token_p,
+            min_edit_tokens=self.cfg.min_edit_tokens,
             num_edits_p=self.cfg.artificial_num_edits_p,
             corrupt_method="mixed",
             rand=self.rand,
@@ -459,13 +523,9 @@ class WhitespaceNoise(Preprocessing):
     def apply(
             self,
             sequences: List[str],
-            target_sequences: List[Optional[str]],
-            infos: List[Dict[str, Any]],
-            is_inference: bool = False
-    ) -> Tuple[List[str], List[Optional[str]], List[Dict[str, Any]]]:
-        if is_inference:
-            return sequences, target_sequences, infos
-
+            target_sequences: List[str],
+            infos: List[Dict[str, Any]]
+    ) -> Tuple[List[str], List[str], List[Dict[str, Any]]]:
         self.cfg: WhitespaceNoiseConfig
         return (
             [
@@ -505,13 +565,12 @@ class Chained(Preprocessing):
     def apply(
             self,
             sequences: List[str],
-            target_sequences: List[Optional[str]],
-            infos: List[Dict[str, Any]],
-            is_inference: bool = False
-    ) -> Tuple[List[str], List[Optional[str]], List[Dict[str, Any]]]:
+            target_sequences: List[str],
+            infos: List[Dict[str, Any]]
+    ) -> Tuple[List[str], List[str], List[Dict[str, Any]]]:
         for override, preprocessing in zip(self.overrides, self.preprocessing):
-            sequences, target_sequences, infos = preprocessing.apply(sequences, target_sequences, infos, is_inference)
-            if override and not is_inference:
+            sequences, target_sequences, infos = preprocessing.apply(sequences, target_sequences, infos)
+            if override:
                 target_sequences = sequences
         return sequences, target_sequences, infos
 
@@ -537,12 +596,11 @@ class Switch(Preprocessing):
     def apply(
             self,
             sequences: List[str],
-            target_sequences: List[Optional[str]],
-            infos: List[Dict[str, Any]],
-            is_inference: bool = False
-    ) -> Tuple[List[str], List[Optional[str]], List[Dict[str, Any]]]:
+            target_sequences: List[str],
+            infos: List[Dict[str, Any]]
+    ) -> Tuple[List[str], List[str], List[Dict[str, Any]]]:
         idx = self.rand.choice(np.arange(len(self.preprocessing)), p=self.probabilities)
-        return self.preprocessing[idx].apply(sequences, target_sequences, infos, is_inference)
+        return self.preprocessing[idx].apply(sequences, target_sequences, infos)
 
 
 @dataclass
@@ -550,78 +608,123 @@ class SubstringConfig(PreprocessingConfig):
     type: Preprocessings = Preprocessings.SUBSTRING
     max_length: int = 512
     unit: str = "char"  # one of {byte, char}
+    respect_word_boundaries: bool = False
 
 
 class Substring(Preprocessing):
     def _get_start_end(
             self,
             sequence: str,
-            target_sequence: Optional[str],
-            is_inference: bool
-    ) -> Tuple[Tuple[int, int], Optional[Tuple[int, int]]]:
+            target_sequence: str
+    ) -> Optional[Tuple[Tuple[int, int], Tuple[int, int]]]:
         self.cfg: SubstringConfig
-        if self.cfg.unit == "char":
-            if is_inference:
-                start_idx, end_idx = 0, self.cfg.max_length
+        if self.cfg.respect_word_boundaries:
+            word_boundaries = find_word_boundaries_ignoring_space(target_sequence, sequence)
+            if self.cfg.unit == "char":
+                num_elements_per_word = [int(i > 0) + word_end - word_start
+                                         for i, (word_start, word_end) in enumerate(word_boundaries)]
+            elif self.cfg.unit == "byte":
+                num_elements_per_word = [len((" " * (i > 0) + sequence[word_start:word_end]).encode("utf8"))
+                                         for i, (word_start, word_end) in enumerate(word_boundaries)]
             else:
-                start_idx = self.rand.integers(0, max(1, len(sequence) - self.cfg.max_length + 1))
-                end_idx = start_idx + self.cfg.max_length
-        elif self.cfg.unit == "byte":
-            byte_list = [list(char.encode("utf8")) for char in sequence]
-            num_bytes_cum = np.cumsum([len(byt) for byt in byte_list])
-            if is_inference:
-                start_idx = 0
-                end_idx = (num_bytes_cum <= self.cfg.max_length).sum()
-            else:
-                upper_idx = (
-                        num_bytes_cum + self.cfg.max_length
-                        <= num_bytes_cum[-1]
-                ).sum()
-                start_idx = self.rand.integers(0, max(1, upper_idx))
-                end_idx = (
-                        num_bytes_cum
-                        <= self.cfg.max_length + (0 if start_idx == 0 else num_bytes_cum[start_idx - 1])
-                ).sum()
-        else:
-            raise RuntimeError(f"unknown unit {self.cfg.unit}, must be one of {{char, byte}}")
+                raise RuntimeError(f"unknown unit {self.cfg.unit}, must be one of {{char, byte}}")
 
-        if is_inference:
-            return (start_idx, end_idx), None
+            if any(num_elements > self.cfg.max_length for num_elements in num_elements_per_word):
+                return
+
+            starting_indices = [0]
+            if sum(num_elements_per_word) > self.cfg.max_length:
+                for i in range(1, len(num_elements_per_word)):
+                    if sum(num_elements_per_word[i:]) >= self.cfg.max_length:
+                        starting_indices.append(i)
+                    else:
+                        break
+
+            word_start_idx = starting_indices[self.rand.integers(0, len(starting_indices))]
+            word_end_idx = word_start_idx + 1
+            while (
+                    word_end_idx < len(num_elements_per_word)
+                    and sum(num_elements_per_word[word_start_idx:word_end_idx])
+                    + num_elements_per_word[word_end_idx] <= self.cfg.max_length
+            ):
+                word_end_idx += 1
+
+            assert sum(num_elements_per_word[word_start_idx:word_end_idx]) <= self.cfg.max_length
+
+            start_idx = word_boundaries[word_start_idx][0]
+            end_idx = word_boundaries[word_end_idx - 1][1]
+
         else:
-            target_start_idx, target_end_idx = find_substring_ignoring_spaces(
-                sequence[start_idx: end_idx], target_sequence
-            )
-            return (start_idx, end_idx), (target_start_idx, target_end_idx)
+            if self.cfg.unit == "char":
+                start_idx = self.rand.integers(0, max(0, len(sequence) - self.cfg.max_length) + 1)
+                end_idx = start_idx + self.cfg.max_length
+
+            elif self.cfg.unit == "byte":
+                byte_lengths = [len(char.encode("utf8")) for char in sequence]
+
+                starting_indices = [0]
+                if sum(byte_lengths) > self.cfg.max_length:
+                    for i in range(1, len(byte_lengths)):
+                        if sum(byte_lengths[i:]) >= self.cfg.max_length:
+                            starting_indices.append(i)
+                        else:
+                            break
+
+                start_idx = starting_indices[self.rand.integers(0, len(starting_indices))]
+                end_idx = start_idx + 1
+                while (
+                        end_idx < len(byte_lengths)
+                        and sum(byte_lengths[start_idx:end_idx]) + byte_lengths[end_idx] <= self.cfg.max_length
+                ):
+                    end_idx += 1
+
+                assert sum(byte_lengths[start_idx:end_idx]) <= self.cfg.max_length
+
+            else:
+                raise RuntimeError(f"unknown unit {self.cfg.unit}, must be one of {{char, byte}}")
+
+        target_start_idx, target_end_idx = find_substring_ignoring_spaces(
+            sequence[start_idx: end_idx], target_sequence
+        )
+
+        return (start_idx, end_idx), (target_start_idx, target_end_idx)
 
     def apply(
             self,
             sequences: List[str],
-            target_sequences: List[Optional[str]],
-            infos: List[Dict[str, Any]],
-            is_inference: bool = False
-    ) -> Tuple[List[str], List[Optional[str]], List[Dict[str, Any]]]:
+            target_sequences: List[str],
+            infos: List[Dict[str, Any]]
+    ) -> Tuple[List[str], List[str], List[Dict[str, Any]]]:
         self.cfg: SubstringConfig
 
         substring_sequences = []
         substring_target_sequences = []
         new_infos = []
         for sequence, target_sequence, info in zip(sequences, target_sequences, infos):
-            (start, end), target_indices = self._get_start_end(sequence, target_sequence, is_inference)
+            indices = self._get_start_end(sequence, target_sequence)
+            if indices is None:
+                print("found invalid inputs to substring preprocessing")
+                continue
+
+            (start, end), (target_start, target_end) = indices
 
             substring_sequences.append(sequence[start: end])
-            if is_inference:
-                substring_target_sequences.append(None)
-            else:
-                target_start, target_end = target_indices
-                substring_target_sequences.append(target_sequence[target_start: target_end])
-                if "org_sequence" in info:
-                    info = copy.deepcopy(info)
-                    # filter original sequence
-                    num_words_before = target_sequence[:target_start].count(" ")
-                    num_words = target_sequence[target_start:target_end].count(" ")
-                    org_words = info["org_sequence"].split()
-                    info["org_sequence"] = " ".join(org_words[num_words_before:num_words_before + num_words + 1])
-                    assert len(info["org_sequence"].split()) == len(substring_target_sequences[-1].split())
+            substring_target_sequences.append(target_sequence[target_start: target_end])
+            if "org_sequence" in info:
+                assert self.cfg.respect_word_boundaries, \
+                    "org_sequence is mapped to target sequence using words, so respect_word_boundaries must be true"
+                info = copy.deepcopy(info)
+                org_sequence = info["org_sequence"]
+                org_words = org_sequence.split()
+                assert len(target_sequence.split()) == len(org_sequence.split())
+                # filter original sequence
+                num_words_before = len(target_sequence[:target_start].split())
+                num_window_words = len(target_sequence[target_start:target_end].split())
+                num_words = len(target_sequence[:target_end].split())
+                assert num_words_before + num_window_words == num_words
+                org_words = org_words[num_words_before:num_words]
+                assert len(org_words) == num_window_words
+                info["org_sequence"] = " ".join(org_words)
             new_infos.append(info)
 
         return substring_sequences, substring_target_sequences, new_infos
@@ -636,10 +739,9 @@ class NoPreprocessing(Preprocessing):
     def apply(
             self,
             sequences: List[str],
-            target_sequences: List[Optional[str]],
-            infos: List[Dict[str, Any]],
-            is_inference: bool = False
-    ) -> Tuple[List[str], List[Optional[str]], List[Dict[str, Any]]]:
+            target_sequences: List[str],
+            infos: List[Dict[str, Any]]
+    ) -> Tuple[List[str], List[str], List[Dict[str, Any]]]:
         return sequences, target_sequences, infos
 
 
@@ -692,13 +794,13 @@ def get_preprocessing_fn(
     ) -> List[Tuple[Sample, str]]:
         # initialize target sequences with target sequences if given else with input sequences
         target_sequences = [
-            None if is_inference else target_sequence or sequence
+            None if is_inference else (target_sequence or sequence)
             for sequence, target_sequence in zip(sequences, target_sequences)
         ]
         infos = [dict()] * len(sequences)
 
         if not is_inference:
-            sequences, target_sequences, infos = preprocessing.apply(sequences, target_sequences, infos, is_inference)
+            sequences, target_sequences, infos = preprocessing.apply(sequences, target_sequences, infos)
 
         samples = utils.prepare_samples(
             sequences,

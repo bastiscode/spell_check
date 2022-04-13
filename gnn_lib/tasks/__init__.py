@@ -62,7 +62,7 @@ class Task:
             model: models.Model,
             device: DistributedDevice
     ) -> Set[str]:
-        batch = self.generate_sample_inputs(num_samples=1)
+        batch = self.generate_sample_inputs(num_samples=2)
         inputs, _ = self._prepare_inputs_and_labels(batch, device.device)
 
         unused_parameters = utils.get_unused_parameters(model, **inputs)

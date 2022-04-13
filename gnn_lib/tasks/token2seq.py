@@ -26,17 +26,17 @@ class Token2Seq(tasks.Task):
         decoder_inputs = []
         decoder_labels = []
         decoder_group_lengths = []
-        for labels, splits in zip(batch.info.pop("label"), batch.info.pop("label_splits")):
-            word_decoder_inputs = []
-            word_decoder_labels = []
-            word_decoder_lengths = []
-            for word_labels in torch.split(labels, splits):
-                word_decoder_inputs.append(word_labels[:-1])
-                word_decoder_labels.append(word_labels[1:])
-                word_decoder_lengths.append(len(word_labels) - 1)
-            decoder_inputs.append(torch.cat(word_decoder_inputs))
-            decoder_labels.append(torch.cat(word_decoder_labels))
-            decoder_group_lengths.append(torch.tensor(word_decoder_lengths, dtype=torch.long))
+        for labels in batch.info.pop("label"):
+            sample_decoder_inputs = []
+            sample_decoder_labels = []
+            sample_decoder_lengths = []
+            for label in labels:
+                sample_decoder_inputs.extend(label[:-1])
+                sample_decoder_labels.extend(label[1:])
+                sample_decoder_lengths.append(len(label) - 1)
+            decoder_inputs.append(torch.tensor(sample_decoder_inputs, dtype=torch.long))
+            decoder_labels.append(torch.tensor(sample_decoder_labels, dtype=torch.long))
+            decoder_group_lengths.append(torch.tensor(sample_decoder_lengths, dtype=torch.long))
 
         decoder_labels = to(utils.pad(decoder_labels, val=batch.info["pad_token_id"][0]).long(), device)
 
@@ -55,8 +55,8 @@ class Token2Seq(tasks.Task):
                    model_output: torch.Tensor,
                    additional_losses: Dict[str, torch.Tensor]) -> torch.Tensor:
         return F.cross_entropy(
-            input=model_output.reshape(-1, model_output.shape[-1]),
-            target=labels["labels"].reshape(-1),
+            input=model_output.view(-1, model_output.shape[-1]),
+            target=labels["labels"].view(-1),
             ignore_index=labels["pad_token_id"]
         ) + sum(additional_losses.values())
 

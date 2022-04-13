@@ -7,7 +7,7 @@ from tqdm import tqdm
 from gnn_lib.data.utils import is_valid_sequence
 from gnn_lib.utils import io, common
 
-from spelling_correction.utils import neuspell
+from spelling_correction.utils import spacy_utils
 
 logger = common.get_logger("PREPARE_NEUSPELL")
 
@@ -32,7 +32,7 @@ def prepare_neuspell(args: argparse.Namespace) -> None:
             ):
                 correct_line = correct_line.strip()
                 corrupt_line = corrupt_line.strip()
-                correct_line, corrupt_line = neuspell.clean_sequences(correct_line, corrupt_line)
+                correct_line, corrupt_line = neuspell.fix_sequences(correct_line, corrupt_line)
                 if (
                         not is_valid_sequence(correct_line, min_length=1)
                         or not is_valid_sequence(corrupt_line, min_length=1)

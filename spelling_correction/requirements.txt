@@ -1,5 +1,4 @@
 # evaluation
-tabulate>=0.8.9
 python-Levenshtein==0.12.2 # (fast editdistance and editops calcuation in C)
 
 # baselines
@@ -7,6 +6,3 @@ hunspell==0.5.5 # (hunspell spell checker)
 jamspell==0.0.12 # (jamspell spell checker)
 neuspell==1.0.0 # (neuspell spell checker suite)
 symspellpy==6.7.6 # (python implementation of symspell algorithm)
-
-# demo
-streamlit>=1.4.0

@@ -321,8 +321,11 @@ class ModelForGraphClassification(GraphModel):
         super().__init__(sample_inputs, cfg, device)
 
     def build_embedding(self, sample_g: dgl.DGLHeteroGraph) -> embedding.GraphEmbedding:
-        num_token_embeddings = {
-            node_type: self.tokenizers[node_type].vocab_size
+        embeddings = {
+            node_type: (
+                self.input_tokenizers[node_type].vocab_size,
+                self.input_tokenizers[node_type].token_to_id(tokenization.PAD)
+            )
             for node_type in sample_g.ntypes
             if f"{node_type}_id" in sample_g.node_attr_schemes(node_type)
         }
@@ -332,7 +335,7 @@ class ModelForGraphClassification(GraphModel):
             sample_g,
             node_hidden_dim=self.cfg.node_hidden_dim,
             hidden_feature=self.cfg.hidden_feature,
-            num_token_embeddings=num_token_embeddings,
+            embeddings=embeddings,
             max_length=self.cfg.max_length,
             edge_hidden_dim=self.cfg.edge_hidden_dim
         )
@@ -365,8 +368,11 @@ class ModelForMultiNodeClassification(GraphModel):
         super().__init__(sample_inputs, cfg, device)
 
     def build_embedding(self, sample_g: DataInput) -> embedding.GraphEmbedding:
-        num_token_embeddings = {
-            node_type: self.tokenizers[node_type].vocab_size
+        embeddings = {
+            node_type: (
+                self.input_tokenizers[node_type].vocab_size,
+                self.input_tokenizers[node_type].token_to_id(tokenization.PAD)
+            )
             for node_type in sample_g.ntypes
             if f"{node_type}_id" in sample_g.node_attr_schemes(node_type)
         }
@@ -376,7 +382,7 @@ class ModelForMultiNodeClassification(GraphModel):
             sample_g,
             node_hidden_dim=self.cfg.node_hidden_dim,
             hidden_feature=self.cfg.hidden_feature,
-            num_token_embeddings=num_token_embeddings,
+            embeddings=embeddings,
             max_length=self.cfg.max_length,
             edge_hidden_dim=self.cfg.edge_hidden_dim
         )
@@ -428,15 +434,16 @@ class ModelForGraph2Seq(GraphModel, GraphEncoderMixin, DecoderMixin):
         }
 
         self.output_tokenizer = get_tokenizer_from_config(cfg.output_tokenizer)
-        self.bos_token_id = self.output_tokenizer.token_to_id(tokenization.BOS)
-        self.eos_token_id = self.output_tokenizer.token_to_id(tokenization.EOS)
-        self.pad_token_id = self.output_tokenizer.token_to_id(tokenization.PAD)
+        self.output_pad_token_id = self.output_tokenizer.token_to_id(tokenization.PAD)
 
         super().__init__(sample_inputs, cfg, device)
 
     def build_embedding(self, sample_g: dgl.DGLHeteroGraph) -> embedding.GraphEmbedding:
-        num_token_embeddings = {
-            node_type: self.input_tokenizers[node_type].vocab_size
+        embeddings = {
+            node_type: (
+                self.input_tokenizers[node_type].vocab_size,
+                self.input_tokenizers[node_type].token_to_id(tokenization.PAD)
+            )
             for node_type in sample_g.ntypes
             if f"{node_type}_id" in sample_g.node_attr_schemes(node_type)
         }
@@ -446,7 +453,7 @@ class ModelForGraph2Seq(GraphModel, GraphEncoderMixin, DecoderMixin):
             sample_g,
             node_hidden_dim=self.cfg.node_hidden_dim,
             hidden_feature=self.cfg.hidden_feature,
-            num_token_embeddings=num_token_embeddings,
+            embeddings=embeddings,
             max_length=self.cfg.max_length,
             edge_hidden_dim=self.cfg.edge_hidden_dim
         )
@@ -455,7 +462,7 @@ class ModelForGraph2Seq(GraphModel, GraphEncoderMixin, DecoderMixin):
         self.cfg: ModelForGraph2SeqConfig
         return heads.TransformerDecoderHead(
             contexts=self.cfg.context_node_types,
-            pad_token_id=self.pad_token_id,
+            pad_token_id=self.output_pad_token_id,
             max_length=self.cfg.max_output_length,
             hidden_dim=self.cfg.node_hidden_dim,
             num_outputs=self.output_tokenizer.vocab_size,
@@ -466,21 +473,24 @@ class ModelForGraph2Seq(GraphModel, GraphEncoderMixin, DecoderMixin):
 
     def forward(
             self,
-            g: dgl.DGLHeteroGraph,
-            decoder_inputs: Optional[torch.Tensor] = None,
-            decoder_lengths: Optional[torch.Tensor] = None,
+            g: DataInput,
+            decoder_inputs: Optional[List[torch.Tensor]] = None,
             **kwargs: Any
     ) -> Tuple[Any, Dict[str, torch.Tensor]]:
-        assert decoder_inputs is not None and decoder_lengths is not None
+        self.cfg: ModelForGraph2SeqConfig
+        assert decoder_inputs is not None
         g = self.encode(g)
 
-        encoder_outputs, encoder_lengths = utils.graph2seq_encoder_outputs_from_graph(
+        encoder_outputs, encoder_lengths = utils.encoder_outputs_from_graph(
             g, self.cfg.context_node_types, self.cfg.hidden_feature
         )
 
+        decoder_lengths = [len(t) for t in decoder_inputs]
+        decoder_inputs = to(utils.pad(decoder_inputs, self.output_pad_token_id).long(), self.device)
+
         output = self.decode(
-            decoder_inputs=kwargs["decoder_inputs"],
-            decoder_lengths=kwargs["decoder_lengths"],
+            decoder_inputs=decoder_inputs,
+            decoder_lengths=decoder_lengths,
             encoder_outputs=encoder_outputs,
             encoder_lengths=encoder_lengths,
         )
@@ -491,9 +501,11 @@ class ModelForGraph2Seq(GraphModel, GraphEncoderMixin, DecoderMixin):
         g = self.embedding(g)
         return self.gnn(g)
 
-    def decode(self,
-               decoder_inputs: torch.Tensor,
-               **kwargs: Any) -> torch.Tensor:
+    def decode(
+            self,
+            decoder_inputs: torch.Tensor,
+            **kwargs: Any
+    ) -> torch.Tensor:
         return self.head.decode(decoder_inputs, **kwargs)
 
 
@@ -502,35 +514,45 @@ class ModelForMultiNode2SeqConfig(GraphModelConfig):
     type: Models = Models.MODEL_FOR_MULTI_NODE2SEQ
     context_node_types: Dict[str, List[str]] = MISSING
     align_positions_with: Optional[Dict[str, str]] = None
-    tokenizers: Dict[str, TokenizerConfig] = MISSING
+    input_tokenizers: Dict[str, TokenizerConfig] = MISSING
+    output_tokenizers: Dict[str, TokenizerConfig] = MISSING
 
     max_output_length: int = 512
 
     decoder_dropout: float = 0.2
-    decoder_num_layers: int = MISSING
+    num_decoder_layers: int = MISSING
     decoder_share_parameters: bool = False
-    decoder_node_types: Optional[List[str]] = None
+    decoder_node_types: List[str] = MISSING
 
 
 class ModelForMultiNode2Seq(GraphModel, GraphEncoderMixin):
     def __init__(self, sample_inputs: Batch, cfg: ModelForMultiNode2SeqConfig, device: torch.device) -> None:
-        self.tokenizers: Dict[str, Tokenizer] = {
-            k: get_tokenizer_from_config(cfg) for k, cfg in cfg.tokenizers.items()
+        self.input_tokenizers: Dict[str, Tokenizer] = {
+            k: get_tokenizer_from_config(cfg) for k, cfg in cfg.input_tokenizers.items()
+        }
+        self.output_tokenizers: Dict[str, Tokenizer] = {
+            k: get_tokenizer_from_config(cfg) for k, cfg in cfg.output_tokenizers.items()
         }
 
-        self.pad_token_ids = {
-            node_type: self.tokenizers[f"{node_type}_output_tokenizer"].token_to_id(tokenization.PAD)
+        assert all(node_type in self.output_tokenizers for node_type in cfg.decoder_node_types), \
+            "need an output tokenizer for each decoder node type"
+
+        self.output_pad_token_ids = {
+            node_type: self.output_tokenizers[node_type].token_to_id(tokenization.PAD)
             for node_type in cfg.decoder_node_types
         }
         self.num_outputs = {
-            node_type: self.tokenizers[f"{node_type}_output_tokenizer"].vocab_size
+            node_type: self.output_tokenizers[node_type].vocab_size
             for node_type in cfg.decoder_node_types
         }
         super().__init__(sample_inputs, cfg, device)
 
     def build_embedding(self, sample_g: dgl.DGLHeteroGraph) -> embedding.GraphEmbedding:
-        num_token_embeddings = {
-            node_type: self.tokenizers[node_type].vocab_size
+        embeddings = {
+            node_type: (
+                self.input_tokenizers[node_type].vocab_size,
+                self.input_tokenizers[node_type].token_to_id(tokenization.PAD)
+            )
             for node_type in sample_g.ntypes
             if f"{node_type}_id" in sample_g.node_attr_schemes(node_type)
         }
@@ -540,7 +562,7 @@ class ModelForMultiNode2Seq(GraphModel, GraphEncoderMixin):
             sample_g,
             node_hidden_dim=self.cfg.node_hidden_dim,
             hidden_feature=self.cfg.hidden_feature,
-            num_token_embeddings=num_token_embeddings,
+            embeddings=embeddings,
             max_length=self.cfg.max_length,
             edge_hidden_dim=self.cfg.edge_hidden_dim
         )
@@ -551,12 +573,12 @@ class ModelForMultiNode2Seq(GraphModel, GraphEncoderMixin):
         for node_type in self.cfg.decoder_node_types:
             node2seq_head[node_type] = heads.TransformerDecoderHead(
                 contexts=self.cfg.context_node_types[node_type] + [node_type],
-                pad_token_id=self.pad_token_ids[node_type],
+                pad_token_id=self.output_pad_token_ids[node_type],
                 max_length=self.cfg.max_output_length,
                 hidden_dim=self.cfg.node_hidden_dim,
                 num_outputs=self.num_outputs[node_type],
                 dropout=self.cfg.decoder_dropout,
-                num_layers=self.cfg.decoder_num_layers,
+                num_layers=self.cfg.num_decoder_layers,
                 share_parameters=self.cfg.decoder_share_parameters
             )
         return node2seq_head
@@ -566,95 +588,97 @@ class ModelForMultiNode2Seq(GraphModel, GraphEncoderMixin):
         g = self.embedding(g)
         return self.gnn(g)
 
-    def forward(self, g: dgl.DGLHeteroGraph, **kwargs: Any) -> Tuple[Any, Dict[str, torch.Tensor]]:
+    def forward(
+            self,
+            g: dgl.DGLHeteroGraph,
+            encoder_group_lengths: Optional[List[Dict[str, Dict[str, torch.Tensor]]]] = None,
+            decoder_inputs: Optional[Dict[str, List[torch.Tensor]]] = None,
+            decoder_group_lengths: Optional[Dict[str, List[torch.Tensor]]] = None,
+            **kwargs: Any
+    ) -> Tuple[Any, Dict[str, torch.Tensor]]:
         self.cfg: ModelForMultiNode2SeqConfig
         g = self.encode(g)
 
-        assert "decoder_inputs" in kwargs and "decoder_lengths" in kwargs
+        assert decoder_inputs is not None and decoder_group_lengths is not None
+        decoder_lengths = {
+            node_type: [len(t) for t in tensors]
+            for node_type, tensors in decoder_inputs.items()
+        }
+        decoder_inputs: Dict[str, torch.Tensor] = {
+            node_type: to(pad(tensors, self.output_pad_token_ids[node_type]).long(), self.device)
+            for node_type, tensors in decoder_inputs.items()
+        }
+
         outputs = {}
         for node_type in self.cfg.decoder_node_types:
+            node_type_encoder_group_lengths = [group_lengths[node_type] for group_lengths in encoder_group_lengths]
+            context_node_types = self.cfg.context_node_types[node_type] + [node_type]
             (
-                encoder_outputs, encoder_lengths, aligned_encoder_positions
-            ) = utils.multi_node2seq_encoder_outputs_from_graph2(
+                encoder_outputs,
+                encoder_lengths
+            ) = utils.encoder_outputs_from_graph(
                 g,
-                node_type,
-                self.cfg.context_node_types[node_type],
-                self.cfg.hidden_feature,
-                self.cfg.align_positions_with[node_type] if self.cfg.align_positions_with is not None else None
+                context_node_types,
+                self.cfg.hidden_feature
             )
 
-            decoder_lengths = kwargs["decoder_lengths"][node_type]
-            decoder_inputs = kwargs["decoder_inputs"][node_type]
-
-            # create decoder positions and encoder masks
-            if aligned_encoder_positions is not None:
-                assert sum(len(pos) for pos in aligned_encoder_positions) == \
-                       sum(len(lengths) for lengths in decoder_lengths)
-                decoder_positions = []
-                for encoder_positions, lengths in zip(aligned_encoder_positions, decoder_lengths):
-                    encoder_positions_plus_lengths = encoder_positions + lengths
-                    upper_indices = torch.cumsum(lengths, 0)
-                    lower_indices = torch.cat([torch.tensor([0]), upper_indices[:-1]])
-
-                    positions = torch.zeros(upper_indices[-1], dtype=torch.long)
-                    for idx_lower, idx_upper, range_lower, range_upper in zip(
-                            lower_indices,
-                            upper_indices,
-                            encoder_positions,
-                            encoder_positions_plus_lengths
-                    ):
-                        positions[idx_lower:idx_upper] = torch.arange(range_lower, range_upper)
-                    decoder_positions.append(positions)
-                decoder_positions = pad(decoder_positions).to(g.device)
+            if self.cfg.align_positions_with is not None:
+                align_positions_with = self.cfg.align_positions_with.get(node_type, node_type)
             else:
-                decoder_positions = None
+                align_positions_with = node_type
+            assert align_positions_with in context_node_types
 
-            # bring encoder outputs into correct format
-            encoder_outputs = {
-                enc_node_type: pad([
-                    torch.cat(enc_output)
-                    for enc_output in enc_outputs
-                ])
-                for enc_node_type, enc_outputs in encoder_outputs.items()
+            # create decoder masks, decoder positions and encoder masks
+            decoder_positions = []
+            decoder_masks = []
+            encoder_masks = {
+                ctx_node_type: []
+                for ctx_node_type in self.cfg.context_node_types[node_type] + [node_type]
             }
 
-            decoder_mask = torch.stack([
-                utils.square_causal_block_mask(
-                    decoder_inputs.shape[1],
-                    dec_lengths,
-                    device=g.device
-                ) for dec_lengths in decoder_lengths
-            ])
+            for enc_lengths_dict, dec_lengths in zip(
+                    node_type_encoder_group_lengths, decoder_group_lengths[node_type]
+            ):
+                for ctx_node_type in context_node_types:
+                    encoder_masks[ctx_node_type].append(
+                        utils.rectangular_block_mask(
+                            decoder_inputs[node_type].shape[1],
+                            encoder_outputs[ctx_node_type].shape[1],
+                            dec_lengths,
+                            enc_lengths_dict[ctx_node_type],
+                            device=self.device
+                        )
+                    )
 
-            encoder_masks = {}
-            for enc_node_type, enc_lengths in encoder_lengths.items():
-                encoder_masks[enc_node_type] = torch.stack([
-                    utils.rectangular_block_mask(
-                        decoder_inputs.shape[1],
-                        encoder_outputs[enc_node_type].shape[1],
+                decoder_masks.append(
+                    utils.square_causal_block_mask(
+                        decoder_inputs[node_type].shape[1],
                         dec_lengths,
-                        lengths,
-                        device=g.device
-                    ) for lengths, dec_lengths in
-                    zip(enc_lengths, decoder_lengths)
+                        device=self.device
+                    )
+                )
+
+                position_enc_lengths = enc_lengths_dict[align_positions_with]
+                positions = torch.cat([
+                    torch.arange(enc_position, enc_position + dec_length)
+                    for enc_position, dec_length
+                    in zip(torch.cat([torch.tensor([0]), torch.cumsum(position_enc_lengths, dim=0)[:-1]]), dec_lengths)
                 ])
+                decoder_positions.append(positions)
+                assert len(decoder_positions[-1]) == dec_lengths.sum()
 
-            # sum up decoder and encoder lengths
-            decoder_lengths = torch.stack([lengths.sum() for lengths in decoder_lengths])
-
-            encoder_lengths = {
-                enc_node_type: torch.stack([lengths.sum() for lengths in enc_lengths])
-                for enc_node_type, enc_lengths in encoder_lengths.items()
-            }
+            assert all(
+                len(positions) == length for positions, length in zip(decoder_positions, decoder_lengths[node_type])
+            )
 
             outputs[node_type] = self.head[node_type].decode(
-                decoder_inputs=decoder_inputs,
-                decoder_lengths=decoder_lengths,
+                decoder_inputs=decoder_inputs[node_type],
+                decoder_lengths=decoder_lengths[node_type],
                 encoder_outputs=encoder_outputs,
                 encoder_lengths=encoder_lengths,
-                encoder_masks=encoder_masks,
-                decoder_mask=decoder_mask,
-                decoder_positions=decoder_positions
+                encoder_masks={ctx_node_type: torch.stack(masks) for ctx_node_type, masks in encoder_masks.items()},
+                decoder_mask=torch.stack(decoder_masks),
+                decoder_positions=to(utils.pad(decoder_positions).long(), self.device)
             )
 
         return outputs, self.gnn.get_additional_losses()
@@ -730,9 +754,9 @@ class ModelForToken2Seq(TensorModel, TensorEncoderMixin, DecoderMixin):
     def forward(
             self,
             x: DataInput,
+            encoder_group_lengths: Optional[List[torch.Tensor]] = None,
             decoder_inputs: Optional[List[torch.Tensor]] = None,
             decoder_group_lengths: Optional[List[torch.Tensor]] = None,
-            encoder_group_lengths: Optional[List[torch.Tensor]] = None,
             **kwargs: Any
     ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
         assert decoder_inputs is not None
@@ -742,6 +766,7 @@ class ModelForToken2Seq(TensorModel, TensorEncoderMixin, DecoderMixin):
 
         decoder_lengths = [len(t) for t in decoder_inputs]
         decoder_inputs = to(utils.pad(decoder_inputs, self.output_pad_token_id).long(), self.device)
+
         decoder_masks = []
         encoder_masks = []
         decoder_positions = []
@@ -870,7 +895,7 @@ class ModelForSeq2Seq(TensorModel, TensorEncoderMixin, DecoderMixin):
     def forward(
             self,
             x: DataInput,
-            decoder_inputs: Optional[DataInput] = None,
+            decoder_inputs: Optional[List[torch.Tensor]] = None,
             **kwargs: Any
     ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
         assert decoder_inputs is not None

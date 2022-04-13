@@ -10,6 +10,7 @@ cfgs:
   - type: SUBSTRING
     max_length: 512
     unit: char
+    respect_word_boundaries: true
 overrides:
   - true # overriding target sequence after saving it
   - false

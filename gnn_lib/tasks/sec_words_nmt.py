@@ -23,7 +23,7 @@ class SECWordsNMT(Token2Seq):
         model_cfg: models.ModelForToken2SeqConfig = model.cfg
 
         batch = self._batch_sequences_for_inference(inputs)
-        inputs = [str(ipt) for ipt in inputs]
+        inputs = [model.input_tokenizer.normalize(str(ipt)) for ipt in inputs]
 
         encoder_group_lengths: List[torch.Tensor] = batch.info["encoder_group_lengths"]
         detections = kwargs.get("detections", [[1] * len(group_lengths) for group_lengths in encoder_group_lengths])

@@ -9,4 +9,3 @@ max_length: 512
 tokenizer:
   type: CHAR
 preprocessing: ${from_file:preprocessing/tokenization_repair_plus.yaml}
-respect_leading_whitespaces: true

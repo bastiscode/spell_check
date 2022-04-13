@@ -46,7 +46,7 @@ class SECNMT(Seq2Seq):
     ) -> List[List[str]]:
         if "detections" not in kwargs:
             kwargs.update({
-                "input_strings": [str(ipt) for ipt in inputs]
+                "input_strings": [model.input_tokenizer.normalize(str(ipt)) for ipt in inputs]
             })
             return super().inference(model, inputs, **kwargs)
         else:

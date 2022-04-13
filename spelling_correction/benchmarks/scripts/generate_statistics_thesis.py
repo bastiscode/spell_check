@@ -65,6 +65,7 @@ def generate_statistics(args: argparse.Namespace) -> None:
                 corrupt_words = corrupt_line.split()
                 correct_split = correct_line.split()
                 correct_words = correct_sequence.split() if args.benchmark_type != "sec" else correct_split
+                assert len(corrupt_words) == len(correct_words)
 
                 for correct_word, corrupt_word in zip(correct_words, corrupt_words):
                     if correct_word == corrupt_word:

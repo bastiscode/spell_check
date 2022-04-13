@@ -1,7 +1,6 @@
 import collections
 from typing import Dict, List, Union, Any, Tuple
 
-import dgl
 import torch
 from torch.nn import functional as F
 
@@ -57,7 +56,6 @@ class MultiNodeClassification(tasks.Task):
         for node_type, pred in model_output.items():
             predictions = torch.argmax(pred, dim=1)
             stats[f"{node_type}_accuracy"].add((labels[node_type] == predictions).cpu())
-            stats[f"{node_type}_f1_prec_rec"].add((labels[node_type].cpu(), predictions.cpu()))
 
     @torch.inference_mode()
     def inference(

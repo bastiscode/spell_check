@@ -76,8 +76,12 @@ def embed_nodes_along_edge(g: dgl.DGLHeteroGraph,
 
     edge_types: List[Tuple[str, str, str]] = []
     for src, edge, dst in g.canonical_etypes:
-        if src == src_node_type and src in embedded_node_types and \
-                along_edge == edge and dst not in embedded_node_types:
+        if (
+                src == src_node_type
+                and src in embedded_node_types
+                and along_edge == edge
+                and dst not in embedded_node_types
+        ):
             edge_types.append((src, edge, dst))
 
     if len(edge_types) == 0:
@@ -101,7 +105,7 @@ class NodeEmbedding(nn.Module):
                  hidden_feature: str,
                  embedding_dim: int,
                  sample_g: dgl.DGLHeteroGraph,
-                 num_token_embeddings: Dict[str, int],
+                 embeddings: Dict[str, Tuple[int, int]],
                  max_length: int,
                  dropout: float,
                  init_embeddings_along_edge_type: Optional[str] = None,
@@ -120,16 +124,19 @@ class NodeEmbedding(nn.Module):
 
         self.token_emb = nn.ModuleDict(
             {
-                node_type: TokenEmbedding(num_embeddings=num_embeddings,
-                                          embedding_dim=embedding_dim)
-                for node_type, num_embeddings in num_token_embeddings.items()
+                node_type: TokenEmbedding(
+                    num_embeddings=num_embeddings,
+                    embedding_dim=embedding_dim,
+                    padding_idx=padding_idx
+                )
+                for node_type, (num_embeddings, padding_idx) in embeddings.items()
             }
         )
         if embed_positions:
             self.pos_emb = nn.ModuleDict({
                 node_type: LearnedPositionalEmbedding(embedding_dim, max_length)
                 if learned_position_embeddings else SinusoidalPositionalEmbedding(embedding_dim, max_length)
-                for node_type in num_token_embeddings.keys()
+                for node_type in embeddings
             })
         else:
             self.pos_emb = None
@@ -185,8 +192,7 @@ class NodeEmbedding(nn.Module):
             if self.node_type_emb is not None:
                 node_type_embeddings = self.node_type_emb(g)
                 # add node type embeddings to all newly embedded nodes
-                node_type_embed_node_types = set(node_type_embeddings) - already_embedded_node_types
-                for node_type in node_type_embed_node_types:
+                for node_type in set(node_type_embeddings) - already_embedded_node_types:
                     g.nodes[node_type].data["emb"] = g.nodes[node_type].data["emb"] + node_type_embeddings[node_type]
 
             for node_type in set(g.ntypes) - already_embedded_node_types:
@@ -213,7 +219,7 @@ class NodeTypeEmbedding(nn.Module):
         self.embedding_dim = embedding_dim
         self.node_types = sorted(sample_g.ntypes)
 
-        self.node_type_dict = {edge_type: i for i, edge_type in enumerate(self.node_types)}
+        self.node_type_dict = {node_type: i for i, node_type in enumerate(self.node_types)}
         self.node_type_emb = TokenEmbedding(num_embeddings=len(self.node_types),
                                             embedding_dim=embedding_dim)
 
@@ -322,7 +328,7 @@ class GraphEmbedding(nn.Module):
                  sample_g: dgl.DGLHeteroGraph,
                  node_hidden_dim: int,
                  hidden_feature: str,
-                 num_token_embeddings: Dict[str, int],
+                 embeddings: Dict[str, Tuple[int, int]],
                  max_length: int,
                  cfg: GraphEmbeddingConfig,
                  edge_hidden_dim: Optional[int] = None) -> None:
@@ -336,7 +342,7 @@ class GraphEmbedding(nn.Module):
             hidden_feature=hidden_feature,
             embedding_dim=self.node_hidden_dim,
             sample_g=sample_g,
-            num_token_embeddings=num_token_embeddings,
+            embeddings=embeddings,
             max_length=max_length,
             dropout=cfg.dropout,
             init_embeddings_along_edge_type=cfg.init_embeddings_along_edge_type,
