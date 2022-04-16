@@ -94,15 +94,20 @@ class Seq2Seq(tasks.Task):
         )
 
     @torch.inference_mode()
-    def inference(self,
-                  model: models.ModelForSeq2Seq,
-                  inputs: List[Union[str, Sample]],
-                  **kwargs: Any) -> List[List[str]]:
+    def inference(
+            self,
+            model: models.ModelForSeq2Seq,
+            inputs: Union[Batch, List[Union[str, Sample]]],
+            **kwargs: Any
+    ) -> List[List[str]]:
         self._check_model(model)
         model = model.eval()
         model_cfg: models.ModelForSeq2SeqConfig = model.cfg
 
-        batch = self._batch_sequences_for_inference(inputs)
+        if isinstance(inputs, Batch):
+            batch = inputs
+        else:
+            batch = self._batch_sequences_for_inference(inputs)
 
         encoder_inputs, encoder_padding_mask = model.pad_inputs(batch.data)
         encoder_outputs = model.encode(encoder_inputs, encoder_padding_mask)

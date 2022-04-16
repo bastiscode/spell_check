@@ -1,9 +1,7 @@
-import math
 import queue
 import time
 from typing import Callable, Tuple, Dict, List, Any, Union, Optional
 
-# import Levenshtein
 import einops
 import torch
 
@@ -56,7 +54,7 @@ BeamSelectFn = Callable[[List[Tuple[Beam, float]]], Beam]
 
 
 def eos_stop_fn(eos_token_id: int) -> StopFn:
-    def _stop(token_ids: List[int], output_str: Optional[str] = None) -> bool:
+    def _stop(token_ids: List[int], _: Optional[str] = None) -> bool:
         return token_ids[-1] == eos_token_id
 
     return _stop
@@ -78,7 +76,7 @@ def sample_select_fn(sample_top_k: int) -> BeamSelectFn:
 
 
 def log_likelihood_score(normalize_by_length: bool = True, alpha: float = 1.0) -> Callable[[Beam], float]:
-    def score(beam: Beam, input_str: Optional[str] = None) -> float:
+    def score(beam: Beam, _: Optional[str] = None) -> float:
         s = sum(beam.log_prob)
         if normalize_by_length:
             return s / (len(beam.log_prob) ** alpha)
@@ -126,19 +124,12 @@ def spelling_correction_score(
 
             # check if current predicted word (or its lowercase version)
             # is a prefix of a dictionary word (in prefix tree)
-            valid_pred = (
-                    len(prefix_index.retrieve(pred_words[-1])) > 0
-                    or len(prefix_index.retrieve(pred_words[-1].lower())) > 0
-            )
+            valid_pred = len(prefix_index.retrieve(pred_words[-1])) > 0
             if mode == "dictionary":
                 pass
-            # check if current predicted word (or its lowercase version)
-            # is a prefix of an input word
+            # check if current predicted word is a prefix of an input word
             elif mode == "dictionary_or_in_input":
-                valid_pred |= (
-                        any(ipt_w.startswith(pred_words[-1]) for ipt_w in input_words)
-                        or any(ipt_w.startswith(pred_words[-1].lower()) for ipt_w in input_words)
-                )
+                valid_pred |= any(ipt_w.startswith(pred_words[-1]) for ipt_w in input_words)
 
             # check if current predicted string is prefix of the input string
             elif mode == "dictionary_or_eq_input":
@@ -148,7 +139,7 @@ def spelling_correction_score(
                 raise RuntimeError(f"unknown spell check score mode {mode}")
 
             if not valid_pred:
-                return s - 1_000_000
+                s -= 1_000_000
 
         return s
 

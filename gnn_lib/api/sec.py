@@ -7,6 +7,7 @@ import torch
 from torch import autocast
 from tqdm import tqdm
 
+from gnn_lib import models
 from gnn_lib.api.utils import (
     _APIBase,
     ModelInfo,
@@ -150,8 +151,9 @@ class SpellingErrorCorrector(_APIBase):
                 or isinstance(task, sec_nmt.SECNMT)
                 or isinstance(task, graph_sec_words_nmt.GraphSECWordsNMT)
                 or isinstance(task, sec_words_nmt.SECWordsNMT)
-        ), f"expected experiment to be of type SECNMT, GraphSECNMT, SECWordsNMT or GraphSECWordsNMT, " \
-           f"but got {type(task)}"
+                or isinstance(task, tokenization_repair_plus.TokenizationRepairPlus)
+        ), f"expected experiment to be of type SECNMT, GraphSECNMT, SECWordsNMT, GraphSECWordsNMT or " \
+           f"TokenizationRepairPlus, but got {type(task)}"
 
         self.max_length = model.cfg.max_length
 
@@ -198,6 +200,14 @@ class SpellingErrorCorrector(_APIBase):
             }
         )
 
+    def _get_output_tokenizer(self) -> tokenization.Tokenizer:
+        if isinstance(self.model, models.ModelForTokenizationRepairPlus):
+            return self.model.sec_tokenizer
+        elif isinstance(self.model, models.ModelForMultiNode2Seq):
+            return self.model.output_tokenizers["token"]
+        else:
+            return self.model.output_tokenizer
+
     @torch.inference_mode()
     def _correct_text_raw(
             self,
@@ -206,6 +216,7 @@ class SpellingErrorCorrector(_APIBase):
             search: Search = GreedySearch(),
             score: SpellingCorrectionScore = SpellingCorrectionScore(),
             batch_size: int = 16,
+            batch_max_length_factor: Optional[float] = None,
             sort_by_length: bool = True,
             show_progress: bool = False
     ) -> List[str]:
@@ -214,17 +225,23 @@ class SpellingErrorCorrector(_APIBase):
 
         inputs = [clean_sequence(ipt) for ipt in inputs]
 
-        inference_kwargs = inference_kwargs_from_search_and_score(search, score, self.model.output_tokenizer)
-        if isinstance(self.task, tokenization_repair_plus.TokenizationRepairPlus):
+        is_tokenization_repair_plus = isinstance(self.task, tokenization_repair_plus.TokenizationRepairPlus)
+        inference_kwargs = inference_kwargs_from_search_and_score(search, score, self._get_output_tokenizer())
+        if is_tokenization_repair_plus:
             inference_kwargs["output_type"] = "sec"
-            inference_kwargs["no_repair"] = True
+            inference_kwargs["no_repair"] = os.getenv("GNN_LIB_TOKENIZATION_REPAIR_PLUS_NO_REPAIR", "false") == "true"
+            inference_kwargs["no_detect"] = os.getenv("GNN_LIB_TOKENIZATION_REPAIR_PLUS_NO_DETECT", "false") == "true"
+            inference_kwargs["threshold"] = float(os.getenv("GNN_LIB_TOKENIZATION_REPAIR_PLUS_THRESHOLD", 0.5))
 
+        num_workers = 0 if len(inputs) <= 16 else min(4, len(os.sched_getaffinity(0)))
         dataset, loader = get_inference_dataset_and_loader(
-            inputs,
+            sequences=inputs,
             task=self.task,
             max_length=self.max_length,
             sort_by_length=sort_by_length,
             batch_size=batch_size,
+            batch_max_length_factor=batch_max_length_factor,
+            num_workers=num_workers,
             **inference_kwargs
         )
 
@@ -257,25 +274,31 @@ class SpellingErrorCorrector(_APIBase):
 
         pbar = tqdm(
             loader,
-            total=dataset.char_length(),
+            total=dataset.byte_length(),
             ascii=True,
             leave=False,
             disable=not show_progress,
-            unit="char"
+            unit="B",
+            unit_scale=True,
+            unit_divisor=1000
         )
 
         all_outputs = []
         for i, (batch, infos, indices) in enumerate(pbar):
+            batch_strings = [str(dataset.samples[idx]) for idx in indices]
+            batch_bytes = sum(len(s.encode("utf8")) for s in batch_strings)
+
+            inference_kwargs.update({
+                "input_strings": batch_strings
+            })
             if detections is not None:
                 batch_detections = [detections[idx] for idx in indices]
                 inference_kwargs.update({
                     "detections": batch_detections
                 })
 
-            batch_length = sum(info.ctx_end - info.ctx_start for info in infos)
             pbar.set_description(
-                f"[Batch {i + 1}] Correcting spelling errors of {len(batch):,} sequences "
-                f"with {batch_length:,} characters in total"
+                f"[Batch {i + 1}] Running {self.task_name} on {len(indices):,} sequences ({batch_bytes / 1000:,.1f}kB)"
             )
 
             # this is a slight hack for now, because fp32 on cpu throws an error even when enabled=False
@@ -290,13 +313,15 @@ class SpellingErrorCorrector(_APIBase):
                 outputs = self.task.inference(self.model, batch, **inference_kwargs)
 
             all_outputs.extend(outputs)
-            pbar.update(batch_length)
+            pbar.update(batch_bytes)
 
         pbar.close()
         all_outputs = reorder_data(all_outputs, dataset.indices)
         all_outputs = self.task.postprocess_inference_outputs(
             inputs, dataset.sample_infos, all_outputs, **inference_kwargs
         )
+        if is_tokenization_repair_plus:
+            all_outputs = [output["sec"] for output in all_outputs]
         return [inference.inference_output_to_str(output) for output in all_outputs]
 
     def correct_text(
@@ -306,6 +331,7 @@ class SpellingErrorCorrector(_APIBase):
             search: Search = GreedySearch(),
             score: SpellingCorrectionScore = SpellingCorrectionScore(),
             batch_size: int = 16,
+            batch_max_length_factor: Optional[float] = None,
             sort_by_length: bool = True,
             show_progress: bool = False
     ) -> StringInputOutput:
@@ -321,6 +347,7 @@ class SpellingErrorCorrector(_APIBase):
             search,
             score,
             batch_size,
+            batch_max_length_factor,
             sort_by_length,
             show_progress
         )
@@ -334,6 +361,7 @@ class SpellingErrorCorrector(_APIBase):
             search: Search = GreedySearch(),
             score: SpellingCorrectionScore = SpellingCorrectionScore(),
             batch_size: int = 16,
+            batch_max_length_factor: Optional[float] = None,
             sort_by_length: bool = True,
             show_progress: bool = True
     ) -> Optional[List[str]]:
@@ -342,7 +370,14 @@ class SpellingErrorCorrector(_APIBase):
             detections = [[int(det) for det in detection.split()] for detection in detections]
 
         outputs = self._correct_text_raw(
-            input_file_path, detections, search, score, batch_size, sort_by_length, show_progress
+            input_file_path,
+            detections,
+            search,
+            score,
+            batch_size,
+            batch_max_length_factor,
+            sort_by_length,
+            show_progress
         )
 
         if output_file_path is not None:

@@ -323,8 +323,8 @@ class ModelForGraphClassification(GraphModel):
     def build_embedding(self, sample_g: dgl.DGLHeteroGraph) -> embedding.GraphEmbedding:
         embeddings = {
             node_type: (
-                self.input_tokenizers[node_type].vocab_size,
-                self.input_tokenizers[node_type].token_to_id(tokenization.PAD)
+                self.tokenizers[node_type].vocab_size,
+                self.tokenizers[node_type].token_to_id(tokenization.PAD)
             )
             for node_type in sample_g.ntypes
             if f"{node_type}_id" in sample_g.node_attr_schemes(node_type)
@@ -370,8 +370,8 @@ class ModelForMultiNodeClassification(GraphModel):
     def build_embedding(self, sample_g: DataInput) -> embedding.GraphEmbedding:
         embeddings = {
             node_type: (
-                self.input_tokenizers[node_type].vocab_size,
-                self.input_tokenizers[node_type].token_to_id(tokenization.PAD)
+                self.tokenizers[node_type].vocab_size,
+                self.tokenizers[node_type].token_to_id(tokenization.PAD)
             )
             for node_type in sample_g.ntypes
             if f"{node_type}_id" in sample_g.node_attr_schemes(node_type)
@@ -1363,7 +1363,6 @@ class ModelForTokenizationRepairPlus(TensorModel, TensorEncoderMixin):
                 len(positions) == length
                 for positions, length in zip(decoder_positions, sec_decoder_lengths)
             )
-            # print("max pos:", max([pos.max().item() for pos in decoder_positions]))
 
             outputs["sec"] = self.head["sec"](
                 decoder_inputs=sec_decoder_inputs,

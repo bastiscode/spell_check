@@ -111,6 +111,7 @@ class TokenizationRepairer(_APIBase):
             self,
             inputs: Union[str, List[str]],
             batch_size: int = 16,
+            batch_max_length_factor: Optional[float] = None,
             sort_by_length: bool = True,
             show_progress: bool = False
     ) -> List[List[int]]:
@@ -124,51 +125,16 @@ class TokenizationRepairer(_APIBase):
         if is_tokenization_repair_plus:
             inference_kwargs["output_type"] = "tokenization_repair"
 
-        dataset, loader = get_inference_dataset_and_loader(
-            inputs,
-            task=self.task,
-            max_length=self.max_length,
-            sort_by_length=sort_by_length,
+        all_outputs = super()._run_raw(
+            inputs=inputs,
             batch_size=batch_size,
+            max_length=self.max_length,
+            batch_max_length_factor=batch_max_length_factor,
+            sort_by_length=sort_by_length,
+            show_progress=show_progress,
             **inference_kwargs
         )
 
-        pbar = tqdm(
-            loader,
-            total=dataset.char_length(),
-            ascii=True,
-            leave=False,
-            disable=not show_progress,
-            unit="char"
-        )
-
-        all_outputs = []
-        for i, (batch, infos, _) in enumerate(pbar):
-            batch_length = sum(info.ctx_end - info.ctx_start for info in infos)
-            pbar.set_description(
-                f"[Batch {i + 1}] Repairing tokenization in {len(batch):,} sequences "
-                f"with {batch_length:,} characters in total"
-            )
-
-            # this is a slight hack for now, because fp32 on cpu throws an error even when enabled=False
-            if self.mixed_precision_enabled:
-                with autocast(
-                        device_type=self.device.type,
-                        dtype=self._mixed_precision_dtype,
-                        enabled=self.mixed_precision_enabled
-                ):
-                    outputs = self.task.inference(self.model, batch, **inference_kwargs)
-            else:
-                outputs = self.task.inference(self.model, batch, **inference_kwargs)
-
-            all_outputs.extend(outputs)
-            pbar.update(batch_length)
-
-        pbar.close()
-        all_outputs = reorder_data(all_outputs, dataset.indices)
-        all_outputs = self.task.postprocess_inference_outputs(
-            inputs, dataset.sample_infos, all_outputs, **inference_kwargs
-        )
         if is_tokenization_repair_plus:
             return [output["tokenization_repair"] for output in all_outputs]
         else:
@@ -178,6 +144,7 @@ class TokenizationRepairer(_APIBase):
             self,
             inputs: StringInputOutput,
             batch_size: int = 16,
+            batch_max_length_factor: Optional[float] = None,
             sort_by_length: bool = True,
             show_progress: bool = False
     ) -> Union[List[int], List[List[int]]]:
@@ -190,6 +157,7 @@ class TokenizationRepairer(_APIBase):
         outputs = self._repair_text_raw(
             [inputs] if input_is_string else inputs,
             batch_size,
+            batch_max_length_factor,
             sort_by_length,
             show_progress
         )
@@ -200,11 +168,12 @@ class TokenizationRepairer(_APIBase):
             input_file_path: str,
             output_file_path: Optional[str] = None,
             batch_size: int = 16,
+            batch_max_length_factor: Optional[float] = None,
             sort_by_length: bool = True,
             show_progress: bool = True
     ) -> Optional[Union[List[int], List[List[int]]]]:
         outputs = self._repair_text_raw(
-            input_file_path, batch_size, sort_by_length, show_progress
+            input_file_path, batch_size, batch_max_length_factor, sort_by_length, show_progress
         )
         if output_file_path is not None:
             with open(output_file_path, "w", encoding="utf8") as out_file:

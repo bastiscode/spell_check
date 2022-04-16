@@ -95,14 +95,17 @@ class Graph2Seq(tasks.Task):
     def inference(
             self,
             model: models.ModelForGraph2Seq,
-            inputs: List[Union[str, Sample]],
+            inputs: Union[Batch, List[Union[str, Sample]]],
             **kwargs: Any
     ) -> List[List[str]]:
         self._check_model(model)
         model = model.eval()
         model_cfg: models.ModelForGraph2SeqConfig = model.cfg
 
-        batch = self._batch_sequences_for_inference(inputs)
+        if isinstance(inputs, Batch):
+            batch = inputs
+        else:
+            batch = self._batch_sequences_for_inference(inputs)
 
         g = model.encode(batch.data)
         encoder_outputs, encoder_lengths = utils.encoder_outputs_from_graph(

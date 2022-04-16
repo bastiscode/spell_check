@@ -23,4 +23,3 @@ log_per_epoch: ${oc.env:GNN_LIB_LOG_PER_EPOCH,100}
 eval_per_epoch: ${oc.env:GNN_LIB_EVAL_PER_EPOCH,4}
 seed: 22
 mixed_precision: ${oc.env:GNN_LIB_MIXED_PRECISION,true}
-pin_memory: False

@@ -4,6 +4,7 @@ import torch
 from torch.nn import functional as F
 
 from gnn_lib import models, tasks
+from gnn_lib.data.utils import Sample
 from gnn_lib.modules import utils
 from gnn_lib.utils import data_containers, Batch, to
 
@@ -74,6 +75,6 @@ class Token2Seq(tasks.Task):
     @torch.inference_mode()
     def inference(self,
                   model: models.ModelForToken2Seq,
-                  inputs: Union[List[str], Batch],
+                  inputs: Union[Batch, List[Union[str, Sample]]],
                   **kwargs: Any) -> List[List[str]]:
         raise NotImplementedError

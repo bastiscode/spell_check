@@ -7,7 +7,7 @@ from gnn_lib.data import variants
 from gnn_lib.data.utils import Sample, InferenceInfo
 from gnn_lib.tasks import utils as task_utils
 from gnn_lib.tasks.multi_node_classification import MultiNodeClassification
-from gnn_lib.utils import data_containers
+from gnn_lib.utils import data_containers, Batch
 
 
 class GraphSEDWords(MultiNodeClassification):
@@ -42,7 +42,7 @@ class GraphSEDWords(MultiNodeClassification):
     def inference(
             self,
             model: models.ModelForMultiNodeClassification,
-            inputs: List[Union[str, Sample]],
+            inputs: Union[Batch, List[Union[str, Sample]]],
             **kwargs: Any
     ) -> List[List[int]]:
         detections_dicts = super().inference(model, inputs, **kwargs)

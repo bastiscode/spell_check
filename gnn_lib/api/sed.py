@@ -17,7 +17,7 @@ from gnn_lib.api.utils import (
     load_text_file, save_text_file
 )
 from gnn_lib.data import DatasetVariants
-from gnn_lib.data.utils import clean_sequence
+from gnn_lib.data.utils import clean_sequence, collate
 from gnn_lib.modules import inference
 from gnn_lib.tasks import graph_sed_words, graph_sed_sequence, sed_words, sed_sequence, tokenization_repair_plus
 from gnn_lib.utils import common
@@ -144,68 +144,28 @@ class SpellingErrorDetector(_APIBase):
             inputs: Union[str, List[str]],
             threshold: float = 0.5,
             batch_size: int = 16,
+            batch_max_length_factor: Optional[float] = None,
             sort_by_length: bool = True,
             show_progress: bool = False
     ) -> List[List[int]]:
-        if isinstance(inputs, str):
-            inputs = load_text_file(inputs)
-
-        inputs = [clean_sequence(ipt) for ipt in inputs]
-
         inference_kwargs = {
             "threshold": threshold
         }
-
         is_tokenization_repair_plus = isinstance(self.task, tokenization_repair_plus.TokenizationRepairPlus)
         if is_tokenization_repair_plus:
             inference_kwargs["output_type"] = "sed"
             inference_kwargs["no_repair"] = os.getenv("GNN_LIB_TOKENIZATION_REPAIR_PLUS_NO_REPAIR", "false") == "true"
 
-        dataset, loader = get_inference_dataset_and_loader(
-            inputs,
-            task=self.task,
-            max_length=self.max_length,
-            sort_by_length=sort_by_length,
+        all_outputs = super()._run_raw(
+            inputs=inputs,
             batch_size=batch_size,
+            max_length=self.max_length,
+            batch_max_length_factor=batch_max_length_factor,
+            sort_by_length=sort_by_length,
+            show_progress=show_progress,
             **inference_kwargs
         )
 
-        pbar = tqdm(
-            loader,
-            total=dataset.char_length(),
-            ascii=True,
-            leave=False,
-            disable=not show_progress,
-            unit="char"
-        )
-
-        all_outputs = []
-        for i, (batch, infos, _) in enumerate(pbar):
-            batch_length = sum(info.ctx_end - info.ctx_start for info in infos)
-            pbar.set_description(
-                f"[Batch {i + 1}] Detecting spelling errors in {len(batch):,} sequences "
-                f"with {batch_length:,} characters in total"
-            )
-
-            # this is a slight hack for now, because fp32 on cpu throws an error even when enabled=False
-            if self.mixed_precision_enabled:
-                with autocast(
-                        device_type=self.device.type,
-                        dtype=self._mixed_precision_dtype,
-                        enabled=self.mixed_precision_enabled
-                ):
-                    outputs = self.task.inference(self.model, batch, **inference_kwargs)
-            else:
-                outputs = self.task.inference(self.model, batch, **inference_kwargs)
-
-            all_outputs.extend(outputs)
-            pbar.update(batch_length)
-
-        pbar.close()
-        all_outputs = reorder_data(all_outputs, dataset.indices)
-        all_outputs = self.task.postprocess_inference_outputs(
-            inputs, dataset.sample_infos, all_outputs, **inference_kwargs
-        )
         if is_tokenization_repair_plus:
             return [output["sed"] for output in all_outputs]
         else:
@@ -216,6 +176,7 @@ class SpellingErrorDetector(_APIBase):
             inputs: StringInputOutput,
             threshold: float = 0.5,
             batch_size: int = 16,
+            batch_max_length_factor: Optional[float] = None,
             sort_by_length: bool = True,
             show_progress: bool = False
     ) -> Union[List[int], List[List[int]]]:
@@ -229,6 +190,7 @@ class SpellingErrorDetector(_APIBase):
             [inputs] if input_is_string else inputs,
             threshold,
             batch_size,
+            batch_max_length_factor,
             sort_by_length,
             show_progress
         )
@@ -240,11 +202,12 @@ class SpellingErrorDetector(_APIBase):
             output_file_path: Optional[str] = None,
             threshold: float = 0.5,
             batch_size: int = 16,
+            batch_max_length_factor: Optional[float] = None,
             sort_by_length: bool = True,
             show_progress: bool = True
     ) -> Optional[Union[List[int], List[List[int]]]]:
         outputs = self._detect_text_raw(
-            input_file_path, threshold, batch_size, sort_by_length, show_progress
+            input_file_path, threshold, batch_size, batch_max_length_factor, sort_by_length, show_progress
         )
         if output_file_path is not None:
             save_text_file(output_file_path, iter(inference.inference_output_to_str(output) for output in outputs))

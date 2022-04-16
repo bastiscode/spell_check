@@ -205,7 +205,8 @@ def corrupt_words(
 
     special_tokens_mask = np.array([utils.is_special_token(doc[i]) for i in range(len(words))], dtype=bool)
 
-    artificial_p = realistic_p = 0
+    artificial_p = 0
+    realistic_p = 0
     if re_weight_edit_token_p:
         num_non_special_tokens = np.logical_not(special_tokens_mask).sum()
         if corrupt_method == "artificial":
@@ -286,14 +287,6 @@ def corrupt_words(
             )
             for idx in edit_indices:
                 edited_words[idx] = artificial_edits(edited_words[idx], 1, rand)
-
-            # print(f"min edit tokens: {min_edit_tokens}, {sum(edited)}, {editable_indices}, {edit_indices}"
-            #       f"\n{words}\n{edited_words}")
-
-    # global tokens_edited, tokens_seen
-    # tokens_seen += len(words)
-    # tokens_edited += sum(w != e for w, e in zip(words, edited_words))
-    # print(f"ratio: {100 * tokens_edited / tokens_seen:.2f}%")
 
     return edited_words
 

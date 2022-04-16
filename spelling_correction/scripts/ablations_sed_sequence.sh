@@ -36,14 +36,12 @@ if [[ $ablations_type == "gnn" ]]; then
     "GNN_LIB_SPELL_CHECK_INDEX"
     )
   declare -a ablations=(
-    "false attention residual false false false true false null" # no_feat
-#    "false attention residual false true false true false null" # default
-#    "true attention residual false true true true false null" # dep + message_gating
+#    "false attention residual false false false true false null" # no_feat
+    "false attention residual false true false true false null" # default
   )
   declare -a ablation_names=(
-    "gnn_no_feat"
-#    "gnn_cliques_wfc"
-#    "gnn_cliques_wfc_dep_gating"
+#    "gnn_no_feat"
+    "gnn_cliques_wfc"
   )
 
   for ablation_idx in ${!ablations[@]}; do

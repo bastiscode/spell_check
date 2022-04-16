@@ -6,13 +6,13 @@ lr_scheduler: ${from_file:lr_scheduler/step_with_0.05_warmup.yaml}
 experiment_dir: ${oc.env:GNN_LIB_EXPERIMENT_DIR}
 data_dir: ${oc.env:GNN_LIB_DATA_DIR}
 datasets:
-#  - ${oc.env:GNN_LIB_DATA_DIR}/processed/wikidump_paragraphs_tokenization_repair_plus
+  - ${oc.env:GNN_LIB_DATA_DIR}/processed/wikidump_paragraphs_tokenization_repair_plus
   - ${oc.env:GNN_LIB_DATA_DIR}/processed/bookcorpus_paragraphs_tokenization_repair_plus
 dataset_limits:
-#  - ${oc.env:GNN_LIB_DATA_LIMIT}
+  - ${oc.env:GNN_LIB_DATA_LIMIT}
   - ${oc.env:GNN_LIB_DATA_LIMIT}
 val_splits:
-#  - 2500
+  - 2500
   - 2500
 
 experiment_name: ${oc.env:GNN_LIB_EXPERIMENT_NAME,dummy}
@@ -23,5 +23,3 @@ log_per_epoch: ${oc.env:GNN_LIB_LOG_PER_EPOCH,100}
 eval_per_epoch: ${oc.env:GNN_LIB_EVAL_PER_EPOCH,4}
 seed: 22
 mixed_precision: ${oc.env:GNN_LIB_MIXED_PRECISION,true}
-pin_memory: False
-num_workers: ${oc.env:GNN_LIB_NUM_WORKERS,null}

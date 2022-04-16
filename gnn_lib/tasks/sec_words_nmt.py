@@ -1,4 +1,4 @@
-from typing import List, Any, Union, Tuple
+from typing import List, Any, Union, Tuple, Optional
 
 import torch
 
@@ -8,6 +8,7 @@ from gnn_lib.data.utils import Sample, flatten, InferenceInfo
 from gnn_lib.modules import inference
 from gnn_lib.modules import utils as mod_utils
 from gnn_lib.tasks.token2seq import Token2Seq
+from gnn_lib.utils import Batch
 
 
 class SECWordsNMT(Token2Seq):
@@ -15,15 +16,21 @@ class SECWordsNMT(Token2Seq):
     def inference(
             self,
             model: models.ModelForToken2Seq,
-            inputs: List[Union[str, Sample]],
+            inputs: Union[Batch, List[Union[str, Sample]]],
+            input_strings: Optional[List[str]] = None,
             **kwargs: Any
     ) -> List[List[str]]:
         self._check_model(model)
         model = model.eval()
         model_cfg: models.ModelForToken2SeqConfig = model.cfg
 
-        batch = self._batch_sequences_for_inference(inputs)
-        inputs = [model.input_tokenizer.normalize(str(ipt)) for ipt in inputs]
+        if isinstance(inputs, Batch):
+            assert input_strings is not None
+            batch = inputs
+            inputs = [model.input_tokenizer.normalize(ipt) for ipt in input_strings]
+        else:
+            batch = self._batch_sequences_for_inference(inputs)
+            inputs = [model.input_tokenizer.normalize(str(ipt)) for ipt in inputs]
 
         encoder_group_lengths: List[torch.Tensor] = batch.info["encoder_group_lengths"]
         detections = kwargs.get("detections", [[1] * len(group_lengths) for group_lengths in encoder_group_lengths])
@@ -73,17 +80,15 @@ class SECWordsNMT(Token2Seq):
         word_results_per_input = mod_utils.split(word_results, words_per_input)
 
         all_results = []
-        for input_str, word_results, word_detections, num_words, group_lengths in zip(
+        for input_str, word_results, word_detections, num_words in zip(
                 inputs,
                 word_results_per_input,
                 detections,
-                words_per_input,
-                encoder_group_lengths
+                words_per_input
         ):
             assert len(word_results) == num_words
 
             input_words = input_str.split()
-            assert len(input_words) == len(group_lengths)
 
             batch_result_str = []
             if len(word_results) == 0:

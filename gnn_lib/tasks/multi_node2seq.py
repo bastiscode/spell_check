@@ -6,6 +6,7 @@ import torch
 from torch.nn import functional as F
 
 from gnn_lib import models, tasks
+from gnn_lib.data.utils import Sample
 from gnn_lib.modules.utils import pad
 from gnn_lib.utils import Batch, to
 
@@ -74,7 +75,7 @@ class MultiNode2Seq(tasks.Task):
     def inference(
             self,
             model: models.ModelForMultiNode2Seq,
-            inputs: Union[List[str], Tuple[dgl.DGLHeteroGraph, List[Dict[str, Any]]]],
+            inputs: Union[Batch, List[Union[str, Sample]]],
             **kwargs: Any
     ) -> Dict[str, List[List[List[str]]]]:
         raise NotImplementedError

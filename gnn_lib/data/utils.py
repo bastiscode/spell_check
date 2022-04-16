@@ -7,7 +7,6 @@ from collections import Counter
 from typing import Union, List, Tuple, Optional, Iterator, Any, Dict, Iterable, Callable
 
 import dgl
-import Levenshtein
 import lmdb
 import spacy
 import torch
@@ -16,7 +15,7 @@ from spacy.tokens import Token, Doc
 from torch import distributed as dist
 from torch.utils.data import Sampler, DistributedSampler, Dataset
 
-from gnn_lib.utils import DataInput, Batch
+from gnn_lib.utils import Batch
 from gnn_lib.utils import common
 from gnn_lib.utils.distributed import DistributedDevice
 
@@ -154,7 +153,8 @@ TokenizationFn = Callable[[Doc], List[List[int]]]
 NeighborFn = Callable[[List[Doc]], List[List[Neighbors]]]
 
 
-def get_edit_distance_neighbor_fn(dictionary: Dict[str, int], num_neighbors: int, normalized: bool = True) -> NeighborFn:
+def get_edit_distance_neighbor_fn(dictionary: Dict[str, int], num_neighbors: int,
+                                  normalized: bool = True) -> NeighborFn:
     def _neigh(docs: List[Doc]) -> List[List[Neighbors]]:
         neighbor_lists = []
         for doc in docs:
@@ -344,7 +344,7 @@ def open_lmdb(lmdb_path: str, write: bool = False) -> lmdb.Environment:
     )
 
 
-def collate(items: List[Tuple[DataInput, Dict[str, Any]]]) -> Batch:
+def collate(items: List[Tuple[Union[torch.Tensor, dgl.DGLHeteroGraph], Dict[str, Any]]]) -> Batch:
     assert len(items)
     data = []
     info = {}
@@ -417,14 +417,17 @@ class DistributedDynamicSampler(DistributedSampler):
 
 
 class BucketSampler(Sampler):
-    def __init__(self,
-                 dataset: dgl.data.DGLDataset,
-                 values: List[int],
-                 batch_max_value: int,
-                 seed: int,
-                 shuffle: bool = False,
-                 bucket_span: Optional[int] = None,
-                 max_value: int = 512) -> None:
+    def __init__(
+            self,
+            dataset: Dataset,
+            values: List[int],
+            batch_max_value: int,
+            seed: int,
+            shuffle: bool = False,
+            bucket_span: Optional[int] = None,
+            max_value: int = 512,
+            verbose: bool = True
+    ) -> None:
         super().__init__(None)
         self.logger = common.get_logger("BUCKET_SAMPLER")
         self.dataset = dataset
@@ -442,7 +445,7 @@ class BucketSampler(Sampler):
         else:
             self._build_batch_buckets()
 
-        if not dist.is_initialized() or (dist.is_initialized() and dist.get_rank() == 0):
+        if (verbose and (not dist.is_initialized() or (dist.is_initialized() and dist.get_rank() == 0))):
             self.logger.info(
                 f"Generated {len(self.batches)} batches with {sum(len(b) for b in self.batches)} items in total "
                 f"(batch_max_value={self.batch_max_value}, bucket_span={self.bucket_span}, max_value={self.max_value})"

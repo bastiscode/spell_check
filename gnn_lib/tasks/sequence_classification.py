@@ -57,7 +57,7 @@ class SequenceClassification(tasks.Task):
     def inference(
             self,
             model: models.ModelForTokenClassification,
-            inputs: List[Union[str, Sample]],
+            inputs: Union[Batch, List[Union[str, Sample]]],
             **kwargs: Any
     ) -> List[int]:
         self._check_model(model)
@@ -66,7 +66,10 @@ class SequenceClassification(tasks.Task):
         threshold = kwargs.get("threshold", 0.5)
         temperature = kwargs.get("temperature", 1.0)
 
-        batch = self._batch_sequences_for_inference(inputs)
+        if isinstance(inputs, Batch):
+            batch = inputs
+        else:
+            batch = self._batch_sequences_for_inference(inputs)
         outputs, _ = model(batch.data, **batch.info)
 
         return_logits = kwargs.get("return_logits", False)

@@ -120,12 +120,12 @@ _METRIC_TO_HIGHER_BETTER = {
 def get_tokenization_repair_models_and_metrics() -> Tuple[Dict[int, List[Tuple[str, str]]], Set[str]]:
     dictionary = {
         0: [
-
+            ("tokenization_repair", "tokenization_repair")
         ],
         1: [
-            ("tokenization_repair", "tokenization_repair"),
             ("tokenization_repair+", "tokenization_repair_plus_sed"),
             ("tokenization_repair+fixed", "tokenization_repair_plus_fixed"),
+            ("tokenization_repair++", "tokenization_repair_plus_sec"),
         ]
     }
     metric_names = {"sequence_accuracy"}
@@ -194,8 +194,9 @@ def get_sec_advanced_models_and_metrics():
                    ("gnn+ --> transformer_word", "gnn_cliques_wfc_plus_transformer_sec_words_nmt")
                ],
                3: [
-                   ("new transformer_word + baseline_ood", "baseline_ood_plus_transformer_sec_words_nmt"),
-                   ("old transformer_word + baseline_ood", "transformer_sec_words_nmt_with_sed_baseline_ood")
+                   ("tokenization_repair++", "tokenization_repair_plus_sec"),
+                   ("tokenization_repair++no_detect", "tokenization_repair_plus_sec_no_detect"),
+                   ("tokenization_repair++high_rec", "tokenization_repair_plus_sec_high_rec")
                ]
            }, {"sequence_accuracy", "mean_normalized_edit_distance"}
 

@@ -2,10 +2,16 @@ import argparse
 import os
 import pprint
 import random
+from typing import List
+
+import Levenshtein
+import altair as alt
 
 from gnn_lib.api import tables
 from gnn_lib.api.utils import load_text_file, save_text_file
+from gnn_lib.data import utils
 from gnn_lib.utils import io, common
+
 from spelling_correction.utils.metrics import is_real_word
 
 
@@ -17,6 +23,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--out-dir", type=str, required=True)
     parser.add_argument("--fmt", choices=["markdown", "latex"], default="latex")
     return parser.parse_args()
+
+
+def generate_edit_distance_histogram(edit_distances: List[int]) -> alt.Chart:
+    chart = alt.Chart().mark_bar()
+    return chart
 
 
 def generate_statistics(args: argparse.Namespace) -> None:
@@ -38,8 +49,10 @@ def generate_statistics(args: argparse.Namespace) -> None:
 
     samples = {}
 
+    edit_distance_statistics = {}
     statistics = {}
     for group, splits in benchmark_groups.items():
+        group_edit_distance_statistics = {}
         group_statistics = {}
         group_samples = {}
         for split in splits:
@@ -58,6 +71,7 @@ def generate_statistics(args: argparse.Namespace) -> None:
             num_words = 0
             real_word_errors = 0
             non_word_errors = 0
+            error_edit_distances = []
             additional_stats = []
             real_word_misspellings = {}
             non_word_misspellings = {}
@@ -78,14 +92,25 @@ def generate_statistics(args: argparse.Namespace) -> None:
                         if corrupt_word not in non_word_misspellings:
                             non_word_misspellings[corrupt_word] = correct_word
 
-                num_words += len(corrupt_words)
-
                 for corrupt_word, correct_word in zip(corrupt_words, correct_words):
-                    if corrupt_word != correct_word:
+                    corrupt_regex, _ = utils.tokenize_words_regex(corrupt_word)
+                    correct_regex, _ = utils.tokenize_words_regex(correct_word)
+
+                    num_words += len(corrupt_regex)
+                    if len(corrupt_regex) != len(correct_regex):
                         if is_real_word(corrupt_word, dictionary):
                             real_word_errors += 1
                         else:
                             non_word_errors += 1
+                        error_edit_distances.append(Levenshtein.distance(corrupt_word, correct_word))
+                    else:
+                        for corrupt, correct in zip(corrupt_regex, correct_regex):
+                            if corrupt != correct:
+                                if is_real_word(corrupt, dictionary):
+                                    real_word_errors += 1
+                                else:
+                                    non_word_errors += 1
+                                error_edit_distances.append(Levenshtein.distance(corrupt, correct))
 
                 if args.benchmark_type == "sed_sequence":
                     if len(additional_stats) == 0:
@@ -105,9 +130,11 @@ def generate_statistics(args: argparse.Namespace) -> None:
                 total_errors,
                 additional_stats
             )
+            group_edit_distance_statistics[split] = error_edit_distances
 
         samples[group] = group_samples
         statistics[group] = group_statistics
+        edit_distance_statistics[group] = group_edit_distance_statistics
 
     logger.info(f"Got the following statistics:\n{pprint.pformat(statistics)}")
 

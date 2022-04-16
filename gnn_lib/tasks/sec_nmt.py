@@ -1,13 +1,15 @@
 import re
-from typing import List, Any, Union, Tuple, Optional, Callable
+from typing import List, Any, Union, Tuple, Optional
 
 import torch
+
 from gnn_lib import models
 from gnn_lib.data import tokenization
 from gnn_lib.data.utils import Sample, InferenceInfo
 from gnn_lib.modules import inference
-from gnn_lib.tasks.seq2seq import Seq2Seq
 from gnn_lib.tasks import utils as task_utils
+from gnn_lib.tasks.seq2seq import Seq2Seq
+from gnn_lib.utils import Batch
 
 
 def _match_input_output(input_string: str, output_string: str) -> str:
@@ -41,21 +43,27 @@ class SECNMT(Seq2Seq):
     def inference(
             self,
             model: models.ModelForSeq2Seq,
-            inputs: List[Union[str, Sample]],
+            inputs: Union[Batch, List[Union[str, Sample]]],
+            input_strings: Optional[List[int]] = None,
             **kwargs: Any
     ) -> List[List[str]]:
-        if "detections" not in kwargs:
-            kwargs.update({
-                "input_strings": [model.input_tokenizer.normalize(str(ipt)) for ipt in inputs]
-            })
-            return super().inference(model, inputs, **kwargs)
-        else:
-            self._check_model(model)
-            model = model.eval()
-            model_cfg: models.ModelForSeq2SeqConfig = model.cfg
+        self._check_model(model)
+        model = model.eval()
+        model_cfg: models.ModelForSeq2SeqConfig = model.cfg
 
+        if isinstance(inputs, Batch):
+            assert input_strings is not None
+            batch = inputs
+            input_strings = [model.input_tokenizer.normalize(ipt) for ipt in input_strings]
+        else:
             batch = self._batch_sequences_for_inference(inputs)
-            input_words = [str(ipt).split() for ipt in inputs]
+            input_strings = [model.input_tokenizer.normalize(str(ipt)) for ipt in inputs]
+
+        if "detections" not in kwargs:
+            return super().inference(model, batch, input_strings=input_strings, **kwargs)
+
+        else:
+            input_words = [ipt.split() for ipt in input_strings]
 
             encoder_inputs, encoder_padding_mask = model.pad_inputs(batch.data)
             encoder_outputs = model.encode(encoder_inputs, encoder_padding_mask)
@@ -91,7 +99,7 @@ class SECNMT(Seq2Seq):
                     break
 
                 kwargs.update({
-                    "input_strings": [inputs[i] for i in inputs_to_decode],
+                    "input_strings": [input_strings[i] for i in inputs_to_decode],
                     "output_strings": [" ".join(output_words[i]) for i in inputs_to_decode]
                 })
 

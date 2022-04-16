@@ -7,19 +7,21 @@ import platform
 import re
 import shutil
 import zipfile
-from typing import Optional, Union, List, Tuple, Dict, Any, Iterator
+from typing import Optional, Union, List, Tuple, Dict, Any, Iterator, Callable
 
 import requests
 import torch
 from omegaconf import OmegaConf
-from torch.utils.data import DataLoader, Dataset
+from torch import multiprocessing as mp, autocast
+from torch.utils.data import DataLoader, Dataset, BatchSampler, SequentialSampler
 from tqdm import tqdm
 
 from gnn_lib import tasks, models
 from gnn_lib.api import tables
 from gnn_lib.data import utils
+from gnn_lib.data.utils import BucketSampler, clean_sequence
 from gnn_lib.tasks import Task
-from gnn_lib.utils import config, common
+from gnn_lib.utils import config, common, DataInput, InfoInput, Batch
 
 _BASE_URL = "https://tokenization.cs.uni-freiburg.de/transformer"
 _CONFIGS_URL = f"{_BASE_URL}/configs.zip"
@@ -82,6 +84,74 @@ class _APIBase:
             force_download: bool
     ) -> "_APIBase":
         raise NotImplementedError
+
+    @torch.inference_mode()
+    def _run_raw(
+            self,
+            inputs: Union[str, List[str]],
+            batch_size: int,
+            max_length: int,
+            batch_max_length_factor: Optional[float] = None,
+            sort_by_length: bool = True,
+            show_progress: bool = False,
+            **inference_kwargs: Any
+    ) -> List[Any]:
+        if isinstance(inputs, str):
+            inputs = load_text_file(inputs)
+
+        inputs = [clean_sequence(ipt) for ipt in inputs]
+
+        num_workers = 0 if len(inputs) <= 16 else min(4, len(os.sched_getaffinity(0)))
+        dataset, loader = get_inference_dataset_and_loader(
+            sequences=inputs,
+            task=self.task,
+            max_length=max_length,
+            sort_by_length=sort_by_length,
+            batch_size=batch_size,
+            batch_max_length_factor=batch_max_length_factor,
+            num_workers=num_workers,
+            **inference_kwargs
+        )
+
+        pbar = tqdm(
+            loader,
+            total=dataset.byte_length(),
+            ascii=True,
+            leave=False,
+            disable=not show_progress,
+            unit="B",
+            unit_scale=True,
+            unit_divisor=1000
+        )
+
+        all_outputs = []
+        for i, (batch, infos, indices) in enumerate(pbar):
+            batch_strings = [str(dataset.samples[idx]) for idx in indices]
+            batch_bytes = sum(len(s.encode("utf8")) for s in batch_strings)
+
+            pbar.set_description(
+                f"[Batch {i + 1}] Running {self.task_name} on {len(indices):,} sequences ({batch_bytes / 1000:,.1f}kB)"
+            )
+
+            # this is a slight hack for now, because fp32 on cpu throws an error even when enabled=False
+            if self.mixed_precision_enabled:
+                with autocast(
+                        device_type=self.device.type,
+                        dtype=self._mixed_precision_dtype,
+                        enabled=self.mixed_precision_enabled
+                ):
+                    outputs = self.task.inference(self.model, batch, **inference_kwargs)
+            else:
+                outputs = self.task.inference(self.model, batch, **inference_kwargs)
+
+            all_outputs.extend(outputs)
+            pbar.update(batch_bytes)
+
+        pbar.close()
+        all_outputs = reorder_data(all_outputs, dataset.indices)
+        return self.task.postprocess_inference_outputs(
+            inputs, dataset.sample_infos, all_outputs, **inference_kwargs
+        )
 
     def set_precision(self, precision: str) -> None:
         assert precision in {"fp32", "fp16", "bfp16"}
@@ -429,11 +499,20 @@ class InferenceDataset(Dataset):
             )
             self.indices = [idx for idx, _ in indices_lengths]
 
-    def __getitem__(self, idx: int) -> Tuple[Union[str, utils.Sample], utils.InferenceInfo, int]:
-        return self.samples[self.indices[idx]], self.sample_infos[self.indices[idx]], self.indices[idx]
+    def __getitem__(self, idx: int) -> Tuple[Tuple[DataInput, InfoInput], utils.InferenceInfo, int]:
+        data = self.task.variant.get_inputs(self.samples[self.indices[idx]], is_inference=True)
+        return data, self.sample_infos[self.indices[idx]], self.indices[idx]
 
     def __len__(self) -> int:
         return len(self.samples)
+
+    @property
+    def lengths(self) -> List[int]:
+        return [info.length for info in self.sample_infos]
+
+    def byte_length(self) -> int:
+        return sum([len(str(sample).encode("utf8"))
+                    for sample, info in zip(self.samples, self.sample_infos)])
 
     def char_length(self) -> int:
         return sum(info.ctx_end - info.ctx_start for info in self.sample_infos)
@@ -442,9 +521,11 @@ class InferenceDataset(Dataset):
         return sum(info.length for info in self.sample_infos)
 
     @staticmethod
-    def collate_fn(items: List[Tuple[Union[str, utils.Sample], utils.InferenceInfo, int]]) \
-            -> Tuple[List[Union[str, utils.Sample]], List[utils.InferenceInfo], List[int]]:
-        return zip(*items)  # type: ignore
+    def collate_fn(
+            items: List[Tuple[Tuple[DataInput, InfoInput], utils.InferenceInfo, int]]
+    ) -> Tuple[Batch, List[utils.InferenceInfo], List[int]]:
+        data, infos, indices = list(zip(*items))
+        return utils.collate(data), infos, indices
 
 
 def get_inference_dataset_and_loader(
@@ -452,25 +533,48 @@ def get_inference_dataset_and_loader(
         task: Task,
         max_length: int,
         sort_by_length: bool,
-        batch_size: int,
+        batch_size: int = 16,
+        batch_max_length_factor: Optional[float] = None,
         context_length: Optional[int] = None,
+        num_workers: int = 0,
         **kwargs: Any
 ) -> Tuple[InferenceDataset, DataLoader]:
     dataset = InferenceDataset(
-        sequences,
-        task,
-        max_length,
+        strings=sequences,
+        task=task,
+        max_length=max_length,
         context_length=context_length,
         sort_by_length=sort_by_length,
         **kwargs
     )
 
+    if batch_max_length_factor is not None:
+        assert batch_max_length_factor >= 1.0, \
+            f"batch max length factor {batch_max_length_factor} must be larger or equal to 1"
+        batch_sampler = BucketSampler(
+            dataset=dataset,
+            values=dataset.lengths,
+            batch_max_value=int(batch_max_length_factor) * max_length,
+            seed=0,
+            shuffle=False,
+            max_value=max_length,
+            verbose=False
+        )
+    else:
+        batch_sampler = BatchSampler(
+            sampler=SequentialSampler(dataset),
+            batch_size=batch_size,
+            drop_last=False
+        )
+
+    mp.set_sharing_strategy("file_system")
     loader = DataLoader(
         dataset=dataset,
-        batch_size=batch_size,
-        collate_fn=dataset.collate_fn
+        batch_sampler=batch_sampler,
+        collate_fn=dataset.collate_fn,
+        num_workers=num_workers,
+        worker_init_fn=lambda worker_id: mp.set_sharing_strategy("file_system")
     )
-
     return dataset, loader
 
 

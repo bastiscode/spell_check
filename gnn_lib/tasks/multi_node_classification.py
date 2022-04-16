@@ -61,13 +61,16 @@ class MultiNodeClassification(tasks.Task):
     def inference(
             self,
             model: models.ModelForMultiNodeClassification,
-            inputs: List[Union[str, Sample]],
+            inputs: Union[Batch, List[Union[str, Sample]]],
             **kwargs: Any
     ) -> List[Dict[str, List]]:
         self._check_model(model)
         model = model.eval()
 
-        batch = self._batch_sequences_for_inference(inputs)
+        if isinstance(inputs, Batch):
+            batch = inputs
+        else:
+            batch = self._batch_sequences_for_inference(inputs)
         outputs, _ = model(batch.data, **batch.info)
 
         return_logits = kwargs.get("return_logits", False)

@@ -825,7 +825,8 @@ class TokenizationRepairPlus(TokenizationRepair):
                 "groups": utils.get_character_groups_from_repaired_doc(list(str(input_sample)), repaired_doc)
             }
 
-            info["word_features"] = utils.get_word_features(repaired_doc, self.dictionary)
+            if self.cfg.add_word_features:
+                info["word_features"] = utils.get_word_features(repaired_doc, self.dictionary)
 
             input_group_lengths = [0] * len(target_words)
             word_group_lengths = [0] * len(target_words)

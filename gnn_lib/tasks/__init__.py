@@ -528,7 +528,7 @@ class Task:
     def inference(
             self,
             model: Model,
-            inputs: List[Union[str, data_utils.Sample]],
+            inputs: Union[Batch, List[Union[str, data_utils.Sample]]],
             **kwargs: Any
     ) -> Any:
         raise NotImplementedError

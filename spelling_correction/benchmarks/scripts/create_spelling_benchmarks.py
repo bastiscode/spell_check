@@ -74,21 +74,25 @@ def create(args: argparse.Namespace) -> None:
     else:
         correct_sequences_out_file = None
 
+    edit_token_p = 0.05 if args.output_type == "sed_sequence" else None
+    min_edit_tokens = 1 if args.output_type == "sed_sequence" else None
     if args.misspelling_type == "artificial":
         noise = preprocessing.ArtificialNoise(
             preprocessing.ArtificialNoiseConfig(
-                edit_token_p=0.2,
-                num_edits_p=0.8
+                edit_token_p=edit_token_p,
+                num_edits_p=0.8,
+                min_edit_tokens=min_edit_tokens
             ),
             args.seed
         )
     else:
         noise = preprocessing.RealisticNoise(
             preprocessing.RealisticNoiseConfig(
-                edit_token_p=0.2,
+                edit_token_p=edit_token_p,
                 word_misspellings_file=os.path.join(
                     args.misspellings_dir, f"{args.misspelling_split}_misspellings.json"
-                )
+                ),
+                min_edit_tokens=min_edit_tokens
             ),
             args.seed
         )
