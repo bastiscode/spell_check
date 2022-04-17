@@ -18,8 +18,8 @@
 __pycache__**
 cc.en.*
 
-/spelling_correction/configs/configs.zip
-/spelling_correction/benchmarks/test*
-/spelling_correction/benchmarks/dev*
-/spelling_correction/benchmarks/matthias
-/spelling_correction/demo/components/plotting/streamlit_network_graph/frontend/node_modules
+/spell_checking/configs/configs.zip
+/spell_checking/benchmarks/test*
+/spell_checking/benchmarks/dev*
+/spell_checking/benchmarks/matthias
+/spell_checking/demo/components/plotting/streamlit_network_graph/frontend/node_modules

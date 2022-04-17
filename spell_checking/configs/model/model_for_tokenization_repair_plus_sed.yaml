@@ -1,0 +1,16 @@
+type: MODEL_FOR_TOKENIZATION_REPAIR_PLUS
+
+embedding: ${from_file:embedding/token_embedding.yaml}
+max_length: 512
+
+hidden_dim: ${oc.env:NSC_HIDDEN_DIM,512}
+dropout: 0.1
+
+input_type: "char"
+output_type: "tokenization_repair_plus_sed"
+
+num_input_layers: ${oc.env:NSC_NUM_INPUT_LAYERS,6}
+num_word_layers: ${oc.env:NSC_NUM_WORD_LAYERS,6}
+
+start_from_tokenization_repair_checkpoint: ${oc.env:NSC_START_FROM_TOKENIZATION_REPAIR_CHECKPOINT,null}
+fix_tokenization_repair: ${oc.env:NSC_FIX_TOKENIZATION_REPAIR,false}

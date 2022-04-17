@@ -1,0 +1,13 @@
+type: MODEL_FOR_TOKEN2SEQ
+
+embedding: ${from_file:embedding/token_embedding.yaml}
+max_length: 512
+max_output_length: 1024
+
+hidden_dim: ${oc.env:NSC_HIDDEN_DIM,512}
+dropout: 0.1
+num_encoder_layers: ${oc.env:NSC_NUM_ENCODER_LAYERS,6}
+num_decoder_layers: ${oc.env:NSC_NUM_DECODER_LAYERS,6}
+
+input_tokenizer: ${from_file:tokenizer/bpe_no_prefix_space.yaml}
+output_tokenizer: ${from_file:tokenizer/bpe_no_prefix_space.yaml}

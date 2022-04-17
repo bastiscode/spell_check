@@ -1,0 +1,11 @@
+
+.PHONY: loc
+loc:
+	git ls-files | grep "\.py" | xargs wc -l
+
+.PHONY: matthias-thesis
+matthias-thesis:
+	docker run --runtime=nvidia -it \
+	-v $(shell pwd)/third_party/matthias-master/thesis:/external \
+	-v $(shell pwd)/spell_checking/benchmarks/test/sec:/sec \
+	-p 1234:1234 matthias-hertel-thesis

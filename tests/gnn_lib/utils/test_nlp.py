@@ -1,10 +1,11 @@
 import string
-from typing import List, Tuple
+from typing import Tuple
 
 import numpy as np
 import pytest
 
-import gnn_lib.data.utils
+from nsc.data import utils
+from nsc.data import preprocessing
 
 
 class TestNLP:
@@ -41,7 +42,7 @@ class TestNLP:
         cleaned_sequence = TestNLP.randomly_insert_whitespaces(string.ascii_letters, p=0.2, seed=seed).strip()
         uncleaned_sequence = TestNLP.add_noise(cleaned_sequence, p=0.2, seed=seed)
 
-        assert gnn_lib.data.utils.clean_sequence(uncleaned_sequence) == cleaned_sequence
+        assert utils.clean_sequence(uncleaned_sequence) == cleaned_sequence
 
     @pytest.mark.parametrize("sequence", [
         ("This is a valid sequence", True),
@@ -52,7 +53,7 @@ class TestNLP:
     ])
     @pytest.mark.parametrize("min_length", [0, 5, 10])
     def test_is_valid_sequence(self, sequence: Tuple[str, int], min_length: int) -> None:
-        assert gnn_lib.data.utils.is_valid_sequence(sequence[0], min_length=min_length) == \
+        assert utils.is_valid_sequence(sequence[0], min_length=min_length) == \
                (sequence[1] if len(sequence[0]) >= min_length else False)
 
     @pytest.mark.parametrize("token", ["this", "Test", "something"])
@@ -65,7 +66,7 @@ class TestNLP:
     ])
     @pytest.mark.parametrize("seed", list(range(20)))
     def test_edit_token(self, token: str, include: Tuple[int], seed: int) -> None:
-        edited_token = gnn_lib.data.utils.edit_token(token, include=include, rand=np.random.RandomState(seed))[0]
+        edited_token = preprocessing.edit_token(token, include=include, rand=np.random.default_rng(seed))[0]
         if include == 0:
             # insert
             assert len(edited_token) == len(token) + 1

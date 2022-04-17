@@ -1,0 +1,11 @@
+type: MODEL_FOR_SEQUENCE_CLASSIFICATION
+
+embedding: ${from_file:embedding/token_embedding.yaml}
+
+hidden_dim: ${oc.env:NSC_HIDDEN_DIM,512}
+dropout: 0.1
+num_layers: ${oc.env:NSC_NUM_ENCODER_LAYERS,6}
+
+num_classes: 2
+
+tokenizer: ${from_file:tokenizer/bpe_no_prefix_space.yaml}

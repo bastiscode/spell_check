@@ -1,0 +1,4 @@
+type: TRANSFORMER_ENCODER_GNN
+
+num_layers: ${oc.env:NSC_NUM_LAYERS,6}
+dropout: 0.1

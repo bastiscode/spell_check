@@ -1,25 +1,25 @@
 from setuptools import setup
 
-with open("README.md", "r", encoding="utf8") as rdm:
+with open("README.rst", "r", encoding="utf8") as rdm:
     long_description = rdm.read()
 
-with open("gnn_lib/version.py", "r", encoding="utf8") as vf:
+with open("nsc/version.py", "r", encoding="utf8") as vf:
     version = vf.readlines()[-1].strip().split()[-1].strip("\"'")
 
 setup(
-    name="gsc",
+    name="nsc",
     version=version,
-    description="Spell checking using Transformers and Graph Neural Networks",
+    description="Neural spell checking using Transformers and Graph Neural Networks",
     long_description=long_description,
     long_description_content_type="text/markdown",
     author="Sebastian Walter",
     author_email="swalter@tf.uni-freiburg.de",
     python_requires=">=3.6",
-    packages=["gnn_lib"],
+    packages=["nsc"],
     scripts=[
-        "bin/gsec",
-        "bin/gsed",
-        "bin/trt"
+        "bin/nsec",
+        "bin/nsed",
+        "bin/ntr"
     ],
     install_requires=[
         "torch>=1.11.0",

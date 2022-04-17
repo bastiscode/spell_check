@@ -14,9 +14,10 @@ dist
 /third_party
 .cache
 *.zip
+docs
 
-/spelling_correction/.transformers_cache
-/spelling_correction/baselines/jamspell
-/spelling_correction/benchmarks/dev
-/spelling_correction/benchmarks/test
-/spelling_correction/benchmarks/matthias
+/spell_checking/.transformers_cache
+/spell_checking/baselines/jamspell
+/spell_checking/benchmarks/dev
+/spell_checking/benchmarks/test
+/spell_checking/benchmarks/matthias

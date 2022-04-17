@@ -1,0 +1,5 @@
+type: SGD
+lr: ${oc.env:NSC_LR,0.0001}
+weight_decay: ${oc.env:NSC_WEIGHT_DECAY,0.001}
+momentum: 0.9
+zero_redundancy: false

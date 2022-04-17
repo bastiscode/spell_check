@@ -1,2 +1,0 @@
-type: BPE
-file_path: ${oc.env:GNN_LIB_DATA_DIR}/tokenizers/bpe/wiki_bookcorpus_10k_default.pkl

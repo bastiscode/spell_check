@@ -1,4 +1,0 @@
-type: TRANSFORMER_ENCODER
-
-num_layers: ${oc.env:GNN_LIB_NUM_LAYERS,6}
-dropout: 0.1

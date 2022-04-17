@@ -1,0 +1,317 @@
+#!/usr/bin/env python
+
+import argparse
+import logging
+import os
+import sys
+import time
+from typing import Tuple, Optional, List
+
+import torch
+from torch.backends import cudnn
+
+import nsc
+from nsc import SpellingErrorCorrector, get_available_spelling_error_correction_models
+from nsc.api.utils import load_text_file, generate_report, save_text_file
+from nsc.utils import common
+from nsc.tasks import utils as task_utils
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        "Spelling error correction using Transformers and Graph Neural Networks",
+        description="Correct spelling errors using Transformer and Graph Neural Network models."
+    )
+    parser.add_argument(
+        "-m",
+        "--model",
+        choices=[model.name for model in get_available_spelling_error_correction_models()],
+        default=get_available_spelling_error_correction_models()[0].name,
+        help="Name of the model to use for spelling error correction"
+    )
+    parser.add_argument(
+        "--search",
+        choices=["greedy", "sample", "beam", "best_first"],
+        default="greedy",
+        help="Set the search method to be used during decoding"
+    )
+    parser.add_argument(
+        "--score",
+        choices=["log_likelihood", "dictionary", "dictionary_or_eq_input", "dictionary_or_in_input"],
+        default="log_likelihood",
+        help="Set the scoring method to score potential solution candidates during decoding"
+    )
+    input_group = parser.add_mutually_exclusive_group()
+    input_group.add_argument(
+        "-c",
+        "--correct",
+        type=str,
+        default=None,
+        help="Correct spelling errors in some text"
+    )
+    input_group.add_argument(
+        "-f",
+        "--file",
+        type=str,
+        default=None,
+        help="Path to a text file which will be corrected line by line"
+    )
+    input_group.add_argument(
+        "-i",
+        "--interactive",
+        action="store_true",
+        default=None,
+        help="Start an interactive session where your command line input is corrected"
+    )
+    parser.add_argument(
+        "-df",
+        "--detection-file",
+        type=str,
+        default=None,
+        help="Path to a text file which contains outputs of a detection model"
+    )
+    parser.add_argument(
+        "-o",
+        "--out-path",
+        type=str,
+        default=None,
+        help="Path where corrected file should be saved to"
+    )
+    parser.add_argument(
+        "--cpu",
+        action="store_true",
+        help="Force to run the model on CPU, by default a GPU is used if available"
+    )
+    parser.add_argument(
+        "-b",
+        "--batch-size",
+        type=int,
+        default=16,
+        help="Determines how many inputs will be processed at the same time, larger values should usually result in "
+             "faster repairing but require more memory"
+    )
+    parser.add_argument(
+        "-u",
+        "--unsorted",
+        action="store_true",
+        help="Disable sorting of the inputs before processing (for a large number of inputs or large text files "
+             "sorting the sequences beforehand leads to speed ups because it minimizes the amount of padding needed "
+             "within a batch of sequences)"
+    )
+    parser.add_argument(
+        "--sed-in",
+        action="store_true",
+        help="Whether the input also contains spelling error detections (should be used together with gsed --sec-out)"
+    )
+    parser.add_argument(
+        "-e",
+        "--experiment",
+        type=str,
+        default=None,
+        help="Path to an experiment directory from which the model will be loaded "
+             "(use this when you trained your own model and want to use it)"
+    )
+    parser.add_argument(
+        "-l",
+        "--list",
+        action="store_true",
+        help="List all available models with short descriptions"
+    )
+    parser.add_argument(
+        "-p",
+        "--pipe",
+        action="store_true",
+        help="Pass this flag when using gsec in a pipe because input and output is then treated as an iterator "
+             "(note that sorting by length gets disabled with this flag because it is not possible to sort an "
+             "iterator)"
+    )
+    parser.add_argument(
+        "--precision",
+        choices=["fp32", "fp16", "bfp16"],
+        default="fp32",
+        help="Choose the precision for inference, fp16 or bfp16 can result in faster runtimes when running on a "
+             "new GPU that supports lower precision, but it can be slower on older GPUs."
+    )
+    parser.add_argument(
+        "--progress",
+        action="store_true",
+        help="Show a progress bar (this flag is only respected when getting input from stdin, "
+             "in interactive mode with -i progress is never shown, "
+             "when repairing a file with -f progress is always shown)"
+    )
+    parser.add_argument(
+        "-v",
+        "--version",
+        action="store_true",
+        help="Print the version of the spell checking library"
+    )
+    parser.add_argument(
+        "--force-download",
+        action="store_true",
+        help="Download the model, data and configs again even if they were already downloaded"
+    )
+    parser.add_argument(
+        "--report",
+        action="store_true",
+        help="Print a report on the runtime (ignoring startup time) formatted as markdown table"
+    )
+    return parser.parse_args()
+
+
+def process_input(line: str, sed_in: bool) -> Tuple[str, Optional[List[int]]]:
+    line = line.strip()
+    if sed_in:
+        split = line.rsplit("\t", 1)
+        assert len(split) == 2, "expected each input line to be of format <input>\\t<detection> when " \
+                                f"sed_in is specified, but got \"{line}\""
+        line, detection = split
+        return line.strip(), [int(det) for det in detection.split()]
+    else:
+        return line, None
+
+
+def run(args: argparse.Namespace) -> None:
+    torch.backends.cudnn.benchmark = True
+    torch.set_num_threads(len(os.sched_getaffinity(0)))
+    torch.use_deterministic_algorithms(False)
+
+    if args.version:
+        print(f"gsec version {nsc.__version__}")
+        return
+    if args.list:
+        model_str = "\n".join(
+            f"- [task: {model.task}] {model.name}: {model.description}"
+            for model in get_available_spelling_error_correction_models()
+        )
+        print(f"Available models:\n{model_str}")
+        return
+
+    if args.experiment:
+        corrector = SpellingErrorCorrector.from_experiment(
+            experiment_dir=args.experiment,
+            device="cpu" if args.cpu else "cuda"
+        )
+    else:
+        corrector = SpellingErrorCorrector.from_pretrained(
+            model=args.model,
+            device="cpu" if args.cpu else "cuda",
+            force_download=args.force_download
+        )
+
+    corrector.set_precision(args.precision)
+
+    start = time.perf_counter()
+    num_sequences = -1
+    num_characters = -1
+    if args.correct is not None:
+        line, detection = process_input(args.correct, args.sed_in)
+        print(corrector.correct_text(line, detection, sort_by_length=False))
+
+    elif args.file is not None:
+        lines = load_text_file(args.file)
+
+        num_characters = 0
+        inputs = []
+        for line in lines:
+            line, detection = process_input(line, False)
+            inputs.append(line)
+            num_characters += len(line)
+
+        num_sequences = len(inputs)
+
+        if args.detection_file:
+            detections = load_text_file(args.detection_file)
+            detections = [[int(det) for det in detection.split()] for detection in detections]
+        else:
+            detections = None
+
+        corrections = corrector.correct_text(
+            inputs=inputs,
+            detections=detections,
+            batch_size=args.batch_size,
+            sort_by_length=not args.unsorted,
+            show_progress=True
+        )
+
+        if args.out_path is None:
+            for correction in corrections:
+                print(correction)
+        else:
+            save_text_file(args.out_path, corrections)
+
+    elif args.interactive:
+        while True:
+            try:
+                line = input()
+                line, detection = process_input(line, False)
+                print(corrector.correct_text(line, detection, sort_by_length=False))
+            except KeyboardInterrupt:
+                return
+    else:
+        if sys.stdin.isatty():
+            return
+
+        try:
+            if args.pipe:
+                for line in sys.stdin:
+                    line, detection = process_input(line, args.sed_in)
+                    print(
+                        corrector.correct_text(
+                            inputs=line,
+                            detections=detection,
+                            sort_by_length=False
+                        )
+                    )
+            else:
+                inputs = []
+                detections = []
+                num_characters = 0
+                for line in sys.stdin:
+                    line, detection = process_input(line, args.sed_in)
+                    inputs.append(line)
+                    detections.append(detection)
+                    num_characters += len(line)
+
+                num_sequences = len(inputs)
+
+                for corrected_line in corrector.correct_text(
+                        inputs=inputs,
+                        detections=detections if args.sed_in else None,
+                        batch_size=args.batch_size,
+                        sort_by_length=not args.unsorted,
+                        show_progress=args.progress
+                ):
+                    print(corrected_line)
+
+        except BrokenPipeError:
+            return
+        except Exception as e:
+            raise e
+
+    if args.report and num_sequences >= 0 and num_characters >= 0:
+        end = time.perf_counter()
+
+        sample_inputs = corrector.task.generate_sample_inputs(2)
+        inputs, _ = corrector.task._prepare_inputs_and_labels(sample_inputs, corrector.device)
+        unused_parameters = task_utils.get_unused_parameters(corrector.model, **inputs)
+        parameter_dict = common.get_num_parameters(corrector.model, unused_parameters)
+
+        generate_report(
+            corrector.task_name,
+            corrector.model_name,
+            parameter_dict["total"] - parameter_dict["unused"],
+            num_sequences,
+            num_characters,
+            end - start,
+            corrector._mixed_precision_dtype,
+            args.batch_size,
+            not args.unsorted,
+            corrector.device,
+            file_path=args.report
+        )
+
+
+if __name__ == "__main__":
+    # disable logging since we do not want that for our command line interface
+    logging.disable(logging.CRITICAL)
+    run(parse_args())

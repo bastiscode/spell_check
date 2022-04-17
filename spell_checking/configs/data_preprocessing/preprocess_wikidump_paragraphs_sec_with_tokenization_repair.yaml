@@ -1,0 +1,21 @@
+data:
+  - ${oc.env:NSC_DATA_DIR}/cleaned/wikidump_paragraphs/train_files.txt
+
+output_dir: ${oc.env:NSC_DATA_DIR}/processed/wikidump_paragraphs_sec_with_tokenization_repair
+seed: 22
+limit: ${oc.env:NSC_LIMIT,100000000}
+
+max_length: 512
+tokenizer: ${from_file:tokenizer/bpe_no_prefix_space.yaml}
+preprocessing:
+  type: CHAINED
+  cfgs:
+    - ${from_file:preprocessing/mixed_noise.yaml}
+    - type: WHITESPACE_NOISE
+      no_whitespace_p: 0.1
+      full_whitespace_p: 0.1
+      insert_whitespace_p: 0.1
+      delete_whitespace_p: 0.5
+  overrides:
+    - false
+    - false

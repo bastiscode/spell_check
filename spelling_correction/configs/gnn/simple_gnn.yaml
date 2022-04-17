@@ -1,6 +1,0 @@
-type: SIMPLE_GNN
-
-num_layers: ${oc.env:GNN_LIB_NUM_LAYERS,6}
-dropout: 0.1
-norm: layer
-recurrent_node_update: false
