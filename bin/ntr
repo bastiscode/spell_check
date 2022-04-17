@@ -97,7 +97,7 @@ def parse_args() -> argparse.Namespace:
         "-p",
         "--pipe",
         action="store_true",
-        help="Pass this flag when using trt in a pipe because input and output is then treated as an iterator "
+        help="Pass this flag when using ntr in a pipe because input and output is then treated as an iterator "
              "(note that sorting by length gets disabled with this flag because it is not possible to sort an "
              "iterator)"
     )
@@ -119,7 +119,7 @@ def parse_args() -> argparse.Namespace:
         "-v",
         "--version",
         action="store_true",
-        help="Print the version of the trt library"
+        help="Print the version of the ntr library"
     )
     parser.add_argument(
         "--force-download",
@@ -148,7 +148,7 @@ def run(args: argparse.Namespace) -> None:
     torch.use_deterministic_algorithms(False)
 
     if args.version:
-        print(f"trt version {nsc.__version__}")
+        print(f"ntr version {nsc.__version__}")
         return
     if args.list:
         model_str = "\n".join(

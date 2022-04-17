@@ -1,20 +1,22 @@
 .PHONY: install
 install:
 	@echo "Installing nsc library"
-	pip install .[train]
-
-.PHONY: docker
-docker: build_docker run_docker
+	pip install .[train] -f https://data.dgl.ai/wheels/repo.html
 
 .PHONY: build_docker
 build_docker:
 	@echo "Building Dockerfile"
 	docker build -t nsc .
 
-.PHONY: run_docker
-run_docker:
-	@echo "Running Dockerfile"
+.PHONY: run_docker_gpu
+run_docker_gpu:
+	@echo "Running nsc Dockerfile with GPU support"
 	docker run -it --gpus all nsc
+
+.PHONY: run_docker_cpu
+run_docker_cpu:
+	@echo "Running nsc Dockerfile on CPU"
+	docker run -it nsc
 
 .PHONY: docs
 docs:

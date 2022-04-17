@@ -22,22 +22,21 @@ setup(
         "bin/ntr"
     ],
     install_requires=[
-        "torch>=1.11.0",
-        "dgl>=0.8.0",
-        "einops>=0.3.0",
-        "numpy>=1.19.0",
-        "tokenizers>=0.10.0",
-        "omegaconf>=2.1.1",
-        "spacy>=3.2.0",
-        "tqdm>=4.49.0",
-        "requests>=2.27.0",
-        "matplotlib>=3.4.3"
+        "torch==1.11.0",
+        "dgl-cu113",
+        "einops==0.4.1",
+        "numpy==1.21.2",
+        "tokenizers==0.12.1",
+        "omegaconf==2.1.2",
+        "spacy==3.2.4",
+        "tqdm==4.62.3",
+        "requests==2.27.1"
     ],
     extras_require={
         "train": [
-            "lmdb>=1.1.0",
-            "lz4>=3.1.0"
-            "tensorboard>=2.8.0"
+            "lmdb==1.3.0",
+            "lz4==4.0.0",
+            "tensorboard==2.8.0"
         ]
     }
 )

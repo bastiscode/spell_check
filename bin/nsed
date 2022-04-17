@@ -93,7 +93,7 @@ def parse_args() -> argparse.Namespace:
         "--sec-out",
         action="store_true",
         help="Whether to format the output suitable for running spelling error correction on it, outputs both "
-             "the original inputs and the spelling error detections (should be used together with gsec --sed-in)"
+             "the original inputs and the spelling error detections (should be used together with nsec --sed-in)"
     )
     parser.add_argument(
         "-e",
@@ -113,7 +113,7 @@ def parse_args() -> argparse.Namespace:
         "-p",
         "--pipe",
         action="store_true",
-        help="Pass this flag when using gsec in a pipe because input and output is then treated as an iterator "
+        help="Pass this flag when using nsec in a pipe because input and output is then treated as an iterator "
              "(note that sorting by length gets disabled with this flag because it is not possible to sort an "
              "iterator)"
     )
@@ -166,7 +166,7 @@ def run(args: argparse.Namespace) -> None:
     torch.use_deterministic_algorithms(False)
 
     if args.version:
-        print(f"gsed version {nsc.__version__}")
+        print(f"nsed version {nsc.__version__}")
         return
     if args.list:
         model_str = "\n".join(
