@@ -30,9 +30,9 @@ Command line interfaces
 
 After installation there will be three commands available in your environment:
 
-    1. ``nsec`` for neural spelling error correction
-    2. ``nsed`` for neural spelling error detection
-    3. ``ntr`` for neural tokenization repair
+1. ``nsec`` for neural spelling error correction
+2. ``nsed`` for neural spelling error detection
+3. ``ntr`` for neural tokenization repair
 
 By default all three commands take input from `stdin`, run their respective task on the
 input line by line and print their output line by line to `stdout`.
@@ -110,18 +110,57 @@ see the ``nsc`` Python API documentation.
 
 **Spelling error correction**
 
-.. literalinclude:: examples/sec.py
-    :language: python
+.. code-block:: python
+
+    from nsc import SpellingErrorCorrector, get_available_spelling_error_correction_models
+
+    # show all spelling error correction models
+    print(get_available_spelling_error_correction_models())
+
+    # use a pretrained model
+    sec = SpellingErrorCorrector.from_pretrained()
+    # correct errors in text
+    correction = sec.correct_text("Tihs text has erors!")
+    print(correction)
+    # correct errors in file
+    corrections = sec.correct_file("path/to/file.txt")
+    print(correction)
 
 **Spelling error detection**
 
-.. literalinclude:: examples/sed.py
-    :language: python
+.. code-block:: python
+
+    from nsc import SpellingErrorDetector, get_available_spelling_error_detection_models
+
+    # show all spelling error detection models
+    print(get_available_spelling_error_detection_models())
+
+    # use a pretrained model
+    sed = SpellingErrorDetector.from_pretrained()
+    # detect errors in text
+    detection = sed.detect_text("Tihs text has erors!")
+    print(detection)
+    # detect errors in file
+    detections = sed.detect_file("path/to/file.txt")
+    print(detections)
 
 **Tokenization repair**
 
-.. literalinclude:: examples/tokenization_repair.py
-    :language: python
+.. code-block:: python
+
+    from nsc import TokenizationRepairer, get_available_tokenization_repair_models
+
+    # show all tokenization repair models
+    print(get_available_tokenization_repair_models())
+
+    # use a pretrained model
+    tr = TokenizationRepairer.from_pretrained()
+    # repair tokenization in text
+    repaired_text = tr.repair_text("Ti hstext h aserors!")
+    print(repaired_text)
+    # repair tokenization in file
+    repaired_file = tr.repair_file("path/to/file.txt")
+    print(repaired_file)
 
 Docker
 ------
