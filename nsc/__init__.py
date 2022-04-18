@@ -6,12 +6,10 @@ __all__ = [
     "get_available_spelling_error_correction_models",
     "get_available_tokenization_repair_models",
     "SpellingCorrectionScore",
-    "Search",
     "GreedySearch",
     "SampleSearch",
     "BeamSearch",
-    "BestFirstSearch",
-    "ModelInfo"
+    "BestFirstSearch"
 ]
 
 from nsc.api.sed import (
@@ -22,7 +20,6 @@ from nsc.api.sec import (
     SpellingErrorCorrector,
     get_available_spelling_error_correction_models,
     SpellingCorrectionScore,
-    Search,
     GreedySearch,
     SampleSearch,
     BeamSearch,
@@ -32,6 +29,5 @@ from nsc.api.tokenization_repair import (
     TokenizationRepairer,
     get_available_tokenization_repair_models
 )
-from nsc.api.utils import ModelInfo
 from nsc.version import __version__
 

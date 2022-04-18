@@ -18,6 +18,12 @@ from nsc.utils import common
 
 
 def get_available_tokenization_repair_models() -> List[ModelInfo]:
+    """
+    Get available tokenization repair models
+
+    Returns: list of tokenization repair model infos each containing the task name, model name and a short description
+
+    """
     return [
         ModelInfo(
             task="tokenization_repair",
@@ -41,6 +47,11 @@ def get_available_tokenization_repair_models() -> List[ModelInfo]:
 
 
 class TokenizationRepairer(_APIBase):
+    """Tokenization repair
+
+    Class to run tokenization repair models.
+
+    """
     def __init__(
             self,
             model_dir: str,
@@ -159,6 +170,23 @@ class TokenizationRepairer(_APIBase):
             sort_by_length: bool = True,
             show_progress: bool = False
     ) -> Union[List[int], List[List[int]]]:
+        """
+
+        Repair whitespaces in text.
+
+        Args:
+            inputs: text to repair given as a single string or a list of strings
+            batch_size: how many sequences to process at once
+            batch_max_length_factor: sets the maximum total length of a batch to be
+                batch_max_length_factor * model_max_input_length, if a model e.g. has a max input length of 512 tokens
+                and batch_max_length_factor is 4 then one batch will contain as many input sequences as fit within
+                512 * 4 = 2048 tokens (takes precedence over batch_size if specified)
+            sort_by_length: sort the inputs by length before processing them
+            show_progress: display progress bar
+
+        Returns: repaired text as string or list of strings
+
+        """
         input_is_string = isinstance(inputs, str)
         assert (
                 input_is_string
@@ -183,6 +211,24 @@ class TokenizationRepairer(_APIBase):
             sort_by_length: bool = True,
             show_progress: bool = True
     ) -> Optional[Union[List[int], List[List[int]]]]:
+        """
+
+        Repair whitespaces in a file.
+
+        Args:
+            input_file_path: path to an input file, which will be repaired line by line
+            output_file_path: path to an output file, where repaired text will be saved line by line
+            batch_size: how many sequences to process at once
+            batch_max_length_factor: sets the maximum total length of a batch to be
+                batch_max_length_factor * model_max_input_length, if a model e.g. has a max input length of 512 tokens
+                and batch_max_length_factor is 4 then one batch will contain as many input sequences as fit within
+                512 * 4 = 2048 tokens (takes precedence over batch_size if specified)
+            sort_by_length: sort the inputs by length before processing them
+            show_progress: display progress bar
+
+        Returns: repaired file as list of strings if output_file_path is not specified else None
+
+        """
         outputs = self._repair_text_raw(
             input_file_path, batch_size, batch_max_length_factor, sort_by_length, show_progress
         )

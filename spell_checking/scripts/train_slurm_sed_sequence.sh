@@ -17,7 +17,6 @@ export NSC_BATCH_MAX_LENGTH=98304
 export NSC_DATA_LIMIT=100000000
 export NSC_LR=0.0001
 export NSC_WEIGHT_DECAY=0.01
-export NSC_NUM_NEIGHBORS=3
 export NSC_MIXED_PRECISION=true
 
 approach=${APPROACH?"APPROACH is not defined"}
@@ -27,11 +26,11 @@ if [[ $approach == "gnn" ]]; then
     "NSC_ADD_WORD_FEATURES"
     )
   declare -a approaches=(
-    "false" # no_feat
-    "true" # default
+#    "false"
+    "true"
   )
   declare -a approach_names=(
-    "gnn_no_feat"
+#    "gnn_no_feat"
     "gnn_cliques_wfc"
   )
 

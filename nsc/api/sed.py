@@ -21,6 +21,13 @@ Detections = Union[str, List[int], List[List[int]]]
 
 
 def get_available_spelling_error_detection_models() -> List[ModelInfo]:
+    """
+    Get available spelling error detection models
+
+    Returns: list of spelling error detection model infos each containing the task name,
+    model name and a short description
+
+    """
     return [
         ModelInfo(
             task="sed_sequence",
@@ -238,6 +245,24 @@ class SpellingErrorDetector(_APIBase):
             sort_by_length: bool = True,
             show_progress: bool = False
     ) -> Union[List[int], List[List[int]]]:
+        """
+
+        Detect spelling errors in text.
+
+        Args:
+            inputs: text to check for errors given as a single string or a list of strings
+            threshold: set detection threshold (0 < threshold < 1)
+            batch_size: how many sequences to process at once
+            batch_max_length_factor: sets the maximum total length of a batch to be
+                batch_max_length_factor * model_max_input_length, if a model e.g. has a max input length of 512 tokens
+                and batch_max_length_factor is 4 then one batch will contain as many input sequences as fit within
+                512 * 4 = 2048 tokens (takes precedence over batch_size if specified)
+            sort_by_length: sort the inputs by length before processing them
+            show_progress: display progress bar
+
+        Returns: detections as list of integers or list of lists of integers
+
+        """
         input_is_string = isinstance(inputs, str)
         assert (
                 input_is_string

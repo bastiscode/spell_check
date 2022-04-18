@@ -30,6 +30,13 @@ Detections = Union[List[int], List[List[int]]]
 
 
 def get_available_spelling_error_correction_models() -> List[ModelInfo]:
+    """
+    Get available spelling error correction models
+
+    Returns: list of spelling error correction model infos each containing the task name,
+    model name and a short description
+
+    """
     return [
         ModelInfo(
             task="sec",
@@ -63,31 +70,76 @@ def get_available_spelling_error_correction_models() -> List[ModelInfo]:
 
 @dataclass
 class Search:
+    """
+
+    Base class for all search methods.
+
+    """
     pass
 
 
 @dataclass
 class GreedySearch(Search):
+    """
+
+    Greedy search: Always take the path with the highest score.
+
+    """
     pass
 
 
 @dataclass
 class SampleSearch(Search):
+    """
+
+    Sample search: Choose a random path from the top_k highest scoring paths.
+
+    """
     top_k: int = 5
 
 
 @dataclass
 class BestFirstSearch(Search):
+    """
+
+    Best first search: Choose the highest scoring path out of all paths encountered so far.
+
+    """
     pass
 
 
 @dataclass
 class BeamSearch(Search):
+    """
+
+    Beam search: Keep the best beam_width paths during search.
+
+    """
     beam_width: int = 5
 
 
 @dataclass
 class SpellingCorrectionScore:
+    """
+
+    Determines how paths during decoding are scored.
+
+    The default mode `log_likelihood` is to score path using the
+    token sequence log likelihood given as the sum of all token log probabilities one got during
+    decoding a particular path normalized by the token sequence length (so shorter paths are not preferred):
+
+        score = sum(log_probabilities) / (len(log_probabilities) ** alpha)
+
+    Alpha here can be used to steer the decoding towards shorter or longer sequences, if alpha > 1 longer sequences are
+    preferred, if alpha < 1 shorter sequences are preferred.
+
+    Other supported modes are `dictionary`, `dictionary_or_eq_input` and `dictionary_or_in_input`. They only allow
+    paths that either contain dictionary words only, contain dictionary words or are equal to the input text or contain
+    dictionary words or words from the input text.
+    Note that for all these modes prefix_index must be specified, since we use a prefix index to determine if
+    a word is in a dictionary or is a prefix of a word in a dictionary.
+
+    """
     normalize_by_length: bool = True
     alpha: float = 1.0
     mode: str = "log_likelihood"
@@ -138,6 +190,11 @@ def inference_kwargs_from_search_and_score(
 
 
 class SpellingErrorCorrector(_APIBase):
+    """Spelling error correction
+
+    Class to run spelling error correction models.
+
+    """
     def __init__(
             self,
             model_dir: str,
@@ -359,14 +416,14 @@ class SpellingErrorCorrector(_APIBase):
             detections: spelling error detections (from a SpellingErrorDetector) to guide the correction, if
                 inputs is a single str, detections must be a list of integers, otherwise if inputs is a list of strings,
                 detections should be a list of lists of integers
-            search: instance of a Search object to determine the search method to use for decoding
-            score: instance of a SpellingCorrectionScore object to determine how to score search paths during decoding
+            search: Search instance to determine the search method to use for decoding
+            score: SpellingCorrectionScore instance to determine how to score search paths during decoding
             batch_size: how many sequences to process at once
             batch_max_length_factor: sets the maximum total length of a batch to be
                 batch_max_length_factor * model_max_input_length, if a model e.g. has a max input length of 512 tokens
                 and batch_max_length_factor is 4 then one batch will contain as many input sequences as fit within
                 512 * 4 = 2048 tokens (takes precedence over batch_size if specified)
-            sort_by_length: sort the inputs by length before correcting them
+            sort_by_length: sort the inputs by length before processing them
             show_progress: display progress bar
 
         Returns: corrected text as string or list of strings
