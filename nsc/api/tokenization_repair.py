@@ -21,8 +21,21 @@ def get_available_tokenization_repair_models() -> List[ModelInfo]:
     return [
         ModelInfo(
             task="tokenization_repair",
-            name="transformer_eo_large",
-            description="Transformer model that repairs sequences by predicting repair tokens for each character"
+            name="transformer_eo",
+            description="Transformer model that repairs sequences by predicting repair tokens for each character."
+        ),
+        ModelInfo(
+            task="tokenization_repair",
+            name="tokenization_repair+",
+            description="Transformer model that repairs sequences by predicting repair tokens for each character. "
+                        "Different from transformer_eo because this model also was trained to detect spelling errors."
+        ),
+        ModelInfo(
+            task="tokenization_repair",
+            name="tokenization_repair++",
+            description="Transformer model that repairs sequences by predicting repair tokens for each character. "
+                        "Different from transformer_eo because this model also was trained to detect "
+                        "and correct spelling errors."
         )
     ]
 
@@ -66,29 +79,19 @@ class TokenizationRepairer(_APIBase):
 
     @staticmethod
     def from_pretrained(
+            task: str = "tokenization_repair",
             model: str = "transformer_eo_large",
             device: Union[str, int] = "cuda",
             cache_dir: Optional[str] = None,
             force_download: bool = False
     ) -> "TokenizationRepairer":
-        """
-
-        Create a new tokenization repairer using a pretrained model.
-
-        Args:
-            model: name of the pretrained model
-            device: device to load the model to (e.g. "cuda", "cpu" or integer in range [0, ..., #GPUs))
-            cache_dir: local cache directory to store the pretrained model
-            force_download: download the pretrained model again even if it already exists in the cache_dir
-
-        Returns: Tokenization repairer
-
-        """
         assert any(model == m.name for m in get_available_tokenization_repair_models()), \
             f"model {model} does not match any of the available models:\n" \
             f"{pprint.pformat(get_available_tokenization_repair_models())}"
 
-        model_dir, data_dir, config_dir = super()._download("tokenization_repair", model, cache_dir, force_download)
+        model_dir, data_dir, config_dir = TokenizationRepairer._download(
+            "tokenization_repair", model, cache_dir, force_download
+        )
 
         return TokenizationRepairer(
             model_dir,
@@ -106,17 +109,6 @@ class TokenizationRepairer(_APIBase):
             experiment_dir: str,
             device: Union[str, int] = "cuda"
     ) -> "TokenizationRepairer":
-        """
-
-        Create a new tokenization repairer using your own experiment.
-
-        Args:
-            experiment_dir: path to the experiment directory
-            device: device to load the model to (e.g. "cuda", "cpu" or integer in range [0, ..., #GPUs))
-
-        Returns: Tokenization repairer
-
-        """
         return TokenizationRepairer(
             experiment_dir,
             device,

@@ -19,7 +19,7 @@ do
   do
     for output_type in ${output_types[@]}
     do
-      # test benchmarks with unknown misspellings
+      # test benchmarks with test misspellings
       python $script_dir/create_spelling_benchmarks.py \
       --in-file $data_dir/$dataset/test_files.txt \
       --out-dir $benchmark_dir/test \

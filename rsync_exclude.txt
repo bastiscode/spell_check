@@ -18,8 +18,8 @@
 __pycache__**
 cc.en.*
 
+/spell_checking/baselines
 /spell_checking/configs/configs.zip
 /spell_checking/benchmarks/test*
 /spell_checking/benchmarks/dev*
 /spell_checking/benchmarks/matthias
-/spell_checking/demo/components/plotting/streamlit_network_graph/frontend/node_modules

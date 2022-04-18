@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --partition=alldlc_gpu-rtx2080
-#SBATCH --nodes=4
+#SBATCH --nodes=2
 #SBATCH --ntasks-per-node=4
 #SBATCH --gres=gpu:4
 #SBATCH --job-name=training
@@ -41,15 +41,11 @@ else
   cd $workspace
   source ../env/bin/activate
 
-#  sync_datasets=${SYNC_DATASETS?"Could not find SYNC_DATASETS env variable"}
-#  srun $script_dir/sync_data.sh $workspace $TMPDIR "$sync_datasets"
-#  data_dir=$TMPDIR/data
-
   data_dir=$workspace/data
   experiment_dir=$workspace/experiments
 
   master_addr=$(scontrol show hostnames "$SLURM_JOB_NODELIST" | head -n 1)
-  world_size=16
+  world_size=${NSC_WORLD_SIZE?"env variable NSC_WORLD_SIZE not found"}
   echo "Running on Slurm Cluster, master machine at $master_addr:$master_port"
 fi
 
@@ -78,9 +74,6 @@ if [[ $config != "" ]]; then
 else
   train_cmd="nsc/train.py --resume $resume"
 fi
-
-echo "GPU information:"
-nvidia-smi
 
 if [[ $is_local == true ]]; then
   echo "Starting local training with cmd $train_cmd"

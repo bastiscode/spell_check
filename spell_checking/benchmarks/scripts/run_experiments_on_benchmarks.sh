@@ -1,11 +1,4 @@
 #!/bin/bash
-#SBATCH --partition=alldlc_gpu-rtx2080
-#SBATCH --gres=gpu:1
-#SBATCH --nodes=1
-#SBATCH --job-name=run_experiments
-#SBATCH --mail-user=sebastian.walter98@gmail.com
-#SBATCH --mail-type=END,FAIL
-#SBATCH --time=24:00:00
 
 script_dir=$(dirname $0)
 

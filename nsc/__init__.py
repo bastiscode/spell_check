@@ -10,7 +10,8 @@ __all__ = [
     "GreedySearch",
     "SampleSearch",
     "BeamSearch",
-    "BestFirstSearch"
+    "BestFirstSearch",
+    "ModelInfo"
 ]
 
 from nsc.api.sed import (
@@ -31,5 +32,6 @@ from nsc.api.tokenization_repair import (
     TokenizationRepairer,
     get_available_tokenization_repair_models
 )
+from nsc.api.utils import ModelInfo
 from nsc.version import __version__
 

@@ -26,10 +26,13 @@ if __name__ == "__main__":
         with open(os.path.join(experiment, "cfg.pkl"), "rb") as inf:
             cfg, env_vars = pickle.load(inf)
 
-        shutil.copy2(os.path.join(experiment, "cfg.pkl"), os.path.join(experiment, "cfg_backup.pkl"))
+        backup_path = os.path.join(experiment, "cfg_backup.pkl")
+        if not os.path.exists(backup_path):
+            shutil.copy2(os.path.join(experiment, "cfg.pkl"), backup_path)
 
         new_env_vars = {
-            f"{NEW_PREFIX}{k[len(OLD_PREFIX):]}": v.replace(OLD_DIR_NAME, NEW_DIR_NAME)
+            f"{NEW_PREFIX}{k[len(OLD_PREFIX):]}" if k.startswith(OLD_PREFIX) else k:
+                v.replace(OLD_DIR_NAME, NEW_DIR_NAME)
             for k, v in env_vars.items()
         }
 

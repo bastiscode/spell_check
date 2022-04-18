@@ -10,7 +10,7 @@ services:
       - Java_Xms=512m
       - Java_Xmx=1g
     volumes:
-      - ./third_party/languagetool:/ngrams
+      - ./ngram_data:/ngrams
     networks:
       - default
   languagetool_load_balance:

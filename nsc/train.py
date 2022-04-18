@@ -41,15 +41,15 @@ def train(args: argparse.Namespace, device: DistributedDevice) -> None:
     rlimit = resource.getrlimit(resource.RLIMIT_NOFILE)
     resource.setrlimit(resource.RLIMIT_NOFILE, (4096, rlimit[1]))
 
-    # create config
     if args.config is not None:
+        # create config
         cfg = OmegaConf.load(args.config)
         OmegaConf.resolve(cfg)
         schema = OmegaConf.structured(config.TrainConfig)
         cfg = OmegaConf.merge(schema, cfg)
         resuming_training = False
     else:
-        # allow data dir to be overwritten when resuming training, because you might train on a different node
+        # allow data dir to be overwritten when resuming training, because you might train on a different SLURM node
         # where the local temporary data directory is different
         override_env_vars = {}
         if "NSC_DATA_DIR" in os.environ:

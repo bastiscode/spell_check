@@ -23,28 +23,78 @@ Detections = Union[str, List[int], List[List[int]]]
 def get_available_spelling_error_detection_models() -> List[ModelInfo]:
     return [
         ModelInfo(
-            task="sed_words",
-            name="gnn_default",
-            description="Graph Neural Network which extends the default Transformer fully connected graph "
-                        "with word nodes and word features"
-        ),
-        ModelInfo(
-            task="sed_words",
-            name="gnn_cliques_wfc",
-            description="Graph Neural Network which processes language graphs with fully connected word nodes "
-                        "and fully connected sub-word cliques for each word"
+            task="sed_sequence",
+            name="transformer",
+            description="Regular transformer processing a sequence of sub-word tokens. "
+                        "Predicts spelling errors on sequence level "
+                        "using the aggregated representations of all sub-word tokens."
         ),
         ModelInfo(
             task="sed_sequence",
-            name="gnn_default",
-            description="Graph Neural Network which extends the default Transformer fully connected graph "
-                        "with word nodes, word features and a sequence node"
+            name="transformer+",
+            description="Regular transformer processing a sequence of sub-word tokens. "
+                        "Before predicting spelling errors, sub-word representations within a word are aggregated "
+                        "and enriched with word features to obtain word representations. Predicts spelling errors on "
+                        "sequence level using the aggregation of those word representations."
         ),
         ModelInfo(
             task="sed_sequence",
-            name="gnn_cliques_wfc",
-            description="Graph Neural Network which processes language graphs with fully connected word nodes, "
-                        "fully connected sub-word cliques for each word and a sequence node"
+            name="gnn",
+            description="Attentional Graph Neural Network which processes language graphs with "
+                        "fully connected word nodes and fully connected sub-word cliques. "
+                        "Predicts spelling errors on sequence level using the aggregated representations of all word "
+                        "nodes."
+        ),
+        ModelInfo(
+            task="sed_sequence",
+            name="gnn+",
+            description="Attentional Graph Neural Network which processes language graphs with "
+                        "fully connected word nodes, word features and fully connected sub-word cliques. "
+                        "Predicts spelling errors on sequence level using the aggregated representations of all word "
+                        "nodes."
+        ),
+        ModelInfo(
+            task="sed_words",
+            name="transformer",
+            description="Regular transformer processing a sequence of sub-word tokens. "
+                        "Predicts spelling errors on word level "
+                        "using the aggregated sub-word representations per word."
+        ),
+        ModelInfo(
+            task="sed_words",
+            name="transformer+",
+            description="Regular transformer processing a sequence of sub-word tokens. "
+                        "Before predicting spelling errors, sub-word representations within a word are aggregated "
+                        "and enriched with word features to obtain word representations. Predicts spelling errors on "
+                        "word level using those word representations."
+        ),
+        ModelInfo(
+            task="sed_words",
+            name="gnn",
+            description="Attentional Graph Neural Network which processes language graphs with "
+                        "fully connected word nodes and fully connected sub-word cliques. "
+                        "Predicts spelling errors on word level using the word node representations."
+        ),
+        ModelInfo(
+            task="sed_words",
+            name="gnn+",
+            description="Attentional Graph Neural Network which processes language graphs with "
+                        "fully connected word nodes, word features and fully connected sub-word cliques. "
+                        "Predicts spelling errors on word level using the word node representations."
+        ),
+        ModelInfo(
+            task="sed_words",
+            name="tokenization_repair+",
+            description="Transformer based model that detects errors in sequences by first correcting the tokenization"
+                        "and then detecting spelling errors for each word in the repaired text."
+        ),
+        ModelInfo(
+            task="sed_words",
+            name="tokenization_repair++",
+            description="Transformer based model that detects errors in sequences by first correcting the tokenization"
+                        "and then detecting spelling errors for each word in the repaired text. Different from "
+                        "tokenization_repair+ because this model was trained additionally to also correct "
+                        "spelling errors (it is also available in nsec)."
         )
     ]
 
@@ -103,12 +153,6 @@ class SpellingErrorDetector(_APIBase):
 
     @property
     def task_name(self) -> str:
-        """
-        Gives the task name for the spelling error detection model.
-
-        Returns: task name (sed_sequence or sed_words)
-
-        """
         return (
             "sed_sequence" if self.task.variant_cfg.type == DatasetVariants.SED_SEQUENCE
             else "sed_words"
@@ -122,25 +166,11 @@ class SpellingErrorDetector(_APIBase):
             cache_dir: Optional[str] = None,
             force_download: bool = False
     ) -> "SpellingErrorDetector":
-        """
-
-        Create a new spelling error detector using a pretrained model.
-
-        Args:
-            task: name of the task (sed_words or sed_sequence)
-            model: name of the pretrained model
-            device: device to load the model to (e.g. "cuda", "cpu" or integer in range [0, ..., #GPUs))
-            cache_dir: local cache directory to store the pretrained model
-            force_download: download the pretrained model again even if it already exists in the cache_dir
-
-        Returns: Spelling error detector
-
-        """
         assert any(model == m.name and task == m.task for m in get_available_spelling_error_detection_models()), \
             f"task {task} and model {model} do not match any of the available models:\n" \
             f"{pprint.pformat(get_available_spelling_error_detection_models())}"
 
-        model_dir, data_dir, config_dir = super()._download(task, model, cache_dir, force_download)
+        model_dir, data_dir, config_dir = SpellingErrorDetector._download(task, model, cache_dir, force_download)
 
         return SpellingErrorDetector(
             model_dir,
@@ -158,17 +188,6 @@ class SpellingErrorDetector(_APIBase):
             experiment_dir: str,
             device: Union[str, int] = "cuda"
     ) -> "SpellingErrorDetector":
-        """
-
-        Create a new spelling error detector using your own experiment.
-
-        Args:
-            experiment_dir: path to the experiment directory
-            device: device to load the model to (e.g. "cuda", "cpu" or integer in range [0, ..., #GPUs))
-
-        Returns: Spelling error detector
-
-        """
         return SpellingErrorDetector(
             experiment_dir,
             device,
@@ -245,6 +264,25 @@ class SpellingErrorDetector(_APIBase):
             sort_by_length: bool = True,
             show_progress: bool = True
     ) -> Optional[Union[List[int], List[List[int]]]]:
+        """
+
+        Detect spelling errors in a file.
+
+        Args:
+            input_file_path: path to an input file, which will be checked for spelling errors line by line
+            output_file_path: path to an output file, where the detections will be saved line by line
+            threshold: set detection threshold (0 < threshold < 1)
+            batch_size: how many sequences to process at once
+            batch_max_length_factor: sets the maximum total length of a batch to be
+                batch_max_length_factor * model_max_input_length, if a model e.g. has a max input length of 512 tokens
+                and batch_max_length_factor is 4 then one batch will contain as many input sequences as fit within
+                512 * 4 = 2048 tokens (takes precedence over batch_size if specified)
+            sort_by_length: sort the inputs by length before processing them
+            show_progress: display progress bar
+
+        Returns: detections as list of lists of integers if output_file_path is not specified else None
+
+        """
         outputs = self._detect_text_raw(
             input_file_path, threshold, batch_size, batch_max_length_factor, sort_by_length, show_progress
         )

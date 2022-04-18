@@ -23,25 +23,34 @@ from nsc.data.utils import BucketSampler, clean_sequence
 from nsc.tasks import Task
 from nsc.utils import config, common, DataInput, InfoInput, Batch
 
-_BASE_URL = "https://tokenization.cs.uni-freiburg.de/transformer"
+_BASE_URL = "https://tokenization.cs.uni-freiburg.de/transformer/nsc"
 _CONFIGS_URL = f"{_BASE_URL}/configs.zip"
 _DATA_URL = f"{_BASE_URL}/data.zip"
 _TASK_AND_NAME_TO_URL = {
+    "tokenization_repair": {
+        "transformer_eo": f"{_BASE_URL}/tokenization_repair_transformer_eo.zip",
+        "tokenization_repair+": f"{_BASE_URL}/tokenization_repair_plus_sed.zip",
+        "tokenization_repair++": f"{_BASE_URL}/tokenization_repair_plus_sed_plus_sec.zip",
+    },
     "sed_sequence": {
-        "gnn_no_feat": f"{_BASE_URL}/sed_sequence_gnn_no_feat.zip",
-        "gnn_cliques_wfc": f"{_BASE_URL}/sed_sequence_gnn_cliques_wfc.zip",
-        "transformer_no_feat": f"{_BASE_URL}/sed_sequence_transformer_no_feat.zip",
-        "transformer": f"{_BASE_URL}/sed_sequence_transformer.zip",
+        "gnn": f"{_BASE_URL}/sed_sequence_gnn_no_feat.zip",
+        "gnn+": f"{_BASE_URL}/sed_sequence_gnn_cliques_wfc.zip",
+        "transformer": f"{_BASE_URL}/sed_sequence_transformer_no_feat.zip",
+        "transformer+": f"{_BASE_URL}/sed_sequence_transformer.zip"
     },
     "sed_words": {
-        "gnn_no_feat": f"{_BASE_URL}/sed_words_gnn_no_feat.zip",
-        "gnn_cliques_wfc": f"{_BASE_URL}/sed_words_gnn_cliques_wfc.zip",
-        "transformer_no_feat": f"{_BASE_URL}/sed_words_transformer_no_feat.zip",
-        "transformer": f"{_BASE_URL}/sed_words_transformer.zip",
+        "gnn": f"{_BASE_URL}/sed_words_gnn_no_feat.zip",
+        "gnn+": f"{_BASE_URL}/sed_words_gnn_cliques_wfc.zip",
+        "transformer": f"{_BASE_URL}/sed_words_transformer_no_feat.zip",
+        "transformer+": f"{_BASE_URL}/sed_words_transformer.zip",
+        "tokenization_repair+": f"{_BASE_URL}/tokenization_repair_plus_sed.zip",
+        "tokenization_repair++": f"{_BASE_URL}/tokenization_repair_plus_sed_plus_sec.zip",
     },
     "sec": {
         "transformer_nmt": f"{_BASE_URL}/sec_transformer_nmt.zip",
+        "transformer_with_tokenization_repair_nmt": f"{_BASE_URL}/sec_transformer_with_tokenization_repair_nmt.zip",
         "transformer_words_nmt": f"{_BASE_URL}/sec_transformer_words_nmt.zip",
+        "tokenization_repair++": f"{_BASE_URL}/tokenization_repair_plus_sed_plus_sec.zip"
     }
 }
 
@@ -74,15 +83,41 @@ class _APIBase:
             experiment_dir: str,
             device: Union[str, int]
     ) -> "_APIBase":
+        """
+
+        Create a new NSC instance using your own experiment.
+
+        Args:
+            experiment_dir: path to the experiment directory
+            device: device to load the model to (e.g. "cuda", "cpu" or integer denoting GPU device index)
+
+        Returns: NSC instance
+
+        """
         raise NotImplementedError
 
     @staticmethod
     def from_pretrained(
+            task: str,
             model: str,
             device: Union[str, int],
             cache_dir: Optional[str],
             force_download: bool
     ) -> "_APIBase":
+        """
+
+        Create a new NSC instance using a pretrained model.
+
+        Args:
+            task: name of the task
+            model: name of the pretrained model
+            device: device to load the model to (e.g. "cuda", "cpu" or integer denoting GPU device index)
+            cache_dir: local cache directory to store the pretrained model
+            force_download: force download the pretrained model again even if it already exists in the cache_dir
+
+        Returns: NSC instance
+
+        """
         raise NotImplementedError
 
     @torch.inference_mode()
@@ -158,6 +193,18 @@ class _APIBase:
         )
 
     def set_precision(self, precision: str) -> None:
+        """
+
+        Set the inference precision to use. Default is standard 32bit full precision.
+        Using 16bit floats or 16bit brain floats should only be used when you have a supported NVIDIA GPU.
+        When running on CPU fp16 will be overwritten with bfp16 since only bfp16 is supported on CPU for now.
+
+        Args:
+            precision: precision identifier (one of {fp32, fp16, bfp16})
+
+        Returns: None
+
+        """
         assert precision in {"fp32", "fp16", "bfp16"}
 
         if precision == "fp32":
@@ -175,19 +222,48 @@ class _APIBase:
 
     @property
     def mixed_precision_enabled(self) -> bool:
+        """
+
+        Check if mixed precision is enabled (precision is set to something else than fp32).
+
+        Returns: bool whether mixed precision is enabled
+
+        """
         return self._mixed_precision_dtype != torch.float32
 
     def to(self, device: Union[str, int]) -> "_APIBase":
+        """
+
+        Move the model to a different device.
+
+        Args:
+            device: device specifier (e.g. "cuda", "cpu" or integer denoting GPU device index)
+
+        Returns: self
+
+        """
         self.device = torch.device(device)
         self.model.to(self.device)
         return self
 
     @property
     def task_name(self) -> str:
+        """
+        Check which NSC task is run.
+
+        Returns: name of the task
+
+        """
         raise NotImplementedError
 
     @property
     def model_name(self) -> str:
+        """
+        Gives the name of the NSC model in use.
+
+        Returns: name of the model
+
+        """
         return self.cfg.experiment_name
 
     @staticmethod
@@ -203,12 +279,8 @@ class _APIBase:
             force_download=force_download,
             logger=logger
         )
-        # check if model comes with a configs.zip, if not download global configs
-        if os.path.exists(os.path.join(model_dir, "configs.zip")):
-            shutil.unpack_archive(os.path.join(model_dir, "configs.zip"), extract_dir=model_dir)
-            config_dir = os.path.join(model_dir, "configs")
-        else:
-            config_dir = download_configs(force_download, logger, cache_dir)
+
+        config_dir = download_configs(force_download, logger, cache_dir)
 
         return model_dir, data_dir, config_dir
 
@@ -365,7 +437,6 @@ def load_experiment_config(
     with open(os.path.join(experiment, "cfg.pkl"), "rb") as inf:
         cfg, env_vars = pickle.load(inf)
 
-    print(cfg, env_vars, override_env_vars)
     if override_env_vars is not None:
         env_vars.update(override_env_vars)
 

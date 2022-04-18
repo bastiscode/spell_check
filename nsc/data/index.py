@@ -1,12 +1,10 @@
-import collections
 import json
 import os
 import pickle
 import shutil
-from typing import List, Optional, Tuple, Dict, Callable, Any
+from typing import List, Optional, Tuple, Dict, Any
 
 import lz4.frame
-import marisa_trie
 import numpy as np
 import torch
 from spacy.tokens import Doc
@@ -133,42 +131,6 @@ class FastTextVectorizer(_BaseWordToVecVectorizer):
     @property
     def dim(self) -> int:
         return self.ft.get_dimension()
-
-
-# class BertVectorizer(Vectorizer):
-#     def __init__(self) -> None:
-#         super().__init__("", 0)
-#         from transformers import BertModel, BertTokenizer, BertConfig
-#         self.tok = BertTokenizer.from_pretrained("bert-base-cased")
-#         self.device = mod_utils.cuda_or_cpu(force_cpu=True)
-#         self.bert: BertModel = BertModel.from_pretrained("bert-base-cased")
-#         self.bert.to(self.device)
-#         self.bert.eval()
-#         self.config: BertConfig = BertConfig.from_pretrained("bert-base-cased")
-#
-#     def vectorize(self, left_context: str, word: str, right_context: str) -> np.array:
-#         tensors = self.tok(left_context + word + right_context, return_tensors="pt").to(self.device)
-#         with torch.inference_mode():
-#             outputs = self.bert(**tensors).last_hidden_state.cpu().numpy()
-#         return np.mean(outputs, axis=1)
-#
-#     def vectorize_batch(self, inputs: List[Tuple[str, str, str]]) -> np.array:
-#         input_strs = [l + w + r for w, l, r in inputs]
-#         tensors = self.tok(input_strs, padding=True, return_tensors="pt").to(self.device)
-#         with torch.inference_mode():
-#             outputs = self.bert(**tensors).last_hidden_state.cpu().numpy()
-#         vectors = []
-#         for i, att_mask in enumerate(tensors["attention_mask"]):
-#             vectors.append(outputs[i, :att_mask.sum()].mean(0))
-#         return np.stack(vectors)
-#
-#     def to_device(self, device: torch.device) -> None:
-#         self.device = device
-#         self.bert.to(self.device)
-#
-#     @property
-#     def dim(self) -> int:
-#         return self.config.hidden_size
 
 
 class StringVectorizer(Vectorizer):
@@ -627,6 +589,7 @@ class PrefixIndex:
             dictionary: Dict[str, int],
             save_path: str
     ) -> None:
+        import marisa_trie
         trie = marisa_trie.Trie(dictionary.keys())
 
         os.makedirs(os.path.dirname(save_path), exist_ok=True)

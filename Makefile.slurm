@@ -1,4 +1,3 @@
-
 # some helpers for the KI Cluster at Uni Freiburg
 
 .PHONY: interactive

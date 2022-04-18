@@ -12,6 +12,7 @@ def zip_experiment(args: argparse.Namespace) -> None:
     if not args.out_file.endswith(".zip"):
         args.out_file += ".zip"
 
+    os.makedirs(os.path.dirname(args.out_file), exist_ok=True)
     with zipfile.ZipFile(args.out_file, "w") as zip_file:
         checkpoint_best = os.path.join(args.experiment, "checkpoints", "checkpoint_best.pt")
         checkpoint = io.load_checkpoint(checkpoint_best)
@@ -41,8 +42,8 @@ def zip_experiment(args: argparse.Namespace) -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--experiment", type=str, required=True)
-    parser.add_argument("--out-file", type=str, required=True)
+    parser.add_argument("-e", "--experiment", type=str, required=True)
+    parser.add_argument("-o", "--out-file", type=str, required=True)
     return parser.parse_args()
 
 

@@ -3,3 +3,6 @@ experiments
 local_experiments
 third_party
 .git
+
+spell_checking/baselines
+spell_checking/benchmarks

@@ -18,21 +18,22 @@ export NSC_LR=0.0001
 export NSC_WEIGHT_DECAY=0.01
 export NSC_MIXED_PRECISION=true
 
-approach=${APPROACH:-"APPROACH is not defined"}
+approach=${APPROACH?"APPROACH is not defined"}
 
 # architecture ablations
 if [[ $approach == "plus_sed" ]]; then
-  config="$config_dir/tokenization_repair_plus_sed.yaml"
+  config="$config_dir/train/tokenization_repair_plus_sed.yaml"
   rel_config=$(realpath "$config" --relative-to "$workspace")
   echo "Starting training with config $(realpath "$config" --relative-to "$config_dir")"
   export NSC_EXPERIMENT_NAME="tokenization_repair_plus_sed"
   export NSC_MASTER_PORT=$(python -c "import random; print(random.randrange(10000, 60000))")
   export NSC_BATCH_MAX_LENGTH=98304
   export NSC_CONFIG=$rel_config
-  sbatch spell_checking/scripts/train.sh
+  export NSC_WORLD_SIZE=12
+  sbatch --nodes=3 spell_checking/scripts/train.sh
 
 elif [[ $approach == "plus_sed_plus_sec" ]]; then
-  config="$config_dir/tokenization_repair_plus_sed_plus_sec.yaml"
+  config="$config_dir/train/tokenization_repair_plus_sed_plus_sec.yaml"
   rel_config=$(realpath "$config" --relative-to "$workspace")
   echo "Starting training with config $(realpath "$config" --relative-to "$config_dir")"
   export NSC_EXPERIMENT_NAME="tokenization_repair_plus_sed_plus_sec"
@@ -40,7 +41,8 @@ elif [[ $approach == "plus_sed_plus_sec" ]]; then
   export NSC_NUM_SEC_LAYERS=6
   export NSC_BATCH_MAX_LENGTH=32768
   export NSC_CONFIG=$rel_config
-  sbatch spell_checking/scripts/train.sh
+  export NSC_WORLD_SIZE=20
+  sbatch --nodes=5 spell_checking/scripts/train.sh
 
 else
   echo "Unknown approach $approach"

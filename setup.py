@@ -37,6 +37,10 @@ setup(
             "lmdb==1.3.0",
             "lz4==4.0.0",
             "tensorboard==2.8.0"
+        ],
+        "index": [
+            "nmslib==2.1.1",
+            "marisa-trie==0.7.7"
         ]
     }
 )

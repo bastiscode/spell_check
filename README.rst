@@ -1,5 +1,5 @@
 Neural spell checking using Transformers and Graph Neural Networks
-========================================================================
+==================================================================
 
 This project is about detecting and correcting spelling errors using Transformers and
 Graph Neural Networks.
@@ -106,7 +106,7 @@ Python API
 
 We also provide a Python API for you to use spell checking models directly in code. Below are basic
 code examples on how to use the API. For a full documentation on all provided classes, methods and arguments
-see the ``nsc`` Python API documentation.
+see the ``nsc`` package documentation.
 
 **Spelling error correction**
 

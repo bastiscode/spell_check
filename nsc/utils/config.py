@@ -97,16 +97,13 @@ class TestConfig:
 
 def set_nsc_env_vars(env_vars: Dict[str, Any], keep_existing_env_vars: bool = False) -> None:
     existing_env_vars = set()
-    if not keep_existing_env_vars:
-        # delete all previous gnn lib env vars
-        for k in os.environ:
-            if k.startswith("NSC_"):
-                del os.environ[k]
-    else:
-        for k in os.environ:
-            if k.startswith("NSC_"):
+    for k in os.environ:
+        if k.startswith("NSC_"):
+            if keep_existing_env_vars:
                 existing_env_vars.add(k)
-    # set all new gnn lib env vars
+            else:
+                del os.environ[k]
+    # set all new nsc env vars
     for k, v in env_vars.items():
         if k not in existing_env_vars:
             os.environ[k] = v

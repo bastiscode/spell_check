@@ -1,0 +1,25 @@
+variant: ${from_file:variant/sec_nmt_transformer.yaml}
+model: ${from_file:model/model_for_sec_nmt_transformer.yaml}
+optimizer: ${from_file:optimizer/adamw.yaml}
+lr_scheduler: ${from_file:lr_scheduler/step_with_0.05_warmup.yaml}
+
+experiment_dir: ${oc.env:NSC_EXPERIMENT_DIR}
+data_dir: ${oc.env:NSC_DATA_DIR}
+datasets:
+  - ${oc.env:NSC_DATA_DIR}/processed/wikidump_paragraphs_sec_with_tokenization_repair
+  - ${oc.env:NSC_DATA_DIR}/processed/bookcorpus_paragraphs_sec_with_tokenization_repair
+dataset_limits:
+  - ${oc.env:NSC_DATA_LIMIT}
+  - ${oc.env:NSC_DATA_LIMIT}
+val_splits:
+  - 2500
+  - 2500
+
+experiment_name: ${oc.env:NSC_EXPERIMENT_NAME,dummy}
+epochs: ${oc.env:NSC_EPOCHS,1}
+batch_max_length: ${oc.env:NSC_BATCH_MAX_LENGTH,4096}
+bucket_span: ${oc.env:NSC_BUCKET_SPAN,4}
+log_per_epoch: ${oc.env:NSC_LOG_PER_EPOCH,100}
+eval_per_epoch: ${oc.env:NSC_EVAL_PER_EPOCH,4}
+seed: 22
+mixed_precision: ${oc.env:NSC_MIXED_PRECISION,true}

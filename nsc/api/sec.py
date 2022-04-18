@@ -35,13 +35,28 @@ def get_available_spelling_error_correction_models() -> List[ModelInfo]:
             task="sec",
             name="transformer_words_nmt",
             description="Transformer model that corrects sequences by translating each word individually "
-                        "from misspelled to correct"
+                        "from misspelled to correct."
+        ),
+        ModelInfo(
+            task="sec",
+            name="tokenization_repair++",
+            description="Transformer based model that corrects sequences by first correcting the tokenization, then "
+                        "detecting spelling errors for each word in the repaired text and then translating "
+                        "every detected misspelled word to its corrected version."
         ),
         ModelInfo(
             task="sec",
             name="transformer_nmt",
             description="Transformer model that translates a sequence with spelling errors into a "
-                        "sequence without spelling errors"
+                        "sequence without spelling errors."
+        ),
+        ModelInfo(
+            task="sec",
+            name="transformer_with_tokenization_repair_nmt",
+            description="Transformer model that translates a sequence with spelling and tokenization errors "
+                        "into a sequence without spelling errors and tokenization errors. Different from "
+                        "transformer_nmt because this model was trained on text with spelling and tokenization errors, "
+                        "whereas transformer_nmt was trained only on text with spelling errors."
         )
     ]
 
@@ -164,29 +179,17 @@ class SpellingErrorCorrector(_APIBase):
 
     @staticmethod
     def from_pretrained(
+            task: str = "sec",
             model: str = "transformer_words_nmt",
             device: Union[str, int] = "cuda",
             cache_dir: Optional[str] = None,
             force_download: bool = False
     ) -> "SpellingErrorCorrector":
-        """
-
-        Create a new spelling error corrector using a pretrained model.
-
-        Args:
-            model: name of the pretrained model
-            device: device to load the model to (e.g. "cuda", "cpu" or integer in range [0, ..., #GPUs))
-            cache_dir: local cache directory to store the pretrained model
-            force_download: download the pretrained model again even if it already exists in the cache_dir
-
-        Returns: Spelling error corrector
-
-        """
         assert any(model == m.name for m in get_available_spelling_error_correction_models()), \
             f"model {model} does not match any of the available models:\n" \
             f"{pprint.pformat(get_available_spelling_error_correction_models())}"
 
-        model_dir, data_dir, config_dir = super()._download("sec", model, cache_dir, force_download)
+        model_dir, data_dir, config_dir = SpellingErrorCorrector._download("sec", model, cache_dir, force_download)
 
         return SpellingErrorCorrector(
             model_dir,
@@ -204,17 +207,6 @@ class SpellingErrorCorrector(_APIBase):
             experiment_dir: str,
             device: Union[str, int] = "cuda"
     ) -> "SpellingErrorCorrector":
-        """
-
-        Create a new spelling error corrector using your own experiment.
-
-        Args:
-            experiment_dir: path to the experiment directory
-            device: device to load the model to (e.g. "cuda", "cpu" or integer in range [0, ..., #GPUs))
-
-        Returns: Spelling error corrector
-
-        """
         return SpellingErrorCorrector(
             experiment_dir,
             device,
@@ -426,7 +418,7 @@ class SpellingErrorCorrector(_APIBase):
                 batch_max_length_factor * model_max_input_length, if a model e.g. has a max input length of 512 tokens
                 and batch_max_length_factor is 4 then one batch will contain as many input sequences as fit within
                 512 * 4 = 2048 tokens (takes precedence over batch_size if specified)
-            sort_by_length: sort the inputs by length before correcting them
+            sort_by_length: sort the inputs by length before processing them
             show_progress: display progress bar
 
         Returns: corrected file as list of strings if output_file_path is not specified else None

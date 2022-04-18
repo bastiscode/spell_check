@@ -17,7 +17,7 @@ dist
 docs
 
 /spell_checking/.transformers_cache
-/spell_checking/baselines/jamspell
 /spell_checking/benchmarks/dev
 /spell_checking/benchmarks/test
-/spell_checking/benchmarks/matthias
+/spell_checking/baselines/jamspell
+/spell_checking/baselines/languagetool/ngram_data
