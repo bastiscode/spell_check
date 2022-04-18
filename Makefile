@@ -21,7 +21,8 @@ run_docker_cpu:
 .PHONY: docs
 docs:
 	@echo "Building docs"
-	cd docs && sphinx-apidoc -f -o . ../nsc && make html
+	sphinx-apidoc -M -f -o docs nsc nsc/train.py nsc/version.py nsc/preprocess.py nsc/scripts nsc/utils \
+	nsc/tasks nsc/data nsc/models nsc/modules nsc/api && make -C docs html
 
 .PHONY: checkstyle
 checkstyle:

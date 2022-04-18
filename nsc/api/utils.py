@@ -7,7 +7,7 @@ import platform
 import re
 import shutil
 import zipfile
-from typing import Optional, Union, List, Tuple, Dict, Any, Iterator, Callable
+from typing import Optional, Union, List, Tuple, Dict, Any, Iterator
 
 import requests
 import torch

@@ -37,7 +37,7 @@ After installation there will be three commands available in your environment:
 By default all three commands take input from `stdin`, run their respective task on the
 input line by line and print their output line by line to `stdout`.
 
-Spelling error correction using **nsec**
+**Spelling error correction using** ``nsec``
 
 .. code-block:: bash
 
@@ -51,7 +51,7 @@ Spelling error correction using **nsec**
     # or by passing a file
     nsec -f path/to/file.txt
 
-Spelling error detection using **nsed**
+**Spelling error detection using** ``nsed``
 
 .. code-block:: bash
 
@@ -65,7 +65,7 @@ Spelling error detection using **nsed**
     # or by passing a file
     nsed -f path/to/file.txt
 
-Tokenization repair using **ntr**
+**Tokenization repair using** ``ntr``
 
 .. code-block:: bash
 
@@ -108,17 +108,17 @@ We also provide a Python API for you to use spell checking models directly in co
 code examples on how to use the API. For a full documentation on all provided classes, methods and arguments
 see the ``nsc`` Python API documentation.
 
-Spelling error correction
+**Spelling error correction**
 
 .. literalinclude:: examples/sec.py
     :language: python
 
-Spelling error detection
+**Spelling error detection**
 
 .. literalinclude:: examples/sed.py
     :language: python
 
-Tokenization repair
+**Tokenization repair**
 
 .. literalinclude:: examples/tokenization_repair.py
     :language: python

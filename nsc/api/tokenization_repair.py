@@ -2,25 +2,19 @@ import pprint
 from typing import List, Union, Dict, Any, Optional
 
 import torch
-from torch import autocast
-from tqdm import tqdm
 
 from nsc.api.utils import (
     ModelInfo,
     StringInputOutput,
     load_experiment,
-    reorder_data,
     get_device_info,
     _APIBase,
-    load_text_file,
-    get_inference_dataset_and_loader
+    load_text_file
 )
 from nsc.data.utils import clean_sequence
 from nsc.modules import inference
 from nsc.tasks import tokenization_repair, tokenization_repair_plus
 from nsc.utils import common
-
-__all__ = ["get_available_tokenization_repair_models", "TokenizationRepairer"]
 
 
 def get_available_tokenization_repair_models() -> List[ModelInfo]:
@@ -77,6 +71,19 @@ class TokenizationRepairer(_APIBase):
             cache_dir: Optional[str] = None,
             force_download: bool = False
     ) -> "TokenizationRepairer":
+        """
+
+        Create a new tokenization repairer using a pretrained model.
+
+        Args:
+            model: name of the pretrained model
+            device: device to load the model to (e.g. "cuda", "cpu" or integer in range [0, ..., #GPUs))
+            cache_dir: local cache directory to store the pretrained model
+            force_download: download the pretrained model again even if it already exists in the cache_dir
+
+        Returns: Tokenization repairer
+
+        """
         assert any(model == m.name for m in get_available_tokenization_repair_models()), \
             f"model {model} does not match any of the available models:\n" \
             f"{pprint.pformat(get_available_tokenization_repair_models())}"
@@ -99,6 +106,17 @@ class TokenizationRepairer(_APIBase):
             experiment_dir: str,
             device: Union[str, int] = "cuda"
     ) -> "TokenizationRepairer":
+        """
+
+        Create a new tokenization repairer using your own experiment.
+
+        Args:
+            experiment_dir: path to the experiment directory
+            device: device to load the model to (e.g. "cuda", "cpu" or integer in range [0, ..., #GPUs))
+
+        Returns: Tokenization repairer
+
+        """
         return TokenizationRepairer(
             experiment_dir,
             device,

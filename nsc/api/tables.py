@@ -1,7 +1,5 @@
 from typing import List, Optional, Set, Tuple
 
-__all__ = ["generate_table"]
-
 
 def generate_table(
         headers: List[List[str]],

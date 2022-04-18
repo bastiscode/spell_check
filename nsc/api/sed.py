@@ -3,26 +3,19 @@ import pprint
 from typing import List, Optional, Union, Any, Dict
 
 import torch
-from torch import autocast
-from tqdm import tqdm
 
 from nsc.api.utils import (
     ModelInfo,
     StringInputOutput,
     load_experiment,
-    reorder_data,
     get_device_info,
     _APIBase,
-    get_inference_dataset_and_loader,
-    load_text_file, save_text_file
+    save_text_file
 )
 from nsc.data import DatasetVariants
-from nsc.data.utils import clean_sequence, collate
 from nsc.modules import inference
 from nsc.tasks import graph_sed_words, graph_sed_sequence, sed_words, sed_sequence, tokenization_repair_plus
 from nsc.utils import common
-
-__all__ = ["get_available_spelling_error_detection_models", "SpellingErrorDetector"]
 
 Detections = Union[str, List[int], List[List[int]]]
 
@@ -57,12 +50,27 @@ def get_available_spelling_error_detection_models() -> List[ModelInfo]:
 
 
 class SpellingErrorDetector(_APIBase):
+    """Spelling error detection
+
+    Class to run spelling error detection models.
+
+    """
     def __init__(
             self,
             model_dir: str,
             device: Union[str, int],
             **kwargs: Dict[str, Any]
     ) -> None:
+        """Spelling error detection constructor.
+
+        Do not use this explicitly.
+        Use the static SpellingErrorDetector.from_pretrained() and SpellingErrorDetector.from_experiment() methods
+        instead.
+
+        Args:
+            model_dir: directory of the model to load
+            device: device to load the model in
+        """
         logger = common.get_logger("SPELLING_ERROR_DETECTION")
 
         if device != "cpu" and not torch.cuda.is_available():
@@ -95,6 +103,12 @@ class SpellingErrorDetector(_APIBase):
 
     @property
     def task_name(self) -> str:
+        """
+        Gives the task name for the spelling error detection model.
+
+        Returns: task name (sed_sequence or sed_words)
+
+        """
         return (
             "sed_sequence" if self.task.variant_cfg.type == DatasetVariants.SED_SEQUENCE
             else "sed_words"
@@ -108,6 +122,20 @@ class SpellingErrorDetector(_APIBase):
             cache_dir: Optional[str] = None,
             force_download: bool = False
     ) -> "SpellingErrorDetector":
+        """
+
+        Create a new spelling error detector using a pretrained model.
+
+        Args:
+            task: name of the task (sed_words or sed_sequence)
+            model: name of the pretrained model
+            device: device to load the model to (e.g. "cuda", "cpu" or integer in range [0, ..., #GPUs))
+            cache_dir: local cache directory to store the pretrained model
+            force_download: download the pretrained model again even if it already exists in the cache_dir
+
+        Returns: Spelling error detector
+
+        """
         assert any(model == m.name and task == m.task for m in get_available_spelling_error_detection_models()), \
             f"task {task} and model {model} do not match any of the available models:\n" \
             f"{pprint.pformat(get_available_spelling_error_detection_models())}"
@@ -130,6 +158,17 @@ class SpellingErrorDetector(_APIBase):
             experiment_dir: str,
             device: Union[str, int] = "cuda"
     ) -> "SpellingErrorDetector":
+        """
+
+        Create a new spelling error detector using your own experiment.
+
+        Args:
+            experiment_dir: path to the experiment directory
+            device: device to load the model to (e.g. "cuda", "cpu" or integer in range [0, ..., #GPUs))
+
+        Returns: Spelling error detector
+
+        """
         return SpellingErrorDetector(
             experiment_dir,
             device,

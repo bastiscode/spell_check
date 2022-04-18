@@ -25,7 +25,6 @@ from nsc.modules import inference
 from nsc.tasks import graph_sec_nmt, graph_sec_words_nmt, sec_nmt, sec_words_nmt, tokenization_repair_plus
 from nsc.utils import common
 
-__all__ = ["get_available_spelling_error_correction_models", "SpellingErrorCorrector"]
 
 Detections = Union[List[int], List[List[int]]]
 
@@ -170,6 +169,19 @@ class SpellingErrorCorrector(_APIBase):
             cache_dir: Optional[str] = None,
             force_download: bool = False
     ) -> "SpellingErrorCorrector":
+        """
+
+        Create a new spelling error corrector using a pretrained model.
+
+        Args:
+            model: name of the pretrained model
+            device: device to load the model to (e.g. "cuda", "cpu" or integer in range [0, ..., #GPUs))
+            cache_dir: local cache directory to store the pretrained model
+            force_download: download the pretrained model again even if it already exists in the cache_dir
+
+        Returns: Spelling error corrector
+
+        """
         assert any(model == m.name for m in get_available_spelling_error_correction_models()), \
             f"model {model} does not match any of the available models:\n" \
             f"{pprint.pformat(get_available_spelling_error_correction_models())}"
@@ -192,6 +204,17 @@ class SpellingErrorCorrector(_APIBase):
             experiment_dir: str,
             device: Union[str, int] = "cuda"
     ) -> "SpellingErrorCorrector":
+        """
+
+        Create a new spelling error corrector using your own experiment.
+
+        Args:
+            experiment_dir: path to the experiment directory
+            device: device to load the model to (e.g. "cuda", "cpu" or integer in range [0, ..., #GPUs))
+
+        Returns: Spelling error corrector
+
+        """
         return SpellingErrorCorrector(
             experiment_dir,
             device,
@@ -335,6 +358,28 @@ class SpellingErrorCorrector(_APIBase):
             sort_by_length: bool = True,
             show_progress: bool = False
     ) -> StringInputOutput:
+        """
+
+        Correct spelling errors in text.
+
+        Args:
+            inputs: text to correct given as a single string or a list of strings
+            detections: spelling error detections (from a SpellingErrorDetector) to guide the correction, if
+                inputs is a single str, detections must be a list of integers, otherwise if inputs is a list of strings,
+                detections should be a list of lists of integers
+            search: instance of a Search object to determine the search method to use for decoding
+            score: instance of a SpellingCorrectionScore object to determine how to score search paths during decoding
+            batch_size: how many sequences to process at once
+            batch_max_length_factor: sets the maximum total length of a batch to be
+                batch_max_length_factor * model_max_input_length, if a model e.g. has a max input length of 512 tokens
+                and batch_max_length_factor is 4 then one batch will contain as many input sequences as fit within
+                512 * 4 = 2048 tokens (takes precedence over batch_size if specified)
+            sort_by_length: sort the inputs by length before correcting them
+            show_progress: display progress bar
+
+        Returns: corrected text as string or list of strings
+
+        """
         input_is_string = isinstance(inputs, str)
         assert (
                 input_is_string
@@ -365,6 +410,28 @@ class SpellingErrorCorrector(_APIBase):
             sort_by_length: bool = True,
             show_progress: bool = True
     ) -> Optional[List[str]]:
+        """
+
+        Correct spelling errors in a file.
+
+        Args:
+            input_file_path: path to an input file, which will be corrected line by line
+            output_file_path: path to an output file, where corrected text will be saved line by line
+            detections: spelling error detections (from a SpellingErrorDetector) to guide the correction, can either
+                be a path to a file containing detections or a list of lists of integers
+            search: instance of a Search object to determine the search method to use for decoding
+            score: instance of a SpellingCorrectionScore object to determine how to score search paths during decoding
+            batch_size: how many sequences to process at once
+            batch_max_length_factor: sets the maximum total length of a batch to be
+                batch_max_length_factor * model_max_input_length, if a model e.g. has a max input length of 512 tokens
+                and batch_max_length_factor is 4 then one batch will contain as many input sequences as fit within
+                512 * 4 = 2048 tokens (takes precedence over batch_size if specified)
+            sort_by_length: sort the inputs by length before correcting them
+            show_progress: display progress bar
+
+        Returns: corrected file as list of strings if output_file_path is not specified else None
+
+        """
         if detections is not None and isinstance(detections, str):
             detections = load_text_file(detections)
             detections = [[int(det) for det in detection.split()] for detection in detections]
