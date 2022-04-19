@@ -14,7 +14,7 @@ dist
 /third_party
 .cache
 *.zip
-docs
+sphinx_docs
 
 /spell_checking/.transformers_cache
 /spell_checking/benchmarks/dev

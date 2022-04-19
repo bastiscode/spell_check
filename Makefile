@@ -24,10 +24,12 @@ run_docker_cpu:
 docs:
 	@echo "Building docs"
 	@cp README.rst docs/readme.rst
+	@cp REPRODUCE.rst docs/reproduce.rst
 	@sphinx-apidoc -M -f -o docs nsc nsc/train.py nsc/version.py nsc/preprocess.py nsc/scripts nsc/utils \
 	nsc/tasks nsc/data nsc/models nsc/modules nsc/api
-	@make -C docs singlehtml
-	@make -C docs man
+	@make -C sphinx_docs singlehtml
+	@make -C sphinx_docs man
+	@cp -a sphinx_docs/_build/singlehtml/. docs
 
 .PHONY: checkstyle
 checkstyle:

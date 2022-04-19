@@ -32,7 +32,6 @@ class PreprocessConfig:
     index: Optional[str] = None
     index_num_neighbors: int = 20
 
-    # options for creating space docs
     with_pos_tags: bool = False
     with_ner: bool = False
     with_dep_parser: bool = False

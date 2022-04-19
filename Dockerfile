@@ -9,12 +9,15 @@ COPY setup.py .
 COPY requirements.txt .
 COPY Makefile .
 COPY README.rst .
-COPY spell_checking .
+COPY REPRODUCE.rst .
 
 RUN make install
 
+WORKDIR /spell_check/docker
+COPY docker/Makefile .
+COPY docker/help.sh .
+
 ENV DGLBACKEND pytorch
 ENV PYTHONPATH "$PYTHONPATH:/spell_check"
-WORKDIR /spell_check/spell_checking
 
 CMD make help && bash

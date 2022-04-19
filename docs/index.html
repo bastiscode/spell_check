@@ -1,0 +1,970 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>nsc 0.1.0 documentation</title>
+      <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+        <script src="_static/jquery.js"></script>
+        <script src="_static/underscore.js"></script>
+        <script src="_static/doctools.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="#" class="icon icon-home"> nsc
+          </a>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="index.html#document-readme">Neural spell checking using Transformers and Graph Neural Networks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="index.html#document-reproduce">Reproduce results</a></li>
+<li class="toctree-l1"><a class="reference internal" href="index.html#document-nsc">nsc package</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="#">nsc</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="#" class="icon icon-home"></a> &raquo;</li>
+      <li>nsc 0.1.0 documentation</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <div class="toctree-wrapper compound">
+<span id="document-readme"></span><section id="neural-spell-checking-using-transformers-and-graph-neural-networks">
+<h1>Neural spell checking using Transformers and Graph Neural Networks<a class="headerlink" href="#neural-spell-checking-using-transformers-and-graph-neural-networks" title="Permalink to this headline"></a></h1>
+<p>This project is about detecting and correcting spelling errors using Transformers and
+Graph Neural Networks.</p>
+<section id="installation">
+<h2>Installation<a class="headerlink" href="#installation" title="Permalink to this headline"></a></h2>
+<p>Clone the repository</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>git clone git@github.com:bastiscode/spell_check.git
+</pre></div>
+</div>
+<p>Install from source (alternatively you can use <a class="reference internal" href="#docker">Docker</a>)</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>make install
+</pre></div>
+</div>
+</section>
+<section id="usage">
+<h2>Usage<a class="headerlink" href="#usage" title="Permalink to this headline"></a></h2>
+<p>There are two main ways to use this project.
+Either via the command line or by directly using the Python API.</p>
+<section id="command-line-interfaces">
+<h3>Command line interfaces<a class="headerlink" href="#command-line-interfaces" title="Permalink to this headline"></a></h3>
+<p>After installation there will be three commands available in your environment:</p>
+<ol class="arabic simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">nsec</span></code> for neural spelling error correction</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">nsed</span></code> for neural spelling error detection</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ntr</span></code> for neural tokenization repair</p></li>
+</ol>
+<p>By default all three commands take input from <cite>stdin</cite>, run their respective task on the
+input line by line and print their output line by line to <cite>stdout</cite>.</p>
+<p><strong>Spelling error correction using</strong> <code class="docutils literal notranslate"><span class="pre">nsec</span></code></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># correct text by piping into nsec,</span>
+<span class="nb">echo</span> <span class="s2">&quot;This is an incorect sentense!&quot;</span> <span class="p">|</span> nsec
+cat path/to/file.txt <span class="p">|</span> nsec
+
+<span class="c1"># by using the -c flag</span>
+nsec -c <span class="s2">&quot;This is an incorect sentense!&quot;</span>
+
+<span class="c1"># or by passing a file</span>
+nsec -f path/to/file.txt
+</pre></div>
+</div>
+<p><strong>Spelling error detection using</strong> <code class="docutils literal notranslate"><span class="pre">nsed</span></code></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># detect errors by piping into nsed,</span>
+<span class="nb">echo</span> <span class="s2">&quot;This is an incorect sentense!&quot;</span> <span class="p">|</span> nsed
+cat path/to/file.txt <span class="p">|</span> nsed
+
+<span class="c1"># by using the -d flag</span>
+nsed -d <span class="s2">&quot;This is an incorect sentense!&quot;</span>
+
+<span class="c1"># or by passing a file</span>
+nsed -f path/to/file.txt
+</pre></div>
+</div>
+<p><strong>Tokenization repair using</strong> <code class="docutils literal notranslate"><span class="pre">ntr</span></code></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># repair text by piping into ntr,</span>
+<span class="nb">echo</span> <span class="s2">&quot;Thisis an inc orect sentens e!&quot;</span> <span class="p">|</span> ntr
+cat path/to/file.txt <span class="p">|</span> ntr
+
+<span class="c1"># by using the -r flag</span>
+ntr -r <span class="s2">&quot;Thisis an inc orect sentens e!&quot;</span>
+
+<span class="c1"># or by passing a file</span>
+ntr -f path/to/file.txt
+</pre></div>
+</div>
+<p>You can also combine the <code class="docutils literal notranslate"><span class="pre">ntr</span></code>, <code class="docutils literal notranslate"><span class="pre">nsed</span></code>, and <code class="docutils literal notranslate"><span class="pre">nsec</span></code> commands in a variety of ways.
+Some examples are shown below.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># repair and detect</span>
+<span class="nb">echo</span> <span class="s2">&quot;Repi arand detec erors in tihssen tence!&quot;</span> <span class="p">|</span> ntr <span class="p">|</span> nsed
+
+<span class="c1"># repair and correct</span>
+<span class="nb">echo</span> <span class="s2">&quot;Repi arand core ct tihssen tens!&quot;</span> <span class="p">|</span> ntr <span class="p">|</span> nsec
+
+<span class="c1"># repair, detect and correct</span>
+<span class="c1"># (this pipeline uses the spelling error detection output</span>
+<span class="c1"># to guide the spelling error correction model to correct only the misspelled words)</span>
+<span class="nb">echo</span> <span class="s2">&quot;Repi arand core ct tihssen tens!&quot;</span> <span class="p">|</span> ntr <span class="p">|</span> nsed --sec-out <span class="p">|</span> nsec --sed-in
+
+<span class="c1"># repair and correct a file and save the output</span>
+ntr -f path/to/file.txt <span class="p">|</span> nsec --progress -o path/to/output_file.txt
+</pre></div>
+</div>
+<p>There are a few other command line options available for the <code class="docutils literal notranslate"><span class="pre">nsec</span></code>, <code class="docutils literal notranslate"><span class="pre">nsed</span></code> and <code class="docutils literal notranslate"><span class="pre">ntr</span></code> commands. Inspect
+them by passing the <code class="docutils literal notranslate"><span class="pre">-h</span> <span class="pre">/</span> <span class="pre">--help</span></code> flag to the commands.</p>
+</section>
+<section id="python-api">
+<h3>Python API<a class="headerlink" href="#python-api" title="Permalink to this headline"></a></h3>
+<p>We also provide a Python API for you to use spell checking models directly in code. Below are basic
+code examples on how to use the API. For a full documentation on all provided classes, methods and arguments
+see the <code class="docutils literal notranslate"><span class="pre">nsc</span></code> package documentation.</p>
+<p><strong>Spelling error correction</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">nsc</span> <span class="kn">import</span> <span class="n">SpellingErrorCorrector</span><span class="p">,</span> <span class="n">get_available_spelling_error_correction_models</span>
+
+<span class="c1"># show all spelling error correction models</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">get_available_spelling_error_correction_models</span><span class="p">())</span>
+
+<span class="c1"># use a pretrained model</span>
+<span class="n">sec</span> <span class="o">=</span> <span class="n">SpellingErrorCorrector</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">()</span>
+<span class="c1"># correct errors in text</span>
+<span class="n">correction</span> <span class="o">=</span> <span class="n">sec</span><span class="o">.</span><span class="n">correct_text</span><span class="p">(</span><span class="s2">&quot;Tihs text has erors!&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">correction</span><span class="p">)</span>
+<span class="c1"># correct errors in file</span>
+<span class="n">corrections</span> <span class="o">=</span> <span class="n">sec</span><span class="o">.</span><span class="n">correct_file</span><span class="p">(</span><span class="s2">&quot;path/to/file.txt&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">correction</span><span class="p">)</span>
+</pre></div>
+</div>
+<p><strong>Spelling error detection</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">nsc</span> <span class="kn">import</span> <span class="n">SpellingErrorDetector</span><span class="p">,</span> <span class="n">get_available_spelling_error_detection_models</span>
+
+<span class="c1"># show all spelling error detection models</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">get_available_spelling_error_detection_models</span><span class="p">())</span>
+
+<span class="c1"># use a pretrained model</span>
+<span class="n">sed</span> <span class="o">=</span> <span class="n">SpellingErrorDetector</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">()</span>
+<span class="c1"># detect errors in text</span>
+<span class="n">detection</span> <span class="o">=</span> <span class="n">sed</span><span class="o">.</span><span class="n">detect_text</span><span class="p">(</span><span class="s2">&quot;Tihs text has erors!&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">detection</span><span class="p">)</span>
+<span class="c1"># detect errors in file</span>
+<span class="n">detections</span> <span class="o">=</span> <span class="n">sed</span><span class="o">.</span><span class="n">detect_file</span><span class="p">(</span><span class="s2">&quot;path/to/file.txt&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">detections</span><span class="p">)</span>
+</pre></div>
+</div>
+<p><strong>Tokenization repair</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">nsc</span> <span class="kn">import</span> <span class="n">TokenizationRepairer</span><span class="p">,</span> <span class="n">get_available_tokenization_repair_models</span>
+
+<span class="c1"># show all tokenization repair models</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">get_available_tokenization_repair_models</span><span class="p">())</span>
+
+<span class="c1"># use a pretrained model</span>
+<span class="n">tr</span> <span class="o">=</span> <span class="n">TokenizationRepairer</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">()</span>
+<span class="c1"># repair tokenization in text</span>
+<span class="n">repaired_text</span> <span class="o">=</span> <span class="n">tr</span><span class="o">.</span><span class="n">repair_text</span><span class="p">(</span><span class="s2">&quot;Ti hstext h aserors!&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">repaired_text</span><span class="p">)</span>
+<span class="c1"># repair tokenization in file</span>
+<span class="n">repaired_file</span> <span class="o">=</span> <span class="n">tr</span><span class="o">.</span><span class="n">repair_file</span><span class="p">(</span><span class="s2">&quot;path/to/file.txt&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">repaired_file</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="docker">
+<h2>Docker<a class="headerlink" href="#docker" title="Permalink to this headline"></a></h2>
+<p>This project can also be run using Docker.
+Inside the Docker container both the <a class="reference internal" href="#command-line-interfaces">Command line interfaces</a> and <a class="reference internal" href="#python-api">Python API</a> are available for you to use.</p>
+<p>To build the Docker image</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>make build_docker
+</pre></div>
+</div>
+<p>To start a Docker container</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># run the docker container with GPU support</span>
+make run_docker_gpu
+<span class="c1"># or with CPU support</span>
+make run_docker_cpu
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Running the Docker container with GPU support assumes that you have the <a class="reference external" href="https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html">NVIDIA Container Toolkit</a> installed.</p>
+</div>
+</section>
+</section>
+<span id="document-reproduce"></span><section id="reproduce-results">
+<h1>Reproduce results<a class="headerlink" href="#reproduce-results" title="Permalink to this headline"></a></h1>
+<p>To reproduce the results you will need the training data. Everything
+you need (preprocessed training data, tokenizer, dictionaries, etc.) can be found
+under <code class="docutils literal notranslate"><span class="pre">/nfs/students/sebastian-walter/masters_thesis/data</span></code>.</p>
+<p>You also need to set the following two special environment variables.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Of course you can also copy the training data folder to every other
+place you like and adjust <code class="docutils literal notranslate"><span class="pre">NSC_DATA_DIR</span></code> accordingly.</p>
+</div>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># set the data directory</span>
+<span class="nb">export</span> <span class="nv">NSC_DATA_DIR</span><span class="o">=</span>/nfs/students/sebastian-walter/masters_thesis/data
+
+<span class="c1"># set the config directory (necessary to be able to compose</span>
+<span class="c1"># the final training config from sub-configs)</span>
+<span class="nb">export</span> <span class="nv">NSC_CONFIG_DIR</span><span class="o">=</span>spell_checking/configs
+</pre></div>
+</div>
+<p>After that all you train your own models using a training config.
+For all available training configs see the <code class="docutils literal notranslate"><span class="pre">configs/train</span></code> directory.</p>
+</section>
+<span id="document-nsc"></span><section id="module-nsc">
+<span id="nsc-package"></span><h1>nsc package<a class="headerlink" href="#module-nsc" title="Permalink to this headline"></a></h1>
+<dl class="py class">
+<dt class="sig sig-object py" id="nsc.BeamSearch">
+<em class="property"><span class="pre">class</span><span class="w">  </span></em><span class="sig-prename descclassname"><span class="pre">nsc.</span></span><span class="sig-name descname"><span class="pre">BeamSearch</span></span><a class="headerlink" href="#nsc.BeamSearch" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">nsc.api.sec.Search</span></code></p>
+<p>Beam search: Keep the best beam_width paths during search.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="nsc.BeamSearch.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">beam_width</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">5</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#nsc.BeamSearch.__init__" title="Permalink to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>beam_width</strong> (<em>int</em>) – </p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="nsc.BeamSearch.beam_width">
+<span class="sig-name descname"><span class="pre">beam_width</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w">  </span><span class="pre">int</span></em><em class="property"><span class="w">  </span><span class="p"><span class="pre">=</span></span><span class="w">  </span><span class="pre">5</span></em><a class="headerlink" href="#nsc.BeamSearch.beam_width" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="nsc.BestFirstSearch">
+<em class="property"><span class="pre">class</span><span class="w">  </span></em><span class="sig-prename descclassname"><span class="pre">nsc.</span></span><span class="sig-name descname"><span class="pre">BestFirstSearch</span></span><a class="headerlink" href="#nsc.BestFirstSearch" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">nsc.api.sec.Search</span></code></p>
+<p>Best first search: Choose the highest scoring path out of all paths encountered so far.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="nsc.BestFirstSearch.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#nsc.BestFirstSearch.__init__" title="Permalink to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="nsc.GreedySearch">
+<em class="property"><span class="pre">class</span><span class="w">  </span></em><span class="sig-prename descclassname"><span class="pre">nsc.</span></span><span class="sig-name descname"><span class="pre">GreedySearch</span></span><a class="headerlink" href="#nsc.GreedySearch" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">nsc.api.sec.Search</span></code></p>
+<p>Greedy search: Always take the path with the highest score.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="nsc.GreedySearch.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#nsc.GreedySearch.__init__" title="Permalink to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="nsc.SampleSearch">
+<em class="property"><span class="pre">class</span><span class="w">  </span></em><span class="sig-prename descclassname"><span class="pre">nsc.</span></span><span class="sig-name descname"><span class="pre">SampleSearch</span></span><a class="headerlink" href="#nsc.SampleSearch" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">nsc.api.sec.Search</span></code></p>
+<p>Sample search: Choose a random path from the top_k highest scoring paths.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="nsc.SampleSearch.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">top_k</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">5</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#nsc.SampleSearch.__init__" title="Permalink to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>top_k</strong> (<em>int</em>) – </p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="nsc.SampleSearch.top_k">
+<span class="sig-name descname"><span class="pre">top_k</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w">  </span><span class="pre">int</span></em><em class="property"><span class="w">  </span><span class="p"><span class="pre">=</span></span><span class="w">  </span><span class="pre">5</span></em><a class="headerlink" href="#nsc.SampleSearch.top_k" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="nsc.SpellingCorrectionScore">
+<em class="property"><span class="pre">class</span><span class="w">  </span></em><span class="sig-prename descclassname"><span class="pre">nsc.</span></span><span class="sig-name descname"><span class="pre">SpellingCorrectionScore</span></span><a class="headerlink" href="#nsc.SpellingCorrectionScore" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Determines how paths during decoding are scored.</p>
+<p>The default mode <cite>log_likelihood</cite> is to score path using the
+token sequence log likelihood given as the sum of all token log probabilities one got during
+decoding a particular path normalized by the token sequence length (so shorter paths are not preferred):</p>
+<blockquote>
+<div><p>score = sum(log_probabilities) / (len(log_probabilities) ** alpha)</p>
+</div></blockquote>
+<p>Alpha here can be used to steer the decoding towards shorter or longer sequences, if alpha &gt; 1 longer sequences are
+preferred, if alpha &lt; 1 shorter sequences are preferred.</p>
+<p>Other supported modes are <cite>dictionary</cite>, <cite>dictionary_or_eq_input</cite> and <cite>dictionary_or_in_input</cite>. They only allow
+paths that either contain dictionary words only, contain dictionary words or are equal to the input text or contain
+dictionary words or words from the input text.
+Note that for all these modes prefix_index must be specified, since we use a prefix index to determine if
+a word is in a dictionary or is a prefix of a word in a dictionary.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="nsc.SpellingCorrectionScore.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">normalize_by_length</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alpha</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'log_likelihood'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">prefix_index</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#nsc.SpellingCorrectionScore.__init__" title="Permalink to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>normalize_by_length</strong> (<em>bool</em>) – </p></li>
+<li><p><strong>alpha</strong> (<em>float</em>) – </p></li>
+<li><p><strong>mode</strong> (<em>str</em>) – </p></li>
+<li><p><strong>prefix_index</strong> (<em>Optional</em><em>[</em><em>nsc.data.index.PrefixIndex</em><em>]</em>) – </p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="nsc.SpellingCorrectionScore.alpha">
+<span class="sig-name descname"><span class="pre">alpha</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w">  </span><span class="pre">float</span></em><em class="property"><span class="w">  </span><span class="p"><span class="pre">=</span></span><span class="w">  </span><span class="pre">1.0</span></em><a class="headerlink" href="#nsc.SpellingCorrectionScore.alpha" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="nsc.SpellingCorrectionScore.mode">
+<span class="sig-name descname"><span class="pre">mode</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w">  </span><span class="pre">str</span></em><em class="property"><span class="w">  </span><span class="p"><span class="pre">=</span></span><span class="w">  </span><span class="pre">'log_likelihood'</span></em><a class="headerlink" href="#nsc.SpellingCorrectionScore.mode" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="nsc.SpellingCorrectionScore.normalize_by_length">
+<span class="sig-name descname"><span class="pre">normalize_by_length</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w">  </span><span class="pre">bool</span></em><em class="property"><span class="w">  </span><span class="p"><span class="pre">=</span></span><span class="w">  </span><span class="pre">True</span></em><a class="headerlink" href="#nsc.SpellingCorrectionScore.normalize_by_length" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="nsc.SpellingCorrectionScore.prefix_index">
+<span class="sig-name descname"><span class="pre">prefix_index</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w">  </span><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><span class="pre">nsc.data.index.PrefixIndex</span><span class="p"><span class="pre">]</span></span></em><em class="property"><span class="w">  </span><span class="p"><span class="pre">=</span></span><span class="w">  </span><span class="pre">None</span></em><a class="headerlink" href="#nsc.SpellingCorrectionScore.prefix_index" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="nsc.SpellingErrorCorrector">
+<em class="property"><span class="pre">class</span><span class="w">  </span></em><span class="sig-prename descclassname"><span class="pre">nsc.</span></span><span class="sig-name descname"><span class="pre">SpellingErrorCorrector</span></span><a class="headerlink" href="#nsc.SpellingErrorCorrector" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">nsc.api.utils._APIBase</span></code></p>
+<p>Spelling error correction</p>
+<p>Class to run spelling error correction models.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="nsc.SpellingErrorCorrector.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model_dir</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#nsc.SpellingErrorCorrector.__init__" title="Permalink to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>model_dir</strong> (<em>str</em>) – </p></li>
+<li><p><strong>device</strong> (<em>Union</em><em>[</em><em>str</em><em>, </em><em>int</em><em>]</em>) – </p></li>
+<li><p><strong>kwargs</strong> (<em>Dict</em><em>[</em><em>str</em><em>, </em><em>Any</em><em>]</em>) – </p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="nsc.SpellingErrorCorrector.correct_file">
+<span class="sig-name descname"><span class="pre">correct_file</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_file_path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_file_path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">detections</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">search</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">GreedySearch()</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">score</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">SpellingCorrectionScore(normalize_by_length=True,</span> <span class="pre">alpha=1.0,</span> <span class="pre">mode='log_likelihood',</span> <span class="pre">prefix_index=None)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">16</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_max_length_factor</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sort_by_length</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show_progress</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#nsc.SpellingErrorCorrector.correct_file" title="Permalink to this definition"></a></dt>
+<dd><p>Correct spelling errors in a file.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>input_file_path</strong> (<em>str</em>) – path to an input file, which will be corrected line by line</p></li>
+<li><p><strong>output_file_path</strong> (<em>Optional</em><em>[</em><em>str</em><em>]</em>) – path to an output file, where corrected text will be saved line by line</p></li>
+<li><p><strong>detections</strong> (<em>Optional</em><em>[</em><em>Union</em><em>[</em><em>str</em><em>, </em><em>List</em><em>[</em><em>List</em><em>[</em><em>int</em><em>]</em><em>]</em><em>]</em><em>]</em>) – spelling error detections (from a SpellingErrorDetector) to guide the correction, can either
+be a path to a file containing detections or a list of lists of integers</p></li>
+<li><p><strong>search</strong> (<em>nsc.api.sec.Search</em>) – instance of a Search object to determine the search method to use for decoding</p></li>
+<li><p><strong>score</strong> (<a class="reference internal" href="index.html#nsc.SpellingCorrectionScore" title="nsc.api.sec.SpellingCorrectionScore"><em>nsc.api.sec.SpellingCorrectionScore</em></a>) – instance of a SpellingCorrectionScore object to determine how to score search paths during decoding</p></li>
+<li><p><strong>batch_size</strong> (<em>int</em>) – how many sequences to process at once</p></li>
+<li><p><strong>batch_max_length_factor</strong> (<em>Optional</em><em>[</em><em>float</em><em>]</em>) – sets the maximum total length of a batch to be
+batch_max_length_factor * model_max_input_length, if a model e.g. has a max input length of 512 tokens
+and batch_max_length_factor is 4 then one batch will contain as many input sequences as fit within
+512 * 4 = 2048 tokens (takes precedence over batch_size if specified)</p></li>
+<li><p><strong>sort_by_length</strong> (<em>bool</em>) – sort the inputs by length before processing them</p></li>
+<li><p><strong>show_progress</strong> (<em>bool</em>) – display progress bar</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><em>Optional</em>[<em>List</em>[str]]</p>
+</dd>
+</dl>
+<p>Returns: corrected file as list of strings if output_file_path is not specified else None</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="nsc.SpellingErrorCorrector.correct_text">
+<span class="sig-name descname"><span class="pre">correct_text</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">inputs</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">detections</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">search</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">GreedySearch()</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">score</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">SpellingCorrectionScore(normalize_by_length=True,</span> <span class="pre">alpha=1.0,</span> <span class="pre">mode='log_likelihood',</span> <span class="pre">prefix_index=None)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">16</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_max_length_factor</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sort_by_length</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show_progress</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#nsc.SpellingErrorCorrector.correct_text" title="Permalink to this definition"></a></dt>
+<dd><p>Correct spelling errors in text.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>inputs</strong> (<em>Union</em><em>[</em><em>str</em><em>, </em><em>List</em><em>[</em><em>str</em><em>]</em><em>]</em>) – text to correct given as a single string or a list of strings</p></li>
+<li><p><strong>detections</strong> (<em>Optional</em><em>[</em><em>Union</em><em>[</em><em>List</em><em>[</em><em>int</em><em>]</em><em>, </em><em>List</em><em>[</em><em>List</em><em>[</em><em>int</em><em>]</em><em>]</em><em>]</em><em>]</em>) – spelling error detections (from a SpellingErrorDetector) to guide the correction, if
+inputs is a single str, detections must be a list of integers, otherwise if inputs is a list of strings,
+detections should be a list of lists of integers</p></li>
+<li><p><strong>search</strong> (<em>nsc.api.sec.Search</em>) – Search instance to determine the search method to use for decoding</p></li>
+<li><p><strong>score</strong> (<a class="reference internal" href="index.html#nsc.SpellingCorrectionScore" title="nsc.api.sec.SpellingCorrectionScore"><em>nsc.api.sec.SpellingCorrectionScore</em></a>) – SpellingCorrectionScore instance to determine how to score search paths during decoding</p></li>
+<li><p><strong>batch_size</strong> (<em>int</em>) – how many sequences to process at once</p></li>
+<li><p><strong>batch_max_length_factor</strong> (<em>Optional</em><em>[</em><em>float</em><em>]</em>) – sets the maximum total length of a batch to be
+batch_max_length_factor * model_max_input_length, if a model e.g. has a max input length of 512 tokens
+and batch_max_length_factor is 4 then one batch will contain as many input sequences as fit within
+512 * 4 = 2048 tokens (takes precedence over batch_size if specified)</p></li>
+<li><p><strong>sort_by_length</strong> (<em>bool</em>) – sort the inputs by length before processing them</p></li>
+<li><p><strong>show_progress</strong> (<em>bool</em>) – display progress bar</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><em>Union</em>[str, <em>List</em>[str]]</p>
+</dd>
+</dl>
+<p>Returns: corrected text as string or list of strings</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="nsc.SpellingErrorCorrector.from_experiment">
+<em class="property"><span class="pre">static</span><span class="w">  </span></em><span class="sig-name descname"><span class="pre">from_experiment</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">experiment_dir</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'cuda'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#nsc.SpellingErrorCorrector.from_experiment" title="Permalink to this definition"></a></dt>
+<dd><p>Create a new NSC instance using your own experiment.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>experiment_dir</strong> (<em>str</em>) – path to the experiment directory</p></li>
+<li><p><strong>device</strong> (<em>Union</em><em>[</em><em>str</em><em>, </em><em>int</em><em>]</em>) – device to load the model to (e.g. “cuda”, “cpu” or integer denoting GPU device index)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><a class="reference internal" href="index.html#nsc.SpellingErrorCorrector" title="nsc.api.sec.SpellingErrorCorrector">nsc.api.sec.SpellingErrorCorrector</a></p>
+</dd>
+</dl>
+<p>Returns: NSC instance</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="nsc.SpellingErrorCorrector.from_pretrained">
+<em class="property"><span class="pre">static</span><span class="w">  </span></em><span class="sig-name descname"><span class="pre">from_pretrained</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">task</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'sec'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'transformer_words_nmt'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'cuda'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cache_dir</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">force_download</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#nsc.SpellingErrorCorrector.from_pretrained" title="Permalink to this definition"></a></dt>
+<dd><p>Create a new NSC instance using a pretrained model.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>task</strong> (<em>str</em>) – name of the task</p></li>
+<li><p><strong>model</strong> (<em>str</em>) – name of the pretrained model</p></li>
+<li><p><strong>device</strong> (<em>Union</em><em>[</em><em>str</em><em>, </em><em>int</em><em>]</em>) – device to load the model to (e.g. “cuda”, “cpu” or integer denoting GPU device index)</p></li>
+<li><p><strong>cache_dir</strong> (<em>Optional</em><em>[</em><em>str</em><em>]</em>) – local cache directory to store the pretrained model</p></li>
+<li><p><strong>force_download</strong> (<em>bool</em>) – force download the pretrained model again even if it already exists in the cache_dir</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><a class="reference internal" href="index.html#nsc.SpellingErrorCorrector" title="nsc.api.sec.SpellingErrorCorrector">nsc.api.sec.SpellingErrorCorrector</a></p>
+</dd>
+</dl>
+<p>Returns: NSC instance</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="nsc.SpellingErrorCorrector.mixed_precision_enabled">
+<em class="property"><span class="pre">property</span><span class="w">  </span></em><span class="sig-name descname"><span class="pre">mixed_precision_enabled</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w">  </span><span class="pre">bool</span></em><a class="headerlink" href="#nsc.SpellingErrorCorrector.mixed_precision_enabled" title="Permalink to this definition"></a></dt>
+<dd><p>Check if mixed precision is enabled (precision is set to something else than fp32).</p>
+<p>Returns: bool whether mixed precision is enabled</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="nsc.SpellingErrorCorrector.model_name">
+<em class="property"><span class="pre">property</span><span class="w">  </span></em><span class="sig-name descname"><span class="pre">model_name</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w">  </span><span class="pre">str</span></em><a class="headerlink" href="#nsc.SpellingErrorCorrector.model_name" title="Permalink to this definition"></a></dt>
+<dd><p>Gives the name of the NSC model in use.</p>
+<p>Returns: name of the model</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="nsc.SpellingErrorCorrector.set_precision">
+<span class="sig-name descname"><span class="pre">set_precision</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">precision</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#nsc.SpellingErrorCorrector.set_precision" title="Permalink to this definition"></a></dt>
+<dd><p>Set the inference precision to use. Default is standard 32bit full precision.
+Using 16bit floats or 16bit brain floats should only be used when you have a supported NVIDIA GPU.
+When running on CPU fp16 will be overwritten with bfp16 since only bfp16 is supported on CPU for now.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>precision</strong> (<em>str</em>) – precision identifier (one of {fp32, fp16, bfp16})</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+<p>Returns: None</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="nsc.SpellingErrorCorrector.task_name">
+<em class="property"><span class="pre">property</span><span class="w">  </span></em><span class="sig-name descname"><span class="pre">task_name</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w">  </span><span class="pre">str</span></em><a class="headerlink" href="#nsc.SpellingErrorCorrector.task_name" title="Permalink to this definition"></a></dt>
+<dd><p>Check which NSC task is run.</p>
+<p>Returns: name of the task</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="nsc.SpellingErrorCorrector.to">
+<span class="sig-name descname"><span class="pre">to</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">device</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#nsc.SpellingErrorCorrector.to" title="Permalink to this definition"></a></dt>
+<dd><p>Move the model to a different device.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>device</strong> (<em>Union</em><em>[</em><em>str</em><em>, </em><em>int</em><em>]</em>) – device specifier (e.g. “cuda”, “cpu” or integer denoting GPU device index)</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p>nsc.api.utils._APIBase</p>
+</dd>
+</dl>
+<p>Returns: self</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="nsc.SpellingErrorDetector">
+<em class="property"><span class="pre">class</span><span class="w">  </span></em><span class="sig-prename descclassname"><span class="pre">nsc.</span></span><span class="sig-name descname"><span class="pre">SpellingErrorDetector</span></span><a class="headerlink" href="#nsc.SpellingErrorDetector" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">nsc.api.utils._APIBase</span></code></p>
+<p>Spelling error detection</p>
+<p>Class to run spelling error detection models.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="nsc.SpellingErrorDetector.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model_dir</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#nsc.SpellingErrorDetector.__init__" title="Permalink to this definition"></a></dt>
+<dd><p>Spelling error detection constructor.</p>
+<p>Do not use this explicitly.
+Use the static SpellingErrorDetector.from_pretrained() and SpellingErrorDetector.from_experiment() methods
+instead.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>model_dir</strong> (<em>str</em>) – directory of the model to load</p></li>
+<li><p><strong>device</strong> (<em>Union</em><em>[</em><em>str</em><em>, </em><em>int</em><em>]</em>) – device to load the model in</p></li>
+<li><p><strong>kwargs</strong> (<em>Dict</em><em>[</em><em>str</em><em>, </em><em>Any</em><em>]</em>) – </p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="nsc.SpellingErrorDetector.detect_file">
+<span class="sig-name descname"><span class="pre">detect_file</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_file_path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_file_path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">16</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_max_length_factor</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sort_by_length</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show_progress</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#nsc.SpellingErrorDetector.detect_file" title="Permalink to this definition"></a></dt>
+<dd><p>Detect spelling errors in a file.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>input_file_path</strong> (<em>str</em>) – path to an input file, which will be checked for spelling errors line by line</p></li>
+<li><p><strong>output_file_path</strong> (<em>Optional</em><em>[</em><em>str</em><em>]</em>) – path to an output file, where the detections will be saved line by line</p></li>
+<li><p><strong>threshold</strong> (<em>float</em>) – set detection threshold (0 &lt; threshold &lt; 1)</p></li>
+<li><p><strong>batch_size</strong> (<em>int</em>) – how many sequences to process at once</p></li>
+<li><p><strong>batch_max_length_factor</strong> (<em>Optional</em><em>[</em><em>float</em><em>]</em>) – sets the maximum total length of a batch to be
+batch_max_length_factor * model_max_input_length, if a model e.g. has a max input length of 512 tokens
+and batch_max_length_factor is 4 then one batch will contain as many input sequences as fit within
+512 * 4 = 2048 tokens (takes precedence over batch_size if specified)</p></li>
+<li><p><strong>sort_by_length</strong> (<em>bool</em>) – sort the inputs by length before processing them</p></li>
+<li><p><strong>show_progress</strong> (<em>bool</em>) – display progress bar</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><em>Optional</em>[<em>Union</em>[<em>List</em>[int], <em>List</em>[<em>List</em>[int]]]]</p>
+</dd>
+</dl>
+<p>Returns: detections as list of lists of integers if output_file_path is not specified else None</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="nsc.SpellingErrorDetector.detect_text">
+<span class="sig-name descname"><span class="pre">detect_text</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">inputs</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">16</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_max_length_factor</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sort_by_length</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show_progress</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#nsc.SpellingErrorDetector.detect_text" title="Permalink to this definition"></a></dt>
+<dd><p>Detect spelling errors in text.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>inputs</strong> (<em>Union</em><em>[</em><em>str</em><em>, </em><em>List</em><em>[</em><em>str</em><em>]</em><em>]</em>) – text to check for errors given as a single string or a list of strings</p></li>
+<li><p><strong>threshold</strong> (<em>float</em>) – set detection threshold (0 &lt; threshold &lt; 1)</p></li>
+<li><p><strong>batch_size</strong> (<em>int</em>) – how many sequences to process at once</p></li>
+<li><p><strong>batch_max_length_factor</strong> (<em>Optional</em><em>[</em><em>float</em><em>]</em>) – sets the maximum total length of a batch to be
+batch_max_length_factor * model_max_input_length, if a model e.g. has a max input length of 512 tokens
+and batch_max_length_factor is 4 then one batch will contain as many input sequences as fit within
+512 * 4 = 2048 tokens (takes precedence over batch_size if specified)</p></li>
+<li><p><strong>sort_by_length</strong> (<em>bool</em>) – sort the inputs by length before processing them</p></li>
+<li><p><strong>show_progress</strong> (<em>bool</em>) – display progress bar</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><em>Union</em>[<em>List</em>[int], <em>List</em>[<em>List</em>[int]]]</p>
+</dd>
+</dl>
+<p>Returns: detections as list of integers or list of lists of integers</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="nsc.SpellingErrorDetector.from_experiment">
+<em class="property"><span class="pre">static</span><span class="w">  </span></em><span class="sig-name descname"><span class="pre">from_experiment</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">experiment_dir</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'cuda'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#nsc.SpellingErrorDetector.from_experiment" title="Permalink to this definition"></a></dt>
+<dd><p>Create a new NSC instance using your own experiment.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>experiment_dir</strong> (<em>str</em>) – path to the experiment directory</p></li>
+<li><p><strong>device</strong> (<em>Union</em><em>[</em><em>str</em><em>, </em><em>int</em><em>]</em>) – device to load the model to (e.g. “cuda”, “cpu” or integer denoting GPU device index)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><a class="reference internal" href="index.html#nsc.SpellingErrorDetector" title="nsc.api.sed.SpellingErrorDetector">nsc.api.sed.SpellingErrorDetector</a></p>
+</dd>
+</dl>
+<p>Returns: NSC instance</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="nsc.SpellingErrorDetector.from_pretrained">
+<em class="property"><span class="pre">static</span><span class="w">  </span></em><span class="sig-name descname"><span class="pre">from_pretrained</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">task</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'sed_words'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'gnn_default'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'cuda'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cache_dir</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">force_download</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#nsc.SpellingErrorDetector.from_pretrained" title="Permalink to this definition"></a></dt>
+<dd><p>Create a new NSC instance using a pretrained model.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>task</strong> (<em>str</em>) – name of the task</p></li>
+<li><p><strong>model</strong> (<em>str</em>) – name of the pretrained model</p></li>
+<li><p><strong>device</strong> (<em>Union</em><em>[</em><em>str</em><em>, </em><em>int</em><em>]</em>) – device to load the model to (e.g. “cuda”, “cpu” or integer denoting GPU device index)</p></li>
+<li><p><strong>cache_dir</strong> (<em>Optional</em><em>[</em><em>str</em><em>]</em>) – local cache directory to store the pretrained model</p></li>
+<li><p><strong>force_download</strong> (<em>bool</em>) – force download the pretrained model again even if it already exists in the cache_dir</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><a class="reference internal" href="index.html#nsc.SpellingErrorDetector" title="nsc.api.sed.SpellingErrorDetector">nsc.api.sed.SpellingErrorDetector</a></p>
+</dd>
+</dl>
+<p>Returns: NSC instance</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="nsc.SpellingErrorDetector.mixed_precision_enabled">
+<em class="property"><span class="pre">property</span><span class="w">  </span></em><span class="sig-name descname"><span class="pre">mixed_precision_enabled</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w">  </span><span class="pre">bool</span></em><a class="headerlink" href="#nsc.SpellingErrorDetector.mixed_precision_enabled" title="Permalink to this definition"></a></dt>
+<dd><p>Check if mixed precision is enabled (precision is set to something else than fp32).</p>
+<p>Returns: bool whether mixed precision is enabled</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="nsc.SpellingErrorDetector.model_name">
+<em class="property"><span class="pre">property</span><span class="w">  </span></em><span class="sig-name descname"><span class="pre">model_name</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w">  </span><span class="pre">str</span></em><a class="headerlink" href="#nsc.SpellingErrorDetector.model_name" title="Permalink to this definition"></a></dt>
+<dd><p>Gives the name of the NSC model in use.</p>
+<p>Returns: name of the model</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="nsc.SpellingErrorDetector.set_precision">
+<span class="sig-name descname"><span class="pre">set_precision</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">precision</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#nsc.SpellingErrorDetector.set_precision" title="Permalink to this definition"></a></dt>
+<dd><p>Set the inference precision to use. Default is standard 32bit full precision.
+Using 16bit floats or 16bit brain floats should only be used when you have a supported NVIDIA GPU.
+When running on CPU fp16 will be overwritten with bfp16 since only bfp16 is supported on CPU for now.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>precision</strong> (<em>str</em>) – precision identifier (one of {fp32, fp16, bfp16})</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+<p>Returns: None</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="nsc.SpellingErrorDetector.task_name">
+<em class="property"><span class="pre">property</span><span class="w">  </span></em><span class="sig-name descname"><span class="pre">task_name</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w">  </span><span class="pre">str</span></em><a class="headerlink" href="#nsc.SpellingErrorDetector.task_name" title="Permalink to this definition"></a></dt>
+<dd><p>Check which NSC task is run.</p>
+<p>Returns: name of the task</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="nsc.SpellingErrorDetector.to">
+<span class="sig-name descname"><span class="pre">to</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">device</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#nsc.SpellingErrorDetector.to" title="Permalink to this definition"></a></dt>
+<dd><p>Move the model to a different device.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>device</strong> (<em>Union</em><em>[</em><em>str</em><em>, </em><em>int</em><em>]</em>) – device specifier (e.g. “cuda”, “cpu” or integer denoting GPU device index)</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p>nsc.api.utils._APIBase</p>
+</dd>
+</dl>
+<p>Returns: self</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="nsc.TokenizationRepairer">
+<em class="property"><span class="pre">class</span><span class="w">  </span></em><span class="sig-prename descclassname"><span class="pre">nsc.</span></span><span class="sig-name descname"><span class="pre">TokenizationRepairer</span></span><a class="headerlink" href="#nsc.TokenizationRepairer" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">nsc.api.utils._APIBase</span></code></p>
+<p>Tokenization repair</p>
+<p>Class to run tokenization repair models.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="nsc.TokenizationRepairer.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model_dir</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#nsc.TokenizationRepairer.__init__" title="Permalink to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>model_dir</strong> (<em>str</em>) – </p></li>
+<li><p><strong>device</strong> (<em>Union</em><em>[</em><em>str</em><em>, </em><em>int</em><em>]</em>) – </p></li>
+<li><p><strong>kwargs</strong> (<em>Dict</em><em>[</em><em>str</em><em>, </em><em>Any</em><em>]</em>) – </p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="nsc.TokenizationRepairer.from_experiment">
+<em class="property"><span class="pre">static</span><span class="w">  </span></em><span class="sig-name descname"><span class="pre">from_experiment</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">experiment_dir</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'cuda'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#nsc.TokenizationRepairer.from_experiment" title="Permalink to this definition"></a></dt>
+<dd><p>Create a new NSC instance using your own experiment.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>experiment_dir</strong> (<em>str</em>) – path to the experiment directory</p></li>
+<li><p><strong>device</strong> (<em>Union</em><em>[</em><em>str</em><em>, </em><em>int</em><em>]</em>) – device to load the model to (e.g. “cuda”, “cpu” or integer denoting GPU device index)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><a class="reference internal" href="index.html#nsc.TokenizationRepairer" title="nsc.api.tokenization_repair.TokenizationRepairer">nsc.api.tokenization_repair.TokenizationRepairer</a></p>
+</dd>
+</dl>
+<p>Returns: NSC instance</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="nsc.TokenizationRepairer.from_pretrained">
+<em class="property"><span class="pre">static</span><span class="w">  </span></em><span class="sig-name descname"><span class="pre">from_pretrained</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">task</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'tokenization_repair'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'transformer_eo_large'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'cuda'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cache_dir</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">force_download</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#nsc.TokenizationRepairer.from_pretrained" title="Permalink to this definition"></a></dt>
+<dd><p>Create a new NSC instance using a pretrained model.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>task</strong> (<em>str</em>) – name of the task</p></li>
+<li><p><strong>model</strong> (<em>str</em>) – name of the pretrained model</p></li>
+<li><p><strong>device</strong> (<em>Union</em><em>[</em><em>str</em><em>, </em><em>int</em><em>]</em>) – device to load the model to (e.g. “cuda”, “cpu” or integer denoting GPU device index)</p></li>
+<li><p><strong>cache_dir</strong> (<em>Optional</em><em>[</em><em>str</em><em>]</em>) – local cache directory to store the pretrained model</p></li>
+<li><p><strong>force_download</strong> (<em>bool</em>) – force download the pretrained model again even if it already exists in the cache_dir</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><a class="reference internal" href="index.html#nsc.TokenizationRepairer" title="nsc.api.tokenization_repair.TokenizationRepairer">nsc.api.tokenization_repair.TokenizationRepairer</a></p>
+</dd>
+</dl>
+<p>Returns: NSC instance</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="nsc.TokenizationRepairer.mixed_precision_enabled">
+<em class="property"><span class="pre">property</span><span class="w">  </span></em><span class="sig-name descname"><span class="pre">mixed_precision_enabled</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w">  </span><span class="pre">bool</span></em><a class="headerlink" href="#nsc.TokenizationRepairer.mixed_precision_enabled" title="Permalink to this definition"></a></dt>
+<dd><p>Check if mixed precision is enabled (precision is set to something else than fp32).</p>
+<p>Returns: bool whether mixed precision is enabled</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="nsc.TokenizationRepairer.model_name">
+<em class="property"><span class="pre">property</span><span class="w">  </span></em><span class="sig-name descname"><span class="pre">model_name</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w">  </span><span class="pre">str</span></em><a class="headerlink" href="#nsc.TokenizationRepairer.model_name" title="Permalink to this definition"></a></dt>
+<dd><p>Gives the name of the NSC model in use.</p>
+<p>Returns: name of the model</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="nsc.TokenizationRepairer.repair_file">
+<span class="sig-name descname"><span class="pre">repair_file</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_file_path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_file_path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">16</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_max_length_factor</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sort_by_length</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show_progress</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#nsc.TokenizationRepairer.repair_file" title="Permalink to this definition"></a></dt>
+<dd><p>Repair whitespaces in a file.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>input_file_path</strong> (<em>str</em>) – path to an input file, which will be repaired line by line</p></li>
+<li><p><strong>output_file_path</strong> (<em>Optional</em><em>[</em><em>str</em><em>]</em>) – path to an output file, where repaired text will be saved line by line</p></li>
+<li><p><strong>batch_size</strong> (<em>int</em>) – how many sequences to process at once</p></li>
+<li><p><strong>batch_max_length_factor</strong> (<em>Optional</em><em>[</em><em>float</em><em>]</em>) – sets the maximum total length of a batch to be
+batch_max_length_factor * model_max_input_length, if a model e.g. has a max input length of 512 tokens
+and batch_max_length_factor is 4 then one batch will contain as many input sequences as fit within
+512 * 4 = 2048 tokens (takes precedence over batch_size if specified)</p></li>
+<li><p><strong>sort_by_length</strong> (<em>bool</em>) – sort the inputs by length before processing them</p></li>
+<li><p><strong>show_progress</strong> (<em>bool</em>) – display progress bar</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><em>Optional</em>[<em>Union</em>[<em>List</em>[int], <em>List</em>[<em>List</em>[int]]]]</p>
+</dd>
+</dl>
+<p>Returns: repaired file as list of strings if output_file_path is not specified else None</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="nsc.TokenizationRepairer.repair_text">
+<span class="sig-name descname"><span class="pre">repair_text</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">inputs</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">16</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_max_length_factor</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sort_by_length</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show_progress</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#nsc.TokenizationRepairer.repair_text" title="Permalink to this definition"></a></dt>
+<dd><p>Repair whitespaces in text.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>inputs</strong> (<em>Union</em><em>[</em><em>str</em><em>, </em><em>List</em><em>[</em><em>str</em><em>]</em><em>]</em>) – text to repair given as a single string or a list of strings</p></li>
+<li><p><strong>batch_size</strong> (<em>int</em>) – how many sequences to process at once</p></li>
+<li><p><strong>batch_max_length_factor</strong> (<em>Optional</em><em>[</em><em>float</em><em>]</em>) – sets the maximum total length of a batch to be
+batch_max_length_factor * model_max_input_length, if a model e.g. has a max input length of 512 tokens
+and batch_max_length_factor is 4 then one batch will contain as many input sequences as fit within
+512 * 4 = 2048 tokens (takes precedence over batch_size if specified)</p></li>
+<li><p><strong>sort_by_length</strong> (<em>bool</em>) – sort the inputs by length before processing them</p></li>
+<li><p><strong>show_progress</strong> (<em>bool</em>) – display progress bar</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><em>Union</em>[<em>List</em>[int], <em>List</em>[<em>List</em>[int]]]</p>
+</dd>
+</dl>
+<p>Returns: repaired text as string or list of strings</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="nsc.TokenizationRepairer.set_precision">
+<span class="sig-name descname"><span class="pre">set_precision</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">precision</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#nsc.TokenizationRepairer.set_precision" title="Permalink to this definition"></a></dt>
+<dd><p>Set the inference precision to use. Default is standard 32bit full precision.
+Using 16bit floats or 16bit brain floats should only be used when you have a supported NVIDIA GPU.
+When running on CPU fp16 will be overwritten with bfp16 since only bfp16 is supported on CPU for now.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>precision</strong> (<em>str</em>) – precision identifier (one of {fp32, fp16, bfp16})</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+<p>Returns: None</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="nsc.TokenizationRepairer.task_name">
+<em class="property"><span class="pre">property</span><span class="w">  </span></em><span class="sig-name descname"><span class="pre">task_name</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w">  </span><span class="pre">str</span></em><a class="headerlink" href="#nsc.TokenizationRepairer.task_name" title="Permalink to this definition"></a></dt>
+<dd><p>Check which NSC task is run.</p>
+<p>Returns: name of the task</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="nsc.TokenizationRepairer.to">
+<span class="sig-name descname"><span class="pre">to</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">device</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#nsc.TokenizationRepairer.to" title="Permalink to this definition"></a></dt>
+<dd><p>Move the model to a different device.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>device</strong> (<em>Union</em><em>[</em><em>str</em><em>, </em><em>int</em><em>]</em>) – device specifier (e.g. “cuda”, “cpu” or integer denoting GPU device index)</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p>nsc.api.utils._APIBase</p>
+</dd>
+</dl>
+<p>Returns: self</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="nsc.get_available_spelling_error_correction_models">
+<span class="sig-prename descclassname"><span class="pre">nsc.</span></span><span class="sig-name descname"><span class="pre">get_available_spelling_error_correction_models</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#nsc.get_available_spelling_error_correction_models" title="Permalink to this definition"></a></dt>
+<dd><p>Get available spelling error correction models</p>
+<p>Returns: list of spelling error correction model infos each containing the task name,
+model name and a short description</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><em>List</em>[nsc.api.utils.ModelInfo]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="nsc.get_available_spelling_error_detection_models">
+<span class="sig-prename descclassname"><span class="pre">nsc.</span></span><span class="sig-name descname"><span class="pre">get_available_spelling_error_detection_models</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#nsc.get_available_spelling_error_detection_models" title="Permalink to this definition"></a></dt>
+<dd><p>Get available spelling error detection models</p>
+<p>Returns: list of spelling error detection model infos each containing the task name,
+model name and a short description</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><em>List</em>[nsc.api.utils.ModelInfo]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="nsc.get_available_tokenization_repair_models">
+<span class="sig-prename descclassname"><span class="pre">nsc.</span></span><span class="sig-name descname"><span class="pre">get_available_tokenization_repair_models</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#nsc.get_available_tokenization_repair_models" title="Permalink to this definition"></a></dt>
+<dd><p>Get available tokenization repair models</p>
+<p>Returns: list of tokenization repair model infos each containing the task name, model name and a short description</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><em>List</em>[nsc.api.utils.ModelInfo]</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+</div>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2022, Sebastian Walter.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
