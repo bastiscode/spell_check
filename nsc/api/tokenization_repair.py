@@ -71,7 +71,7 @@ class TokenizationRepairer(_APIBase):
             model_dir,
             device,
             kwargs.get("override_env_vars"),
-            kwargs.get("keep_existing_env_vars", False)
+            kwargs.get("keep_existing_env_vars")
         )
 
         assert (
@@ -123,9 +123,7 @@ class TokenizationRepairer(_APIBase):
         return TokenizationRepairer(
             experiment_dir,
             device,
-            **{
-                "keep_existing_env_vars": True
-            }
+            **{"keep_existing_env_vars": {"NSC_DATA_DIR", "NSC_CONFIG_DIR"}}
         )
 
     @torch.inference_mode()

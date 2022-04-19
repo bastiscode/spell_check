@@ -7,6 +7,7 @@ def generate_table(
         alignments: Optional[List[str]] = None,
         horizontal_lines: Optional[List[int]] = None,
         bold_cells: Optional[Set[Tuple[int, int]]] = None,
+        vertical_lines: bool = False,
         fmt: str = "markdown"
 ) -> str:
     assert fmt in {"markdown", "latex"}
@@ -32,7 +33,7 @@ def generate_table(
 
     tables_lines = []
 
-    opening_str = _open_table(fmt, alignments)
+    opening_str = _open_table(fmt, alignments, vertical_lines)
     if opening_str:
         tables_lines.append(opening_str)
 
@@ -68,11 +69,14 @@ _LATEX_ALIGNMENTS = {
 }
 
 
-def _open_table(fmt: str, alignments: List[str]) -> str:
+def _open_table(fmt: str, alignments: List[str], vertical_lines: bool) -> str:
     if fmt == "markdown":
         return ""
     else:
-        return "\\begin{tabular}{|" + "|".join(_LATEX_ALIGNMENTS[align] for align in alignments) + "|} \\hline"
+        divider = "|" if vertical_lines else ""
+        return f"\\begin{{tabular}}{{{divider}" \
+               + f"{divider}".join(_LATEX_ALIGNMENTS[align] for align in alignments) \
+               + f"{divider}}} \\hline"
 
 
 def _close_table(fmt: str) -> str:

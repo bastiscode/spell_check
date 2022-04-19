@@ -4,10 +4,11 @@ import logging
 import os
 import pickle
 import platform
+import pprint
 import re
 import shutil
 import zipfile
-from typing import Optional, Union, List, Tuple, Dict, Any, Iterator
+from typing import Optional, Union, List, Tuple, Dict, Any, Iterator, Set
 
 import requests
 import torch
@@ -431,8 +432,8 @@ def get_cache_dir() -> str:
 
 def load_experiment_config(
         experiment: str,
-        override_env_vars: Optional[Dict] = None,
-        keep_existing_env_vars: bool = False
+        override_env_vars: Optional[Dict[str, str]] = None,
+        keep_existing_env_vars: Optional[Set[str]] = None
 ) -> config.TrainConfig:
     with open(os.path.join(experiment, "cfg.pkl"), "rb") as inf:
         cfg, env_vars = pickle.load(inf)
@@ -451,8 +452,8 @@ def load_experiment_config(
 def load_experiment(
         experiment: str,
         device: torch.device,
-        override_env_vars: Optional[Dict] = None,
-        keep_existing_env_vars: bool = False
+        override_env_vars: Optional[Dict[str, str]] = None,
+        keep_existing_env_vars: Optional[Set[str]] = None
 ) -> Tuple[config.TrainConfig, tasks.Task, models.Model]:
     cfg = load_experiment_config(experiment, override_env_vars, keep_existing_env_vars)
 

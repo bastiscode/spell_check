@@ -25,6 +25,10 @@ if [[ $approach == "gnn" ]]; then
   declare -a approach_env_vars=(
     "NSC_ADD_WORD_FEATURES"
     )
+  declare -a approach_num_nodes=(
+#    "2"
+    "3"
+  )
   declare -a approaches=(
 #    "false"
     "true"
@@ -55,8 +59,9 @@ if [[ $approach == "gnn" ]]; then
 
     echo ""
 
-    export NSC_WORLD_SIZE=8
-    sbatch --nodes=2 spell_checking/scripts/train.sh
+    num_nodes=${approach_num_nodes[$approach_idx]}
+    export NSC_WORLD_SIZE=$((4 * num_nodes))
+    sbatch --nodes=$num_nodes spell_checking/scripts/train.sh
 
   done
 

@@ -22,6 +22,7 @@ if [[ $is_local == true ]]; then
   echo "Running locally"
   workspace=$(realpath $script_dir/../..)
   data_dir=$workspace/data
+
 else
   echo "Running on Slurm Cluster"
   export MPLCONFIGDIR=$TMPDIR/matplotlib
@@ -30,6 +31,7 @@ else
   data_dir=$workspace/data
   cd $workspace
   source ../env/bin/activate
+
 fi
 
 config=${NSC_CONFIG?"NSC_CONFIG env variable not found"}

@@ -22,13 +22,15 @@ script_dir=$(dirname $script_dir)
 echo "Script is located at $script_dir"
 
 if [[ $is_local == true ]]; then
+  echo "Running locally"
   workspace=$(realpath $script_dir/../..)
   cd $workspace
   data_dir=$workspace/data
-  experiment_dir=$workspace/local_experiments
+  experiment_dir=$workspace/experiments
 
   master_addr="127.0.0.1"
   world_size=$(python -c "import torch; print(torch.cuda.device_count())")
+
 else
   export MPLCONFIGDIR=$TMPDIR/matplotlib
   export NSC_DISABLE_TQDM=true
@@ -47,6 +49,7 @@ else
   master_addr=$(scontrol show hostnames "$SLURM_JOB_NODELIST" | head -n 1)
   world_size=${NSC_WORLD_SIZE?"env variable NSC_WORLD_SIZE not found"}
   echo "Running on Slurm Cluster, master machine at $master_addr:$master_port"
+
 fi
 
 # for nsc

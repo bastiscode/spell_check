@@ -1,6 +1,6 @@
 import os.path
 from dataclasses import dataclass
-from typing import Optional, Any, Dict, List
+from typing import Optional, Any, Dict, List, Set
 
 import omegaconf
 from omegaconf import MISSING
@@ -95,16 +95,18 @@ class TestConfig:
     cpu: bool = False
 
 
-def set_nsc_env_vars(env_vars: Dict[str, Any], keep_existing_env_vars: bool = False) -> None:
-    existing_env_vars = set()
+def set_nsc_env_vars(
+        env_vars: Dict[str, str],
+        keep_existing_env_vars: Optional[Set[str]] = None
+) -> None:
+    # delete all nsc env vars that should not be kept
     for k in os.environ:
         if k.startswith("NSC_"):
-            if keep_existing_env_vars:
-                existing_env_vars.add(k)
-            else:
-                del os.environ[k]
+            if k in keep_existing_env_vars:
+                continue
+            del os.environ[k]
+
     # set all new nsc env vars
     for k, v in env_vars.items():
-        if k not in existing_env_vars:
+        if k not in keep_existing_env_vars:
             os.environ[k] = v
-

@@ -214,7 +214,7 @@ class SpellingErrorCorrector(_APIBase):
             model_dir,
             device,
             kwargs.get("override_env_vars"),
-            kwargs.get("keep_existing_env_vars", False)
+            kwargs.get("keep_existing_env_vars")
         )
 
         assert (
@@ -267,9 +267,7 @@ class SpellingErrorCorrector(_APIBase):
         return SpellingErrorCorrector(
             experiment_dir,
             device,
-            **{
-                "keep_existing_env_vars": True
-            }
+            **{"keep_existing_env_vars": {"NSC_DATA_DIR", "NSC_CONFIG_DIR"}}
         )
 
     def _get_output_tokenizer(self) -> tokenization.Tokenizer:
@@ -303,7 +301,7 @@ class SpellingErrorCorrector(_APIBase):
             inference_kwargs["output_type"] = "sec"
             inference_kwargs["no_repair"] = os.getenv("NSC_TOKENIZATION_REPAIR_PLUS_NO_REPAIR", "false") == "true"
             inference_kwargs["no_detect"] = os.getenv("NSC_TOKENIZATION_REPAIR_PLUS_NO_DETECT", "false") == "true"
-            inference_kwargs["threshold"] = float(os.getenv("NSC_TOKENIZATION_REPAIR_PLUS_THRESHOLD", 0.5))
+            inference_kwargs["threshold"] = float(os.getenv("NSC_TOKENIZATION_REPAIR_PLUS_THRESHOLD", 0.2))
 
         num_workers = 0 if len(inputs) <= 16 else min(4, len(os.sched_getaffinity(0)))
         dataset, loader = get_inference_dataset_and_loader(

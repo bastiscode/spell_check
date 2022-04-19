@@ -27,7 +27,7 @@ if __name__ == "__main__":
             cfg, env_vars = pickle.load(inf)
 
         backup_path = os.path.join(experiment, "cfg_backup.pkl")
-        if not os.path.exists(backup_path):
+        if not os.path.exists(backup_path) and not args.dry:
             shutil.copy2(os.path.join(experiment, "cfg.pkl"), backup_path)
 
         new_env_vars = {
