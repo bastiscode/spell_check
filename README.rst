@@ -2,7 +2,9 @@ Neural spell checking using Transformers and Graph Neural Networks
 ==================================================================
 
 This project is about detecting and correcting spelling errors using Transformers and
-Graph Neural Networks.
+Graph Neural Networks. Visit the `documentation`_ (which also includes this README)
+for information on how to reproduce results and train your own models
+as well as a more detailed description of the ``nsc`` `Python API`_.
 
 Installation
 ------------
@@ -105,8 +107,7 @@ Python API
 ~~~~~~~~~~
 
 We also provide a Python API for you to use spell checking models directly in code. Below are basic
-code examples on how to use the API. For a full documentation on all provided classes, methods and arguments
-see the ``nsc`` package documentation.
+code examples on how to use the API.
 
 **Spelling error correction**
 
@@ -193,3 +194,4 @@ To start a Docker container
     Running the Docker container with GPU support assumes that you have the `NVIDIA Container Toolkit`_ installed.
 
 .. _NVIDIA Container Toolkit: https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html
+.. _documentation: https://bastiscode.github.io/spell_check
