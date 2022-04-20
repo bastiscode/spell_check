@@ -1,6 +1,7 @@
 import collections
+import re
 import string
-from typing import Optional, Callable, Tuple, List, Any, Dict
+from typing import Optional, Callable, Tuple, List, Any, Dict, Set
 
 import numpy as np
 from Levenshtein import distance as ed
@@ -106,45 +107,128 @@ def binary_f1_prec_rec(
     return _tp_fp_fn_to_f1_prec_rec(tp, fp, fn)
 
 
+def _find_word_boundaries(s: str) -> List[Tuple[int, int]]:
+    word_boundary_pattern = re.compile(r"\S+")
+    matches = [(match.start(), match.end()) for match in word_boundary_pattern.finditer(s)]
+    assert len(matches) == len(s.split())
+    return matches
+
+
+def _get_edited_words(ipt: str, tgt: str) -> Set[int]:
+    tgt_word_boundaries = _find_word_boundaries(tgt)
+    edit_ops = edit_operations(ipt, tgt, spaces_insert_delete_only=True)
+    edited_tgt_indices = set()
+    for op_code, ipt_idx, tgt_idx in edit_ops:
+        word_boundary_idx = 0
+        while word_boundary_idx < len(tgt_word_boundaries):
+            word_start, word_end = tgt_word_boundaries[word_boundary_idx]
+            if tgt_idx <= word_end:
+                break
+            word_boundary_idx += 1
+
+        if op_code == "insert" and tgt[tgt_idx] == " ":
+            assert word_boundary_idx < len(tgt_word_boundaries) - 1
+            edited_tgt_indices.add(word_boundary_idx)
+            edited_tgt_indices.add(word_boundary_idx + 1)
+        else:
+            edited_tgt_indices.add(word_boundary_idx)
+
+    return edited_tgt_indices
+
+
+def _match_words(pred: str, tgt: str) -> Set[int]:
+    sm = difflib.SequenceMatcher(a=pred.split(), b=tgt.split())
+    matching_blocks = sm.get_matching_blocks()
+    matching_pred_indices = set()
+    matching_tgt_indices = set()
+    for matching_block in matching_blocks:
+        start_pred = matching_block.a
+        for idx in range(start_pred, start_pred + matching_block.size):
+            matching_pred_indices.add(idx)
+        start_tgt = matching_block.b
+        for idx in range(start_tgt, start_tgt + matching_block.size):
+            matching_tgt_indices.add(idx)
+    return matching_pred_indices, matching_tgt_indices
+
+
+def _group_words(
+        ipt: str,
+        pred: str,
+        matching_in_pred: Set[int]
+) -> Set[int]:
+    edit_ops = edit_operations(ipt, pred, spaces_insert_delete_only=True)
+    ipt_word_boundaries = find_word_boundaries(ipt)
+    merged_with_next_indices = set()
+    num_spaces_inserted = {}
+    for op_code, ipt_idx, pred_idx in edit_ops:
+        word_boundary_idx = 0
+        while word_boundary_idx < len(ipt_word_boundaries):
+            word_start, word_end = ipt_word_boundaries[word_boundary_idx]
+            if ipt_idx <= word_end:
+                break
+            word_boundary_idx += 1
+
+        if op_code == "delete" and ipt[ipt_idx] == " ":
+            merged_with_next_indices.add(word_boundary_idx)
+
+        if op_code == "insert" and pred[pred_idx] == " ":
+            if word_boundary_idx not in num_spaces_inserted:
+                num_spaces_inserted[word_boundary_idx] = 1
+            else:
+                num_spaces_inserted[word_boundary_idx] += 1
+
+    correct = set()
+    ipt_idx = 0
+    pred_idx = 0
+    while ipt_idx < len(ipt_word_boundaries):
+        merged_word = {ipt_idx}
+        total_spaces_inserted = num_spaces_inserted.get(ipt_idx, 0)
+        while ipt_idx in merged_with_next_indices:
+            ipt_idx += 1
+            merged_word.add(ipt_idx)
+            total_spaces_inserted += num_spaces_inserted.get(ipt_idx, 0)
+
+        # find corresponding words for merged word in pred
+        if all(idx in matching_in_pred for idx in range(pred_idx, pred_idx + total_spaces_inserted + 1)):
+            correct = correct.union(merged_word)
+
+        ipt_idx += 1
+        pred_idx += total_spaces_inserted + 1
+
+    assert ipt_idx == len(ipt_word_boundaries) and pred_idx == len(pred.split())
+    return correct
+
+
+def _correction_tp_fp_fn(pred: str, tgt: str, ipt: str) -> Tuple[int, int, int]:
+    misspelled = _get_edited_words(ipt, tgt)
+    changed = _get_edited_words(pred, ipt)
+    matching_in_pred, restored = _match_words(pred, tgt)
+    correct = _group_words(ipt, pred, matching_in_pred)
+    tp_indices = misspelled.intersection(restored)
+    fn_indices = misspelled.difference(restored)
+    fp_indices = changed.difference(correct)
+    return len(tp_indices), len(fp_indices), len(fn_indices)
+
+
 def correction_f1_prec_rec(
         input_sequences: List[str],
         predicted_sequences: List[str],
-        target_sequences: List[str],
-        split_fn: Optional[Callable] = None
+        target_sequences: List[str]
 ) -> Tuple[float, float, float]:
     check_same_length(input_sequences, predicted_sequences, target_sequences)
+    assert all(
+        i.strip() == i and p.strip() == p and t.strip() == t
+               for i, p, t in zip(input_sequences, predicted_sequences, target_sequences)
+    ), "correction f1 score expects that all sequence contain no leading or trailing whitespaces"
 
-    if split_fn is None:
-        def _split_fn(s: str) -> List[str]:
-            return s.split()
+    total_tp = total_fp = total_fn = 0
+    for pred, tgt, ipt in zip(predicted_sequences, target_sequences, input_sequences):
+        tp, fp, fn = _correction_tp_fp_fn(pred, tgt, ipt)
+        total_tp += tp
+        total_fp += fp
+        total_fn += fn
 
-        split_fn = _split_fn
-
-    tp = 0
-    fp = 0
-    fn = 0
-
-    for input_sequence, predicted_sequence, target_sequence in zip(
-            input_sequences, predicted_sequences, target_sequences
-    ):
-        input_tokens = split_fn(input_sequence)
-        predicted_tokens = split_fn(predicted_sequence)
-        target_tokens = split_fn(target_sequence)
-        assert len(input_tokens) == len(target_tokens)
-
-        misspelled = set(i for i in range(len(input_tokens)) if input_tokens[i] != target_tokens[i])
-        # restored = set(i for i in range(len(input_tokens)) if )
-        #
-        # tokens_count = collections.Counter(tokens)
-        # target_tokens_count = collections.Counter(target_tokens)
-        #
-        # tokens_in_common = sum((tokens_count & target_tokens_count).values())
-        #
-        # tp += tokens_in_common
-        # fp += len(tokens) - tokens_in_common
-        # fn += len(target_tokens) - tokens_in_common
-
-    return _tp_fp_fn_to_f1_prec_rec(tp, fp, fn)
+    return _tp_fp_fn_to_f1_prec_rec(total_tp, total_fp, total_fn)
 
 
 def is_real_word(word: str, dictionary: Dict[str, int]) -> bool:
