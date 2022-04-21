@@ -4,7 +4,6 @@ import pprint
 import random
 from typing import List, Tuple
 
-import Levenshtein
 import altair as alt
 import pandas as pd
 
@@ -14,6 +13,7 @@ from nsc.data import utils
 from nsc.utils import io, common
 
 from spell_checking.utils.metrics import is_real_word
+from spell_checking.utils.edit_distance import edit_distance
 
 
 def parse_args() -> argparse.Namespace:
@@ -105,7 +105,7 @@ def generate_statistics(args: argparse.Namespace) -> None:
 
                     num_words += len(corrupt_regex)
                     if len(corrupt_regex) != len(correct_regex):
-                        ed = Levenshtein.distance(corrupt_word, correct_word)
+                        ed = edit_distance(corrupt_word, correct_word)
                         if is_real_word(corrupt_word, dictionary):
                             real_word_errors += 1
                             error_edit_distances.append((ed, True))
@@ -114,7 +114,7 @@ def generate_statistics(args: argparse.Namespace) -> None:
                             error_edit_distances.append((ed, False))
                     else:
                         for corrupt, correct in zip(corrupt_regex, correct_regex):
-                            ed = Levenshtein.distance(corrupt, correct)
+                            ed = edit_distance(corrupt, correct)
                             if corrupt != correct:
                                 if is_real_word(corrupt, dictionary):
                                     real_word_errors += 1

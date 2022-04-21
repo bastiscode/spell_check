@@ -16,6 +16,7 @@ dist
 *.zip
 sphinx_docs
 
+/spell_checking/utils/edit_distance_rs/target
 /spell_checking/.transformers_cache
 /spell_checking/benchmarks/dev
 /spell_checking/benchmarks/test

@@ -18,6 +18,7 @@ create_own_benchmarks:
 
 .PHONY: evaluate_sed_sequence
 evaluate_sed_sequence:
+	@rm $(SPLIT)/sed_sequence_tables/results.json
 	@python scripts/evaluate_thesis.py \
 	--benchmark-dir $(SPLIT)/sed_sequence \
 	--benchmark-type sed_sequence \
@@ -28,6 +29,7 @@ evaluate_sed_sequence:
 
 .PHONY: evaluate_sed_words
 evaluate_sed_words:
+	@rm $(SPLIT)/sed_words_tables/results.json
 	@python scripts/evaluate_thesis.py \
 	--benchmark-dir $(SPLIT)/sed_words \
 	--benchmark-type sed_words \

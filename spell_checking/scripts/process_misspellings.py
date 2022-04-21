@@ -6,15 +6,15 @@ import os
 from functools import partial
 from typing import Dict, List, Set, Callable, Tuple, Iterable, Optional
 
-import Levenshtein
 import aspell
 import hunspell
 import numpy as np
 from tqdm import tqdm
 
-import nsc.data.utils
 from nsc.data import utils
 from nsc.utils import common, io
+
+from spell_checking.utils.edit_distance import edit_distance
 
 HUNSPELL = hunspell.HunSpell("/usr/share/hunspell/en_US.dic", "/usr/share/hunspell/en_US.aff")
 
@@ -29,7 +29,7 @@ def invalid_word(word: str) -> bool:
 def invalid_pair(correct: str, misspelled: str, max_ed: int = 5) -> bool:
     return (
             misspelled == correct or
-            Levenshtein.distance(correct, misspelled) > max_ed
+            edit_distance(correct, misspelled) > max_ed
     )
 
 

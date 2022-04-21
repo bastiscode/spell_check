@@ -187,8 +187,7 @@ To start a Docker container
 
 .. note::
     The Docker setup is only intended to be used for trying out the command line tools or the Python API and
-    not for training or reproducing the results. If you want to do that see the REPRODUCE.rst
-    or read the HTML-documentation.
+    not for training or reproducing the results.
 
 .. note::
     Running the Docker container with GPU support assumes that you have the `NVIDIA Container Toolkit`_ installed.

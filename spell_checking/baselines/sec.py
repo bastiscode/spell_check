@@ -9,13 +9,13 @@ import pkg_resources
 import requests
 import torch
 from spacy.tokens import Doc
-import Levenshtein
 
 from nsc.data import utils, index
 from nsc.utils import io
 
 from spell_checking import DICTIONARIES_DIR, SPELL_CHECK_INDEX_DIR
 from spell_checking.baselines import Baseline
+from spell_checking.utils.edit_distance import edit_distance
 
 
 class SECCTDBaseline(Baseline):
@@ -36,7 +36,7 @@ class SECCTDBaseline(Baseline):
 
         closest_words: Dict[str, int] = {}
         for w, freq in self.dictionary.items():
-            edit_dist = Levenshtein.distance(w, word)
+            edit_dist = edit_distance(w, word)
             if edit_dist < min_ed:
                 closest_words = {w: freq}
                 min_ed = edit_dist
@@ -99,7 +99,7 @@ class SECSpellCheckIndexBaseline(Baseline):
                             joined_neighbor_words[w] += freq
 
                     neighbor_words = [
-                        (w, freq, Levenshtein.distance(w, word.text))
+                        (w, freq, edit_distance(w, word.text))
                         for w, freq in joined_neighbor_words.items()
                     ]
                     neighbor_words = sorted(neighbor_words, key=lambda item: (item[2], -item[1]))

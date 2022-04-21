@@ -60,10 +60,14 @@ def create(args: argparse.Namespace) -> None:
     ctx = mp.get_context("spawn")
 
     dictionary = Counter()
-    with ctx.Pool(processes=min(int(os.getenv("NSC_NUM_PROCESSES", min(os.cpu_count(), 8))), len(files))) as pool:
-        for i, d in tqdm(enumerate(pool.imap_unordered(utils.get_word_frequencies_from_file, files, chunksize=16)),
-                         total=len(files),
-                         desc="Calculating word frequencies from files"):
+    with ctx.Pool(processes=min(int(os.getenv("NSC_NUM_PROCESSES", len(os.sched_getaffinity(0)))), len(files))) as pool:
+        for d in tqdm(
+                pool.imap_unordered(utils.get_word_frequencies_from_file, files),
+                total=len(files),
+                desc="calculating word frequencies from files",
+                leave=False,
+            disable=common.disable_tqdm()
+        ):
             dictionary += d
 
     logger.info(f"Created dictionary with {len(dictionary)} entries")

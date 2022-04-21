@@ -5,11 +5,11 @@ To reproduce the results you will need the training data. Everything
 you need (preprocessed training data, tokenizer, dictionaries, etc.) can be found
 under ``/nfs/students/sebastian-walter/masters_thesis/data``.
 
-You also need to set the following two special environment variables.
-
 .. note::
     Of course you can also copy the training data folder to every other
     place you like and adjust ``NSC_DATA_DIR`` accordingly.
+
+You also need to set the following two special environment variables:
 
 .. code-block:: bash
 

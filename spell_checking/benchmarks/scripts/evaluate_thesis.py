@@ -1,5 +1,6 @@
 import argparse
 import collections
+import json
 import os
 from typing import Dict, Tuple, List, Set, Optional
 
@@ -25,6 +26,7 @@ def parse_args():
 
     parser.add_argument("--format", choices=["markdown", "latex", "both"], default="both")
     parser.add_argument("--save-dir", type=str, required=True)
+    parser.add_argument("--overwrite", type=str, nargs="+", default=None)
 
     return parser.parse_args()
 
@@ -96,6 +98,10 @@ def evaluate(
             mned = metrics.mean_normalized_sequence_edit_distance(predictions, groundtruths)
             results[name] = (mned, [f"{mned:.4f}"])
 
+        elif name == "correction_f1":
+            f1, prec, rec = metrics.correction_f1_prec_rec(corrupted, predictions, groundtruths)
+            results[name] = (f1, [f"{100 * f1:.2f}", f"\\footnotesize{100 * prec:.1f} {100 * rec:.1f}"])
+
         else:
             raise RuntimeError(f"unknown metric {name}")
 
@@ -106,14 +112,16 @@ _METRIC_TO_NUM_LINES = {
     "sequence_accuracy": 1,
     "binary_f1": 2,
     "word_accuracy": 2,
-    "mean_normalized_edit_distance": 1
+    "mean_normalized_edit_distance": 1,
+    "correction_f1": 2
 }
 
 _METRIC_TO_HIGHER_BETTER = {
     "sequence_accuracy": True,
     "binary_f1": True,
     "word_accuracy": True,
-    "mean_normalized_edit_distance": False
+    "mean_normalized_edit_distance": False,
+    "correction_f1": True
 }
 
 
@@ -153,7 +161,7 @@ def get_sed_models_and_metrics(is_sed_words: bool) -> Tuple[Dict[int, List[Tuple
             ("gnn+", "gnn_cliques_wfc")
         ]
     }
-    metric_names = {"binary_f1"}
+    metric_names = {"binary_f1", "sequence_accuracy"}
     if is_sed_words:
         dictionary[3].extend([
             ("tokenization_repair+", "tokenization_repair_plus_sed"),
@@ -161,9 +169,6 @@ def get_sed_models_and_metrics(is_sed_words: bool) -> Tuple[Dict[int, List[Tuple
             ("tokenization_repair++", "tokenization_repair_plus_sec")
         ])
         metric_names.add("word_accuracy")
-        metric_names.add("sequence_accuracy")
-    else:
-        metric_names.add("sequence_accuracy")
     return dictionary, metric_names
 
 
@@ -181,11 +186,9 @@ def get_sec_models_and_metrics() -> Tuple[Dict[int, List[Tuple[str, str]]], Set[
                ],
                2: [
                    ("transformer", "transformer_sec_nmt"),
-                   ("transformer_word", "transformer_sec_words_nmt"),
-                   ("gnn+", "graph_sec_nmt"),
-                   ("gnn+_word", "graph_sec_words_nmt")
+                   ("transformer_word", "transformer_sec_words_nmt")
                ]
-           }, {"sequence_accuracy", "mean_normalized_edit_distance"}
+           }, {"sequence_accuracy", "mean_normalized_edit_distance", "correction_f1"}
 
 
 def get_sec_advanced_models_and_metrics():
@@ -198,11 +201,10 @@ def get_sec_advanced_models_and_metrics():
                    ("gnn+ --> transformer_word", "gnn_cliques_wfc_plus_transformer_sec_words_nmt")
                ],
                3: [
-                   ("tokenization_repair++", "tokenization_repair_plus_sec"),
-                   ("tokenization_repair++no_detect", "tokenization_repair_plus_sec_no_detect"),
-                   ("tokenization_repair++high_rec", "tokenization_repair_plus_sec_high_rec")
+                   ("transformer_with_tokenization_repair", "transformer_with_tokenization_repair_sec_nmt"),
+                   ("tokenization_repair++", "tokenization_repair_plus_sec")
                ]
-           }, {"sequence_accuracy", "mean_normalized_edit_distance"}
+           }, {"sequence_accuracy", "mean_normalized_edit_distance", "correction_f1"}
 
 
 if __name__ == "__main__":
@@ -228,8 +230,14 @@ if __name__ == "__main__":
     else:
         models, metric_names = get_tokenization_repair_models_and_metrics()
 
+    results_file = os.path.join(args.save_dir, "results.json")
+    if os.path.exists(results_file):
+        with open(results_file, "r", encoding="utf8") as rf:
+            results = json.load(rf)
+    else:
+        results = {}
+
     model_groups = sorted(models)
-    results = collections.defaultdict(list)
     for model_group in tqdm(model_groups, desc="evaluating model groups", leave=False):
         for model_name, model_file_name in tqdm(
                 models[model_group], total=len(models[model_group]),
@@ -254,21 +262,38 @@ if __name__ == "__main__":
                         model_scores[metric_name].append(None)
                     continue
 
+                filtered_metrics = set()
+                for metric_name in metric_names:
+                    if (
+                            metric_name in results
+                            and model_name in results[metric_name]
+                            and not (args.overwrite and metric_name in args.overwrite)
+                    ):
+                        continue
+                    filtered_metrics.add(metric_name)
+
                 m = evaluate(
-                    benchmark_gt, model_prediction, benchmark_input, metric_names, dictionary
+                    benchmark_gt, model_prediction, benchmark_input, filtered_metrics, dictionary
                 )
 
                 for metric_name, scores in m.items():
                     model_scores[metric_name].append(scores)
 
             for metric_name, benchmark_scores in model_scores.items():
-                results[metric_name].append(
-                    [model_name] + benchmark_scores
-                )
+                if metric_name not in results:
+                    results[metric_name] = {}
+                results[metric_name][model_name] = benchmark_scores
 
-    for metric_name, data in results.items():
-        if len(data) == 0:
+            # save intermediate results after each metric, model pair was processed
+            with open(results_file, "w", encoding="utf8") as rf:
+                json.dump(results, rf)
+
+    for metric_name, model_data in results.items():
+        if len(model_data) == 0:
             continue
+
+        data = [[model_name] + model_data[model_name]
+                for model_group in model_groups for model_name, _ in models[model_group]]
 
         num_lines_per_model = _METRIC_TO_NUM_LINES[metric_name]
         assert num_lines_per_model in {1, 2}

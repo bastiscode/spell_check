@@ -16,7 +16,7 @@ from tokenizers import trainers, pre_tokenizers, models, normalizers, decoders
 from tqdm import tqdm
 
 from nsc.data import utils
-from nsc.utils import io
+from nsc.utils import io, common
 
 ALL_CHARS = string.ascii_letters + string.digits + string.punctuation + " "
 
@@ -249,12 +249,14 @@ class WordTokenizer(Tokenizer):
             files = files[:num_files]
 
         word_freq = Counter()
-        with ctx.Pool(
-                processes=min(int(os.getenv("NSC_NUM_PROCESSES", min(len(os.sched_getaffinity(0)), 8))), len(files))
-        ) as pool:
-            for i, d in tqdm(enumerate(pool.imap_unordered(utils.get_word_frequencies_from_file, files, chunksize=16)),
-                             total=len(files),
-                             desc="Calculating word frequencies from files"):
+        with ctx.Pool(min(int(os.getenv("NSC_NUM_PROCESSES", len(os.sched_getaffinity(0)))), len(files))) as pool:
+            for d in tqdm(
+                    pool.imap_unordered(utils.get_word_frequencies_from_file, files),
+                    total=len(files),
+                    desc="calculating word frequencies from files",
+                    leave=False,
+                    disable=common.disable_tqdm()
+            ):
                 word_freq += d
 
         token_id = len(vocab)
