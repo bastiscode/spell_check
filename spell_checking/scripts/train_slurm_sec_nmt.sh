@@ -19,19 +19,7 @@ export NSC_MIXED_PRECISION=true
 
 approach=${APPROACH?"APPROACH is not defined"}
 
-if [[ $approach == "gnn" ]]; then
-  config="$config_dir/train/sec_nmt_graph.yaml"
-  rel_config=$(realpath "$config" --relative-to "$workspace")
-  echo "Starting approach $approach with config $(realpath "$config" --relative-to "$config_dir")"
-  export NSC_EXPERIMENT_NAME="graph_sec_nmt"
-  export NSC_MASTER_PORT=$(python -c "import random; print(random.randrange(10000, 60000))")
-  export NSC_BATCH_MAX_LENGTH=32768
-  export NSC_NUM_LAYERS=6
-  export NSC_CONFIG=$rel_config
-  export NSC_WORLD_SIZE=12
-  sbatch --nodes=3 spell_checking/scripts/train.sh
-
-elif [[ $approach == "transformer" ]]; then
+if [[ $approach == "transformer" ]]; then
   config="$config_dir/train/sec_nmt_transformer.yaml"
   rel_config=$(realpath "$config" --relative-to "$workspace")
   echo "Starting approach $approach with config $(realpath "$config" --relative-to "$config_dir")"
