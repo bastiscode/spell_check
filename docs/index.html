@@ -61,7 +61,9 @@
 <span id="document-readme"></span><section id="neural-spell-checking-using-transformers-and-graph-neural-networks">
 <h1>Neural spell checking using Transformers and Graph Neural Networks<a class="headerlink" href="#neural-spell-checking-using-transformers-and-graph-neural-networks" title="Permalink to this headline"></a></h1>
 <p>This project is about detecting and correcting spelling errors using Transformers and
-Graph Neural Networks.</p>
+Graph Neural Networks. Visit the <a class="reference external" href="https://bastiscode.github.io/spell_check">documentation</a> (which also includes this README)
+for information on how to reproduce results and train your own models
+as well as a more detailed description of the <code class="docutils literal notranslate"><span class="pre">nsc</span></code> <a class="reference internal" href="#python-api">Python API</a>.</p>
 <section id="installation">
 <h2>Installation<a class="headerlink" href="#installation" title="Permalink to this headline"></a></h2>
 <p>Clone the repository</p>
@@ -146,8 +148,7 @@ them by passing the <code class="docutils literal notranslate"><span class="pre"
 <section id="python-api">
 <h3>Python API<a class="headerlink" href="#python-api" title="Permalink to this headline"></a></h3>
 <p>We also provide a Python API for you to use spell checking models directly in code. Below are basic
-code examples on how to use the API. For a full documentation on all provided classes, methods and arguments
-see the <code class="docutils literal notranslate"><span class="pre">nsc</span></code> package documentation.</p>
+code examples on how to use the API.</p>
 <p><strong>Spelling error correction</strong></p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">nsc</span> <span class="kn">import</span> <span class="n">SpellingErrorCorrector</span><span class="p">,</span> <span class="n">get_available_spelling_error_correction_models</span>
 
@@ -216,8 +217,7 @@ make run_docker_cpu
 <div class="admonition note">
 <p class="admonition-title">Note</p>
 <p>The Docker setup is only intended to be used for trying out the command line tools or the Python API and
-not for training or reproducing the results. If you want to do that see the REPRODUCE.rst
-or read the HTML-documentation.</p>
+not for training or reproducing the results.</p>
 </div>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
@@ -230,12 +230,13 @@ or read the HTML-documentation.</p>
 <p>To reproduce the results you will need the training data. Everything
 you need (preprocessed training data, tokenizer, dictionaries, etc.) can be found
 under <code class="docutils literal notranslate"><span class="pre">/nfs/students/sebastian-walter/masters_thesis/data</span></code>.</p>
-<p>You also need to set the following two special environment variables.</p>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
 <p>Of course you can also copy the training data folder to every other
-place you like and adjust <code class="docutils literal notranslate"><span class="pre">NSC_DATA_DIR</span></code> accordingly.</p>
+place you like and adjust <code class="docutils literal notranslate"><span class="pre">NSC_DATA_DIR</span></code> accordingly. But keep in mind that this
+folder is very large (about 1TB).</p>
 </div>
+<p>You also need to set the following two special environment variables:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># set the data directory</span>
 <span class="nb">export</span> <span class="nv">NSC_DATA_DIR</span><span class="o">=</span>/nfs/students/sebastian-walter/masters_thesis/data
 
@@ -244,8 +245,88 @@ place you like and adjust <code class="docutils literal notranslate"><span class
 <span class="nb">export</span> <span class="nv">NSC_CONFIG_DIR</span><span class="o">=</span>spell_checking/configs
 </pre></div>
 </div>
-<p>After that all you train your own models using a training config.
-For all available training configs see the <code class="docutils literal notranslate"><span class="pre">configs/train</span></code> directory.</p>
+<p>After that you can train your own models using a training config.
+All training to reproduce the models from this project can be found <a class="reference external" href="https://github.com/bastiscode/spell_check/tree/main/spell_checking/configs/train">here</a>.</p>
+<p>You might have to further configure a training config by setting additional environment variables. Let’s
+look at an example where we want to train a spelling error detection Graph Neural Network. The <a class="reference external" href="https://github.com/bastiscode/spell_check/tree/main/spell_checking/configs/train/sed_words.yaml">config
+for this task</a> looks like the following:</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">variant</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">${from_file:variant/sed_words.yaml}</span>
+<span class="nt">model</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">${from_file:model/model_for_sed_words.yaml}</span>
+<span class="nt">optimizer</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">${from_file:optimizer/adamw.yaml}</span>
+<span class="nt">lr_scheduler</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">${from_file:lr_scheduler/step_with_0.05_warmup.yaml}</span>
+
+<span class="nt">experiment_dir</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">${oc.env:NSC_EXPERIMENT_DIR}</span>
+<span class="nt">data_dir</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">${oc.env:NSC_DATA_DIR}</span>
+<span class="nt">datasets</span><span class="p">:</span>
+  <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">${oc.env:NSC_DATA_DIR}/processed/wikidump_paragraphs_sed_words_and_sec</span>
+  <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">${oc.env:NSC_DATA_DIR}/processed/bookcorpus_paragraphs_sed_words_and_sec</span>
+<span class="nt">dataset_limits</span><span class="p">:</span>
+  <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">${oc.env:NSC_DATA_LIMIT}</span>
+  <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">${oc.env:NSC_DATA_LIMIT}</span>
+<span class="nt">val_splits</span><span class="p">:</span>
+  <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">2500</span>
+  <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">2500</span>
+
+<span class="nt">experiment_name</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">${oc.env:NSC_EXPERIMENT_NAME,dummy}</span>
+<span class="nt">epochs</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">${oc.env:NSC_EPOCHS,1}</span>
+<span class="nt">batch_max_length</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">${oc.env:NSC_BATCH_MAX_LENGTH,4096}</span>
+<span class="nt">bucket_span</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">${oc.env:NSC_BUCKET_SPAN,4}</span>
+<span class="nt">log_per_epoch</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">${oc.env:NSC_LOG_PER_EPOCH,100}</span>
+<span class="nt">eval_per_epoch</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">${oc.env:NSC_EVAL_PER_EPOCH,4}</span>
+<span class="nt">seed</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">22</span>
+<span class="nt">mixed_precision</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">${oc.env:NSC_MIXED_PRECISION,true}</span>
+</pre></div>
+</div>
+<p>Values looking like <code class="docutils literal notranslate"><span class="pre">${from_file:&lt;file_path&gt;}</span></code> refer to other config files relative to the <code class="docutils literal notranslate"><span class="pre">NSC_CONFIG_DIR</span></code>. When the training
+config is composed, the contents of the referred config files will replace these values.</p>
+<p>Values looking like <code class="docutils literal notranslate"><span class="pre">${oc.env:&lt;env_var_name&gt;,&lt;default&gt;}</span></code> refer to environment variables and an optional default that will be set
+if the environment variable is not found. If there is no default you will be required to set the environment variable, otherwise
+you receive an error message.</p>
+<p>In our example we need to set values for the environment variables <code class="docutils literal notranslate"><span class="pre">NSC_DATA_LIMIT</span></code> (can be used to limit the number of samples per training dataset)
+and <code class="docutils literal notranslate"><span class="pre">NSC_EXPERIMENT_DIR</span></code> (directory path where the logs and checkpoints will be saved). Once we have set these variables we
+can start the training. Since the training script is written to support distributed training we need to use <a class="reference external" href="https://pytorch.org/docs/stable/elastic/run.html">torchrun</a>
+to launch the script:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># set the environment variables</span>
+<span class="nb">export</span> <span class="nv">NSC_DATA_LIMIT</span><span class="o">=</span><span class="m">100000</span> <span class="c1"># set data limit to 100,000 samples per dataset</span>
+<span class="nb">export</span> <span class="nv">NSC_EXPERIMENT_DIR</span><span class="o">=</span>experiments <span class="c1"># directory path where the experiment will be saved</span>
+
+<span class="c1"># to train locally / on a single node</span>
+torchrun --nnodes<span class="o">=</span><span class="m">1</span> nsc/train.py --config spell_checking/configs/sed_words.yaml
+</pre></div>
+</div>
+<p>You can also resume training for an existing experiment if you had to abort training for some reason:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># resume training from latest checkpoint of an experiment</span>
+torchrun --nnodes<span class="o">=</span><span class="m">1</span> nsc/train.py --resume &lt;path_to_experiment_directory&gt;
+</pre></div>
+</div>
+<p>As an alternative you can set one of the <code class="docutils literal notranslate"><span class="pre">NSC_CONFIG</span></code> or <code class="docutils literal notranslate"><span class="pre">NSC_RESUME</span></code> environment variables
+and use the <a class="reference external" href="https://github.com/bastiscode/spell_check/tree/main/spell_checking/scripts/train.sh">train.sh</a> script to start training. This script additionally provides functionality to start distributed
+training in SLURM clusters. Training using this script would look something like this:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># set the environment variables</span>
+<span class="nb">export</span> <span class="nv">NSC_DATA_LIMIT</span><span class="o">=</span><span class="m">100000</span> <span class="c1"># set data limit to 100,000 samples per dataset</span>
+<span class="nb">export</span> <span class="nv">NSC_EXPERIMENT_DIR</span><span class="o">=</span>experiments <span class="c1"># directory path where the experiment will be saved</span>
+
+<span class="c1">## LOCAL training</span>
+<span class="c1"># start new training run using a config</span>
+<span class="nv">NSC_CONFIG</span><span class="o">=</span>spell_checking/configs/sed_words.yaml spell_checking/scripts/train.sh
+
+<span class="c1"># resume training from latest checkpoint of an experiment</span>
+<span class="nv">NSC_RESUME</span><span class="o">=</span>&lt;path_to_experiment_directory&gt; spell_checking/scripts/train.sh
+
+<span class="c1">## SLURM training</span>
+<span class="c1"># start distributed training on SLURM cluster using sbatch</span>
+<span class="c1"># requires you to set the NSC_WORLD_SIZE environment variable (total number of GPUs used for training)</span>
+<span class="c1"># if you e.g. want to train on 4 nodes with 2 GPUs each set NSC_WORLD_SIZE=8</span>
+<span class="nv">NSC_CONFIG</span><span class="o">=</span>spell_checking/configs/sed_words.yaml <span class="nv">NSC_WORLD_SIZE</span><span class="o">=</span><span class="m">8</span> sbatch --nodes<span class="o">=</span><span class="m">4</span> --ntasks-per-node<span class="o">=</span><span class="m">2</span> --gres<span class="o">=</span>gpu:2 spell_checking/scripts/train.sh
+
+<span class="c1"># if you are in an interactive SLURM session (started e.g. with srun)</span>
+<span class="c1"># but you want to train as if you are running locally, set NSC_FORCE_LOCAL=true and</span>
+<span class="c1"># start training without sbatch</span>
+<span class="nv">NSC_FORCE_LOCAL</span><span class="o">=</span><span class="nb">true</span> <span class="nv">NSC_CONFIG</span><span class="o">=</span>spell_checking/configs/sed_words.yaml spell_checking/scripts/train.sh
+</pre></div>
+</div>
+<p>For the environment variables you need to set in order to reproduce the results of this project see the
+<code class="docutils literal notranslate"><span class="pre">train_slurm_&lt;task&gt;.sh</span></code> scripts in this <a class="reference external" href="https://github.com/bastiscode/spell_check/tree/main/spell_checking/scripts">directory</a> which were used for training all models.</p>
 </section>
 <span id="document-nsc"></span><section id="module-nsc">
 <span id="nsc-package"></span><h1>nsc package<a class="headerlink" href="#module-nsc" title="Permalink to this headline"></a></h1>

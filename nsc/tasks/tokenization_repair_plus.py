@@ -66,10 +66,10 @@ class TokenizationRepairPlus(tasks.Task):
             label_dict["sec_pad_token_id"] = batch.info["sec_pad_token_id"][0]
             data_dict["sec_decoder_inputs"] = decoder_inputs
             data_dict["sec_decoder_group_lengths"] = decoder_group_lengths
-            # self.logger.warning(
-            #     f"input lengths: {[len(t) for t in batch.data]}, "
-            #     f"target lengths: {[torch.sum(lengths).item() for lengths in decoder_group_lengths]}"
-            # )
+            self.logger.warning(
+                f"input lengths: {[len(t) for t in batch.data]}, "
+                f"target lengths: {[torch.sum(lengths).item() for lengths in decoder_group_lengths]}"
+            )
 
         return {**data_dict, **batch.info}, label_dict
 

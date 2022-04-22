@@ -28,8 +28,8 @@ if [[ $approach == "gnn" ]]; then
   export NSC_BATCH_MAX_LENGTH=32768
   export NSC_NUM_LAYERS=6
   export NSC_CONFIG=$rel_config
-  sbatch --nodes=3 spell_checking/scripts/train.sh
   export NSC_WORLD_SIZE=12
+  sbatch --nodes=3 spell_checking/scripts/train.sh
 
 elif [[ $approach == "transformer" ]]; then
   config="$config_dir/train/sec_nmt_transformer.yaml"

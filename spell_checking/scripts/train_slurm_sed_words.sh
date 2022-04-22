@@ -27,13 +27,13 @@ if [[ $approach == "gnn" ]]; then
     "NSC_ADD_WORD_FEATURES"
     )
   declare -a approaches=(
-    "false" # no_feat
-    "true" # default
+    "false"
+    "true"
   )
   declare -a approach_names=(
     "gnn_no_feat"
     "gnn_cliques_wfc"
-  )sequence
+  )
 
   for approach_idx in ${!approaches[@]}; do
     declare -a approach=(${approaches[$approach_idx]})

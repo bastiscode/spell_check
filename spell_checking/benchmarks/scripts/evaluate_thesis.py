@@ -230,23 +230,26 @@ if __name__ == "__main__":
     else:
         models, metric_names = get_tokenization_repair_models_and_metrics()
 
+    model_groups = sorted(models)
     results_file = os.path.join(args.save_dir, "results.json")
     if os.path.exists(results_file):
         with open(results_file, "r", encoding="utf8") as rf:
             results = json.load(rf)
     else:
-        results = {}
+        results = {
+            metric_name: {model_name: [None for _ in range(len(benchmarks))]
+                          for model_group in model_groups for model_name, _ in models[model_group]}
+            for metric_name in metric_names
+        }
 
-    model_groups = sorted(models)
     for model_group in tqdm(model_groups, desc="evaluating model groups", leave=False):
         for model_name, model_file_name in tqdm(
                 models[model_group], total=len(models[model_group]),
                 desc=f"evaluating models in group {model_group}",
                 leave=False
         ):
-            model_scores = collections.defaultdict(list)
-            for benchmark, benchmark_group, benchmark_split in tqdm(
-                    zip(benchmarks, benchmark_groups, benchmark_splits),
+            for i, (benchmark, benchmark_group, benchmark_split) in tqdm(
+                    enumerate(zip(benchmarks, benchmark_groups, benchmark_splits)),
                     total=len(benchmarks),
                     desc=f"evaluating model {model_name} from group {model_group} on benchmarks",
                     leave=False
@@ -258,8 +261,6 @@ if __name__ == "__main__":
                 )
 
                 if not os.path.exists(model_prediction):
-                    for metric_name in metric_names:
-                        model_scores[metric_name].append(None)
                     continue
 
                 filtered_metrics = set()
@@ -267,6 +268,7 @@ if __name__ == "__main__":
                     if (
                             metric_name in results
                             and model_name in results[metric_name]
+                            and results[metric_name][model_name][i] is not None
                             and not (args.overwrite and metric_name in args.overwrite)
                     ):
                         continue
@@ -277,12 +279,7 @@ if __name__ == "__main__":
                 )
 
                 for metric_name, scores in m.items():
-                    model_scores[metric_name].append(scores)
-
-            for metric_name, benchmark_scores in model_scores.items():
-                if metric_name not in results:
-                    results[metric_name] = {}
-                results[metric_name][model_name] = benchmark_scores
+                    results[metric_name][model_name][i] = scores
 
             # save intermediate results after each metric, model pair was processed
             with open(results_file, "w", encoding="utf8") as rf:
@@ -292,8 +289,11 @@ if __name__ == "__main__":
         if len(model_data) == 0:
             continue
 
-        data = [[model_name] + model_data[model_name]
-                for model_group in model_groups for model_name, _ in models[model_group]]
+        data = [
+            [model_name] + model_data[model_name]
+            for model_group in model_groups
+            for model_name, _ in models[model_group]
+        ]
 
         num_lines_per_model = _METRIC_TO_NUM_LINES[metric_name]
         assert num_lines_per_model in {1, 2}

@@ -19,32 +19,21 @@ else
   is_local=true
 fi
 script_dir=$(dirname $script_dir)
-echo "Script is located at $script_dir"
+workspace=$(realpath $script_dir/../..)
+cd $workspace
+echo "Script is located at $script_dir, workspace is $workspace"
 
 if [[ $is_local == true ]]; then
   echo "Running locally"
-  workspace=$(realpath $script_dir/../..)
-  cd $workspace
-  data_dir=$workspace/data
-  experiment_dir=$workspace/experiments
-
   master_addr="127.0.0.1"
   world_size=$(python -c "import torch; print(torch.cuda.device_count())")
 
 else
-  export MPLCONFIGDIR=$TMPDIR/matplotlib
   export NSC_DISABLE_TQDM=true
   export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 
   export NCCL_SOCKET_IFNAME=eth0
   export NCCL_IB_DISABLE=1
-
-  workspace=/work/dlclarge1/swalter-masters_thesis/masters_thesis
-  cd $workspace
-  source ../env/bin/activate
-
-  data_dir=$workspace/data
-  experiment_dir=$workspace/experiments
 
   master_addr=$(scontrol show hostnames "$SLURM_JOB_NODELIST" | head -n 1)
   world_size=${NSC_WORLD_SIZE?"env variable NSC_WORLD_SIZE not found"}
@@ -54,8 +43,8 @@ fi
 
 # for nsc
 export NSC_CONFIG_DIR=$workspace/spell_checking/configs
-export NSC_DATA_DIR=$data_dir
-export NSC_EXPERIMENT_DIR=$experiment_dir
+export NSC_DATA_DIR=${NSC_DATA_DIR:-$workspace/data}
+export NSC_EXPERIMENT_DIR=${NSC_EXPERIMENT_DIR:-$workspace/experiments}
 
 echo "config dir: $NSC_CONFIG_DIR, data_dir: $NSC_DATA_DIR, experiment_dir: $NSC_EXPERIMENT_DIR"
 

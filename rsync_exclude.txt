@@ -23,3 +23,6 @@ cc.en.*
 /spell_checking/benchmarks/test*
 /spell_checking/benchmarks/dev*
 /spell_checking/benchmarks/matthias
+/spell_checking/utils/edit_distance_rs
+/docs
+/sphinx_docs

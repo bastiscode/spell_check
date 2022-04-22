@@ -98,11 +98,11 @@ def set_nsc_env_vars(
         env_vars: Dict[str, str],
         keep_existing_env_vars: Optional[Set[str]] = None
 ) -> None:
+    if keep_existing_env_vars is None:
+        keep_existing_env_vars = set()
     # delete all nsc env vars that should not be kept
     for k in os.environ:
-        if k.startswith("NSC_"):
-            if k in keep_existing_env_vars:
-                continue
+        if k.startswith("NSC_") and k not in keep_existing_env_vars:
             del os.environ[k]
 
     # set all new nsc env vars
