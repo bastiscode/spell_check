@@ -1,14 +1,11 @@
 Training and reproducing results
 ================================
 
-To reproduce the results you will need the training data. Everything
-you need (preprocessed training data, tokenizer, dictionaries, etc.) can be found
-under ``/nfs/students/sebastian-walter/masters_thesis/data``.
+Training
+--------
 
-.. note::
-    Of course you can also copy the training data folder to every other
-    place you like and adjust ``NSC_DATA_DIR`` accordingly. But keep in mind that this
-    folder is very large (about 1TB).
+Before starting training you need the get the training data. Everything you need
+(preprocessed samples, tokenizer, dictionaries, etc.) can be found under ``/nfs/students/sebastian-walter/masters_thesis/data``.
 
 You also need to set the following two special environment variables:
 
@@ -21,8 +18,13 @@ You also need to set the following two special environment variables:
     # the final training config from sub-configs)
     export NSC_CONFIG_DIR=spell_checking/configs
 
+.. note::
+    Of course you can also copy the training data folder to every other
+    place you like and adjust ``NSC_DATA_DIR`` accordingly. But keep in mind that this
+    folder is very large (about 1TB).
+
 After that you can train your own models using a training config.
-All training to reproduce the models from this project can be found here_.
+All of the training configs this project used to train models can be found here_.
 
 You might have to further configure a training config by setting additional environment variables. Let's
 look at an example where we want to train a spelling error detection Graph Neural Network. The `config
@@ -86,7 +88,7 @@ You can also resume training for an existing experiment if you had to abort trai
 
 As an alternative you can set one of the ``NSC_CONFIG`` or ``NSC_RESUME`` environment variables
 and use the `train.sh`_ script to start training. This script additionally provides functionality to start distributed
-training in SLURM clusters. Training using this script would look something like this:
+training on SLURM_ clusters. Training using this script would look something like this:
 
 .. code-block:: bash
 
@@ -102,21 +104,33 @@ training in SLURM clusters. Training using this script would look something like
     NSC_RESUME=<path_to_experiment_directory> spell_checking/scripts/train.sh
 
     ## SLURM training
-    # start distributed training on SLURM cluster using sbatch
+    # starting distributed training on a SLURM cluster using sbatch
     # requires you to set the NSC_WORLD_SIZE environment variable (total number of GPUs used for training)
     # if you e.g. want to train on 4 nodes with 2 GPUs each set NSC_WORLD_SIZE=8
     NSC_CONFIG=spell_checking/configs/sed_words.yaml NSC_WORLD_SIZE=8 sbatch --nodes=4 --ntasks-per-node=2 --gres=gpu:2 spell_checking/scripts/train.sh
 
     # if you are in an interactive SLURM session (started e.g. with srun)
-    # but you want to train as if you are running locally, set NSC_FORCE_LOCAL=true and
+    # you probably want to train as if you are running locally, set NSC_FORCE_LOCAL=true and
     # start training without sbatch
     NSC_FORCE_LOCAL=true NSC_CONFIG=spell_checking/configs/sed_words.yaml spell_checking/scripts/train.sh
 
-For the environment variables you need to set in order to reproduce the results of this project see the
-``train_slurm_<task>.sh`` scripts in this directory_ which were used for training all models.
+Reproduce
+---------
+
+To reproduce the results of this project see the ``train_slurm_<task>.sh`` scripts in this directory_ which were used for training all models.
+These scripts do nothing more than setting some environment variables and calling the ``train.sh`` script mentioned above.
+
+.. note::
+
+    Using the ``train_slurm_<task>.sh`` scripts to reproduce results is only possible on a SLURM cluster
+    since they call the ``train.sh`` script using SLURMs sbatch command.
+
+Once you finished training you can evaluate the models on the projects benchmarks that are available under
+``/nfs/students/sebastian-walter/masters_thesis/benchmarks``.
 
 .. _here: https://github.com/bastiscode/spell_check/tree/main/spell_checking/configs/train
 .. _config for this task: https://github.com/bastiscode/spell_check/tree/main/spell_checking/configs/train/sed_words.yaml
 .. _torchrun: https://pytorch.org/docs/stable/elastic/run.html
 .. _train.sh: https://github.com/bastiscode/spell_check/tree/main/spell_checking/scripts/train.sh
 .. _directory: https://github.com/bastiscode/spell_check/tree/main/spell_checking/scripts
+.. _SLURM: https://slurm.schedmd.com/documentation.html

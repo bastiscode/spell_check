@@ -30,7 +30,7 @@
         </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
               <ul>
 <li class="toctree-l1"><a class="reference internal" href="index.html#document-readme">Neural spell checking using Transformers and Graph Neural Networks</a></li>
-<li class="toctree-l1"><a class="reference internal" href="index.html#document-reproduce">Reproduce results</a></li>
+<li class="toctree-l1"><a class="reference internal" href="index.html#document-reproduce">Training and reproducing results</a></li>
 <li class="toctree-l1"><a class="reference internal" href="index.html#document-nsc">nsc package</a></li>
 </ul>
 
@@ -225,17 +225,12 @@ not for training or reproducing the results.</p>
 </div>
 </section>
 </section>
-<span id="document-reproduce"></span><section id="reproduce-results">
-<h1>Reproduce results<a class="headerlink" href="#reproduce-results" title="Permalink to this headline"></a></h1>
-<p>To reproduce the results you will need the training data. Everything
-you need (preprocessed training data, tokenizer, dictionaries, etc.) can be found
-under <code class="docutils literal notranslate"><span class="pre">/nfs/students/sebastian-walter/masters_thesis/data</span></code>.</p>
-<div class="admonition note">
-<p class="admonition-title">Note</p>
-<p>Of course you can also copy the training data folder to every other
-place you like and adjust <code class="docutils literal notranslate"><span class="pre">NSC_DATA_DIR</span></code> accordingly. But keep in mind that this
-folder is very large (about 1TB).</p>
-</div>
+<span id="document-reproduce"></span><section id="training-and-reproducing-results">
+<h1>Training and reproducing results<a class="headerlink" href="#training-and-reproducing-results" title="Permalink to this headline"></a></h1>
+<section id="training">
+<h2>Training<a class="headerlink" href="#training" title="Permalink to this headline"></a></h2>
+<p>Before starting training you need the get the training data. Everything you need
+(preprocessed samples, tokenizer, dictionaries, etc.) can be found under <code class="docutils literal notranslate"><span class="pre">/nfs/students/sebastian-walter/masters_thesis/data</span></code>.</p>
 <p>You also need to set the following two special environment variables:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># set the data directory</span>
 <span class="nb">export</span> <span class="nv">NSC_DATA_DIR</span><span class="o">=</span>/nfs/students/sebastian-walter/masters_thesis/data
@@ -245,8 +240,14 @@ folder is very large (about 1TB).</p>
 <span class="nb">export</span> <span class="nv">NSC_CONFIG_DIR</span><span class="o">=</span>spell_checking/configs
 </pre></div>
 </div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Of course you can also copy the training data folder to every other
+place you like and adjust <code class="docutils literal notranslate"><span class="pre">NSC_DATA_DIR</span></code> accordingly. But keep in mind that this
+folder is very large (about 1TB).</p>
+</div>
 <p>After that you can train your own models using a training config.
-All training to reproduce the models from this project can be found <a class="reference external" href="https://github.com/bastiscode/spell_check/tree/main/spell_checking/configs/train">here</a>.</p>
+All of the training configs this project used to train models can be found <a class="reference external" href="https://github.com/bastiscode/spell_check/tree/main/spell_checking/configs/train">here</a>.</p>
 <p>You might have to further configure a training config by setting additional environment variables. Let’s
 look at an example where we want to train a spelling error detection Graph Neural Network. The <a class="reference external" href="https://github.com/bastiscode/spell_check/tree/main/spell_checking/configs/train/sed_words.yaml">config
 for this task</a> looks like the following:</p>
@@ -301,7 +302,7 @@ torchrun --nnodes<span class="o">=</span><span class="m">1</span> nsc/train.py -
 </div>
 <p>As an alternative you can set one of the <code class="docutils literal notranslate"><span class="pre">NSC_CONFIG</span></code> or <code class="docutils literal notranslate"><span class="pre">NSC_RESUME</span></code> environment variables
 and use the <a class="reference external" href="https://github.com/bastiscode/spell_check/tree/main/spell_checking/scripts/train.sh">train.sh</a> script to start training. This script additionally provides functionality to start distributed
-training in SLURM clusters. Training using this script would look something like this:</p>
+training on <a class="reference external" href="https://slurm.schedmd.com/documentation.html">SLURM</a> clusters. Training using this script would look something like this:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># set the environment variables</span>
 <span class="nb">export</span> <span class="nv">NSC_DATA_LIMIT</span><span class="o">=</span><span class="m">100000</span> <span class="c1"># set data limit to 100,000 samples per dataset</span>
 <span class="nb">export</span> <span class="nv">NSC_EXPERIMENT_DIR</span><span class="o">=</span>experiments <span class="c1"># directory path where the experiment will be saved</span>
@@ -314,19 +315,30 @@ training in SLURM clusters. Training using this script would look something like
 <span class="nv">NSC_RESUME</span><span class="o">=</span>&lt;path_to_experiment_directory&gt; spell_checking/scripts/train.sh
 
 <span class="c1">## SLURM training</span>
-<span class="c1"># start distributed training on SLURM cluster using sbatch</span>
+<span class="c1"># starting distributed training on a SLURM cluster using sbatch</span>
 <span class="c1"># requires you to set the NSC_WORLD_SIZE environment variable (total number of GPUs used for training)</span>
 <span class="c1"># if you e.g. want to train on 4 nodes with 2 GPUs each set NSC_WORLD_SIZE=8</span>
 <span class="nv">NSC_CONFIG</span><span class="o">=</span>spell_checking/configs/sed_words.yaml <span class="nv">NSC_WORLD_SIZE</span><span class="o">=</span><span class="m">8</span> sbatch --nodes<span class="o">=</span><span class="m">4</span> --ntasks-per-node<span class="o">=</span><span class="m">2</span> --gres<span class="o">=</span>gpu:2 spell_checking/scripts/train.sh
 
 <span class="c1"># if you are in an interactive SLURM session (started e.g. with srun)</span>
-<span class="c1"># but you want to train as if you are running locally, set NSC_FORCE_LOCAL=true and</span>
+<span class="c1"># you probably want to train as if you are running locally, set NSC_FORCE_LOCAL=true and</span>
 <span class="c1"># start training without sbatch</span>
 <span class="nv">NSC_FORCE_LOCAL</span><span class="o">=</span><span class="nb">true</span> <span class="nv">NSC_CONFIG</span><span class="o">=</span>spell_checking/configs/sed_words.yaml spell_checking/scripts/train.sh
 </pre></div>
 </div>
-<p>For the environment variables you need to set in order to reproduce the results of this project see the
-<code class="docutils literal notranslate"><span class="pre">train_slurm_&lt;task&gt;.sh</span></code> scripts in this <a class="reference external" href="https://github.com/bastiscode/spell_check/tree/main/spell_checking/scripts">directory</a> which were used for training all models.</p>
+</section>
+<section id="reproduce">
+<h2>Reproduce<a class="headerlink" href="#reproduce" title="Permalink to this headline"></a></h2>
+<p>To reproduce the results of this project see the <code class="docutils literal notranslate"><span class="pre">train_slurm_&lt;task&gt;.sh</span></code> scripts in this <a class="reference external" href="https://github.com/bastiscode/spell_check/tree/main/spell_checking/scripts">directory</a> which were used for training all models.
+These scripts do nothing more than setting some environment variables and calling the <code class="docutils literal notranslate"><span class="pre">train.sh</span></code> script mentioned above.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Using the <code class="docutils literal notranslate"><span class="pre">train_slurm_&lt;task&gt;.sh</span></code> scripts to reproduce results is only possible on a SLURM cluster
+since they call the <code class="docutils literal notranslate"><span class="pre">train.sh</span></code> script using SLURMs sbatch command.</p>
+</div>
+<p>Once you finished training you can evaluate the models on the projects benchmarks that are available under
+<code class="docutils literal notranslate"><span class="pre">/nfs/students/sebastian-walter/masters_thesis/benchmarks</span></code>.</p>
+</section>
 </section>
 <span id="document-nsc"></span><section id="module-nsc">
 <span id="nsc-package"></span><h1>nsc package<a class="headerlink" href="#module-nsc" title="Permalink to this headline"></a></h1>
