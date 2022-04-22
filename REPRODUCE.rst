@@ -1,4 +1,4 @@
-Reproduce results
+Training and reproducing results
 ================================
 
 To reproduce the results you will need the training data. Everything
