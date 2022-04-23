@@ -21,7 +21,7 @@ You also need to set the following two special environment variables:
 .. note::
     Of course you can also copy the training data folder to every other
     place you like and adjust ``NSC_DATA_DIR`` accordingly. But keep in mind that this
-    folder is very large (about 1TB).
+    folder is very large (about 750GB).
 
 After that you can train your own models using a training config.
 All of the training configs this project used to train models can be found here_.

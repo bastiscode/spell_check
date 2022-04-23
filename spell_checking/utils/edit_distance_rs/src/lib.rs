@@ -5,7 +5,7 @@ use pyo3::prelude::*;
 use rayon::prelude::*;
 use indicatif::{ProgressBar, ParallelProgressIterator, ProgressStyle};
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 enum EditOp {
     None,
     Keep,
@@ -134,6 +134,81 @@ fn calculate_edit_distance(
     d[d.len() - 1][d[0].len() - 1]
 }
 
+#[derive(Copy, Clone, Debug)]
+enum MatchOp {
+    None,
+    Delete,
+    Insert,
+    Match,
+    NoMatch,
+}
+
+fn calculate_word_matching(
+    a: &String,
+    b: &String,
+) -> Vec<(usize, usize)> {
+    let a_words = a.split_whitespace().collect::<Vec<&str>>();
+    let b_words = b.split_whitespace().collect::<Vec<&str>>();
+
+    let mut d: Matrix<usize> = vec![vec![0; b_words.len() + 1]; a_words.len() + 1];
+    let mut ops: Matrix<MatchOp> = vec![vec![MatchOp::None; b_words.len() + 1]; a_words.len() + 1];
+
+    // initialize matrices
+    ops[0][0] = MatchOp::NoMatch;
+    for i in 1..=a_words.len() {
+        ops[i][0] = MatchOp::Delete;
+    }
+    for j in 1..=b_words.len() {
+        ops[0][j] = MatchOp::Insert;
+    }
+
+    for (a_idx, &a_word) in a_words.iter().enumerate() {
+        for (b_idx, &b_word) in b_words.iter().enumerate() {
+            // string indices are offset by -1
+            let i = a_idx + 1;
+            let j = b_idx + 1;
+
+            let values = vec![
+                (d[i - 1][j], MatchOp::Delete),
+                (d[i][j - 1], MatchOp::Insert),
+                (d[i - 1][j - 1] + ((a_word == b_word) as usize),
+                 if a_word == b_word { MatchOp::Match } else { MatchOp::NoMatch }),
+            ];
+
+            let (max_value, max_op) = values.iter().max_by(|(v_1, _), (v_2, _)| {
+                v_1.cmp(v_2)
+            }).expect("should not happen");
+            d[i][j] = *max_value;
+            ops[i][j] = *max_op;
+        }
+    }
+
+    // backtrace
+    let mut matches = vec![];
+    let mut i = a_words.len();
+    let mut j = b_words.len();
+    while i > 0 || j > 0 {
+        let op = &ops[i][j];
+        match op {
+            MatchOp::None => { panic!("should not happen") }
+            MatchOp::Delete => { i -= 1; }
+            MatchOp::Insert => { j -= 1; }
+            MatchOp::Match => {
+                i -= 1;
+                j -= 1;
+                matches.push((i, j));
+            }
+            MatchOp::NoMatch => {
+                i -= 1;
+                j -= 1;
+            }
+        }
+    }
+    matches.reverse();
+    matches
+}
+
+
 #[pyfunction]
 fn edit_distance(
     a: String,
@@ -214,12 +289,50 @@ fn batch_edit_operations(
     Ok(edit_operations)
 }
 
+#[pyfunction]
+fn match_words(
+    a: String,
+    b: String,
+) -> PyResult<Vec<(usize, usize)>> {
+    Ok(calculate_word_matching(&a, &b))
+}
+
+#[pyfunction]
+fn batch_match_words(
+    a_list: Vec<String>,
+    b_list: Vec<String>,
+    batch_size: usize,
+) -> PyResult<Vec<Vec<(usize, usize)>>> {
+    assert_eq!(a_list.len(), b_list.len());
+    let pb = ProgressBar::new(
+        ((a_list.len() + batch_size - 1) / batch_size).max(1) as u64
+    )
+        .with_style(ProgressStyle::with_template(
+            "{msg}: {wide_bar} [{pos}/{len}] [{elapsed_precise}|{eta_precise}]"
+        ).unwrap()
+        ).with_message("matching words");
+    let word_matchings = a_list
+        .par_chunks(batch_size)
+        .zip(b_list.par_chunks(batch_size))
+        .progress_with(pb)
+        .map(|(a_chunk, b_chunk)| {
+            a_chunk.iter().zip(b_chunk.iter()).map(|(a, b)| {
+                calculate_word_matching(a, b)
+            }).collect::<Vec<Vec<(usize, usize)>>>()
+        })
+        .flatten()
+        .collect();
+    Ok(word_matchings)
+}
+
 #[pymodule]
 fn edit_distance_rs(_: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(edit_distance, m)?)?;
     m.add_function(wrap_pyfunction!(batch_edit_distance, m)?)?;
     m.add_function(wrap_pyfunction!(edit_operations, m)?)?;
     m.add_function(wrap_pyfunction!(batch_edit_operations, m)?)?;
+    m.add_function(wrap_pyfunction!(match_words, m)?)?;
+    m.add_function(wrap_pyfunction!(batch_match_words, m)?)?;
 
     Ok(())
 }

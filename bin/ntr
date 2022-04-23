@@ -10,7 +10,7 @@ import torch
 import torch.backends.cudnn
 
 import nsc
-from nsc.api import get_available_tokenization_repair_models, TokenizationRepairer
+from nsc import get_available_tokenization_repair_models, TokenizationRepairer
 from nsc.api.utils import generate_report, load_text_file, save_text_file
 from nsc.utils import common
 from nsc.tasks import utils as task_utils
@@ -127,12 +127,6 @@ def parse_args() -> argparse.Namespace:
         help="Download the model again even if it already was downloaded"
     )
     parser.add_argument(
-        "--server",
-        type=str,
-        default=None,
-        help="Run a tokenization repair server, specify host and port in the form <host>:<port>"
-    )
-    parser.add_argument(
         "--report",
         type=str,
         default=None,
@@ -157,16 +151,6 @@ def run(args: argparse.Namespace) -> None:
         )
         print(f"Available models:\n{model_str}")
         return
-    elif args.server is not None:
-        try:
-            host, port = args.server.split(":")
-            port = int(port)
-        except Exception:
-            raise RuntimeError(f"could not parse host and port from {args.server}")
-
-        from nsc.api.server import run_flask_server
-        run_flask_server(host, port)
-        return
 
     # disable logging here since we do not want that for our command line interface, but for the server above
     logging.disable(logging.CRITICAL)
@@ -187,14 +171,14 @@ def run(args: argparse.Namespace) -> None:
 
     start = time.perf_counter()
     num_sequences = -1
-    num_characters = -1
+    num_bytes = -1
     if args.repair is not None:
         print(tok_rep.repair_text(args.repair))
 
     elif args.file is not None:
         inputs = load_text_file(args.file)
         num_sequences = len(inputs)
-        num_characters = sum(len(ipt) for ipt in inputs)
+        num_bytes = sum(len(ipt.encode("utf8")) for ipt in inputs)
 
         repaired_lines = tok_rep.repair_text(
             inputs=inputs,
@@ -241,14 +225,14 @@ def run(args: argparse.Namespace) -> None:
                     print(repaired_line)
 
                 num_sequences = len(lines)
-                num_characters = sum(len(line) for line in lines)
+                num_bytes = sum(len(line.encode("utf8")) for line in lines)
 
         except BrokenPipeError:
             return
         except Exception as e:
             raise e
 
-    if args.report and num_sequences >= 0 and num_characters >= 0:
+    if args.report and num_sequences >= 0 and num_bytes >= 0:
         end = time.perf_counter()
 
         sample_inputs = tok_rep.task.generate_sample_inputs(2)
@@ -261,7 +245,7 @@ def run(args: argparse.Namespace) -> None:
             tok_rep.model_name,
             parameter_dict["total"] - parameter_dict["unused"],
             num_sequences,
-            num_characters,
+            num_bytes,
             end - start,
             tok_rep._mixed_precision_dtype,
             args.batch_size,

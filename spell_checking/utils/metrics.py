@@ -1,14 +1,11 @@
 import difflib
-import re
 import string
-import time
 from typing import Tuple, List, Any, Dict, Set
 
 import numpy as np
 
 from nsc.data import utils
-
-from spell_checking.utils.edit_distance import batch_edit_distance, batch_edit_operations
+from spell_checking.utils.edit_distance import batch_edit_distance, batch_edit_operations, batch_match_words
 
 
 def check_same_length(*args: Any) -> None:
@@ -145,22 +142,12 @@ def _get_edited_words(ipts: List[str], tgts: List[str]) -> List[Set[int]]:
 
 
 def _match_words(preds: List[str], tgts: List[str]) -> Tuple[List[Set[int]], List[Set[int]]]:
-    match_pred_indices_list = []
-    match_tgt_indices_list = []
-    for pred, tgt in zip(preds, tgts):
-        sm = difflib.SequenceMatcher(a=pred.split(), b=tgt.split())
-        matching_blocks = sm.get_matching_blocks()
-        matching_pred_indices = set()
-        matching_tgt_indices = set()
-        for matching_block in matching_blocks:
-            start_pred = matching_block.a
-            for idx in range(start_pred, start_pred + matching_block.size):
-                matching_pred_indices.add(idx)
-            start_tgt = matching_block.b
-            for idx in range(start_tgt, start_tgt + matching_block.size):
-                matching_tgt_indices.add(idx)
-        match_pred_indices_list.append(matching_pred_indices)
-        match_tgt_indices_list.append(matching_tgt_indices)
+    match_pred_indices_list = [set() for _ in range(len(preds))]
+    match_tgt_indices_list = [set() for _ in range(len(tgts))]
+    for i, matching_indices in enumerate(batch_match_words(preds, tgts)):
+        for pred_idx, tgt_idx in matching_indices:
+            match_pred_indices_list[i].add(pred_idx)
+            match_tgt_indices_list[i].add(tgt_idx)
 
     return match_pred_indices_list, match_tgt_indices_list
 

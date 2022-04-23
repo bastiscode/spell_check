@@ -194,17 +194,17 @@ def run(args: argparse.Namespace) -> None:
 
     start = time.perf_counter()
     num_sequences = -1
-    num_characters = -1
+    num_bytes = -1
     if args.detect is not None:
-        detection = detector.detect_text(args.detect, args.threshold, sort_by_length=False)
-        print(format_output(detection, args.detect, args.sec_out))
+        detection, output_line = detector.detect_text(args.detect, args.threshold, sort_by_length=False)
+        print(format_output(detection, output_line, args.sec_out))
 
     elif args.file is not None:
         inputs = load_text_file(args.file)
         num_sequences = len(inputs)
-        num_characters = sum(len(ipt) for ipt in inputs)
+        num_bytes = sum(len(ipt.encode("utf8")) for ipt in inputs)
 
-        detections = detector.detect_text(
+        detections, output_lines = detector.detect_text(
             inputs=inputs,
             threshold=args.threshold,
             batch_size=args.batch_size,
@@ -212,20 +212,21 @@ def run(args: argparse.Namespace) -> None:
             show_progress=True
         )
         if args.out_path is None:
-            for detection, line in zip(detections, inputs):
+            for detection, line in zip(detections, output_lines):
                 print(format_output(detection, line, args.sec_out))
         else:
             save_text_file(
                 args.out_path,
-                [format_output(detection, line, args.sec_out) for detection, line in zip(detections, inputs)]
+                [format_output(detection, line, args.sec_out)
+                 for detection, line in zip(detections, output_lines)]
             )
 
     elif args.interactive:
         while True:
             try:
                 line = input()
-                detection = detector.detect_text(line, args.threshold)
-                print(format_output(detection, line, args.sec_out))
+                detection, output_line = detector.detect_text(line, args.threshold)
+                print(format_output(detection, output_line, args.sec_out))
             except KeyboardInterrupt:
                 return
 
@@ -237,29 +238,29 @@ def run(args: argparse.Namespace) -> None:
             if args.pipe:
                 for line in sys.stdin:
                     line = line.strip()
-                    detection = detector.detect_text(line, args.threshold, sort_by_length=False)
-                    print(format_output(detection, line, args.sec_out))
+                    detection, output_line = detector.detect_text(line, args.threshold, sort_by_length=False)
+                    print(format_output(detection, output_line, args.sec_out))
             else:
                 lines = [line.strip() for line in sys.stdin]
-                detections = detector.detect_text(
+                detections, output_lines = detector.detect_text(
                     inputs=lines,
                     threshold=args.threshold,
                     batch_size=args.batch_size,
                     sort_by_length=not args.unsorted,
                     show_progress=args.progress
                 )
-                for detection, line in zip(detections, lines):
+                for detection, line in zip(detections, output_lines):
                     print(format_output(detection, line, args.sec_out))
 
                 num_sequences = len(lines)
-                num_characters = sum(len(line) for line in lines)
+                num_bytes = sum(len(line.encode("utf8")) for line in lines)
 
         except BrokenPipeError:
             return
         except Exception as e:
             raise e
 
-    if args.report and num_sequences >= 0 and num_characters >= 0:
+    if args.report and num_sequences >= 0 and num_bytes >= 0:
         end = time.perf_counter()
 
         sample_inputs = detector.task.generate_sample_inputs(2)
@@ -272,7 +273,7 @@ def run(args: argparse.Namespace) -> None:
             detector.model_name,
             parameter_dict["total"] - parameter_dict["unused"],
             num_sequences,
-            num_characters,
+            num_bytes,
             end - start,
             detector._mixed_precision_dtype,
             args.batch_size,

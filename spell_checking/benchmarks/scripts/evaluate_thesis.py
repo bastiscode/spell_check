@@ -2,7 +2,7 @@ import argparse
 import collections
 import json
 import os
-from typing import Dict, Tuple, List, Set, Optional
+from typing import Dict, Tuple, List, Set, Optional, Callable
 
 from tqdm import tqdm
 
@@ -18,7 +18,15 @@ def parse_args():
     parser.add_argument("--benchmark-dir", type=str, required=True)
     parser.add_argument(
         "--benchmark-type",
-        choices=["sed_sequence", "sed_words", "sec", "sec_advanced", "tokenization_repair"],
+        choices=[
+            "sed_sequence",
+            "sed_words",
+            "sec",
+            "sec_advanced",
+            "sec_whitespace",
+            "sec_bea_cleaned",
+            "tokenization_repair"
+        ],
         required=True
     )
     parser.add_argument("--result-dir", type=str, required=True)
@@ -125,7 +133,8 @@ _METRIC_TO_HIGHER_BETTER = {
 }
 
 
-def get_tokenization_repair_models_and_metrics() -> Tuple[Dict[int, List[Tuple[str, str]]], Set[str]]:
+def get_tokenization_repair_models_and_metrics() \
+        -> Tuple[Callable[[str], bool], Dict[int, List[Tuple[str, str]]], Set[str]]:
     dictionary = {
         0: [
             ("tokenization_repair", "tokenization_repair")
@@ -137,10 +146,11 @@ def get_tokenization_repair_models_and_metrics() -> Tuple[Dict[int, List[Tuple[s
         ]
     }
     metric_names = {"sequence_accuracy"}
-    return dictionary, metric_names
+    return lambda _: True, dictionary, metric_names
 
 
-def get_sed_models_and_metrics(is_sed_words: bool) -> Tuple[Dict[int, List[Tuple[str, str]]], Set[str]]:
+def get_sed_models_and_metrics(is_sed_words: bool) \
+        -> Tuple[Callable[[str], bool], Dict[int, List[Tuple[str, str]]], Set[str]]:
     dictionary = {
         0: [
             ("aspell", "baseline_aspell"),
@@ -169,42 +179,95 @@ def get_sed_models_and_metrics(is_sed_words: bool) -> Tuple[Dict[int, List[Tuple
             ("tokenization_repair++", "tokenization_repair_plus_sec")
         ])
         metric_names.add("word_accuracy")
-    return dictionary, metric_names
+    return lambda _: True, dictionary, metric_names
 
 
-def get_sec_models_and_metrics() -> Tuple[Dict[int, List[Tuple[str, str]]], Set[str]]:
-    return {
-               0: [
-                   ("aspell", "baseline_aspell"),
-                   ("jamspell", "baseline_jamspell"),
-                   ("language_tool", "baseline_languagetool"),
-                   ("close_to_dictionary", "baseline_ctd"),
-                   ("do_nothing", "baseline_dummy")
-               ],
-               1: [
-                   ("neuspell_bert", "baseline_neuspell_bert")
-               ],
-               2: [
-                   ("transformer", "transformer_sec_nmt"),
-                   ("transformer_word", "transformer_sec_words_nmt")
-               ]
-           }, {"sequence_accuracy", "mean_normalized_edit_distance", "correction_f1"}
+def _regular_sec_benchmark(s: str) -> bool:
+    split = s.split("/")
+    group, split = split[-2], split[-1]
+    return group != "whitespace" and split != "bea60k_cleaned"
 
 
-def get_sec_advanced_models_and_metrics():
-    return {
-               1: [
-                   ("gnn+ --> neuspell_bert", "gnn_cliques_wfc_plus_baseline_neuspell_bert")
-               ],
-               2: [
-                   ("gnn+ --> transformer", "gnn_cliques_wfc_plus_transformer_sec_nmt"),
-                   ("gnn+ --> transformer_word", "gnn_cliques_wfc_plus_transformer_sec_words_nmt")
-               ],
-               3: [
-                   ("transformer_with_tokenization_repair", "transformer_with_tokenization_repair_sec_nmt"),
-                   ("tokenization_repair++", "tokenization_repair_plus_sec")
-               ]
-           }, {"sequence_accuracy", "mean_normalized_edit_distance", "correction_f1"}
+def get_sec_models_and_metrics() -> Tuple[Callable[[str], bool], Dict[int, List[Tuple[str, str]]], Set[str]]:
+    return _regular_sec_benchmark, {
+        0: [
+            ("aspell", "baseline_aspell"),
+            ("jamspell", "baseline_jamspell"),
+            ("language_tool", "baseline_languagetool"),
+            ("close_to_dictionary", "baseline_ctd"),
+            ("do_nothing", "baseline_dummy")
+        ],
+        1: [
+            ("neuspell_bert", "baseline_neuspell_bert")
+        ],
+        2: [
+            ("transformer", "transformer_sec_nmt"),
+            ("transformer_word", "transformer_sec_words_nmt")
+        ]
+    }, {"sequence_accuracy", "mean_normalized_edit_distance", "correction_f1"}
+
+
+def get_sec_advanced_models_and_metrics() -> Tuple[Callable[[str], bool], Dict[int, List[Tuple[str, str]]], Set[str]]:
+    return _regular_sec_benchmark, {
+        1: [
+            ("gnn+ --> neuspell_bert", "gnn_cliques_wfc_plus_baseline_neuspell_bert")
+        ],
+        2: [
+            ("gnn+ --> transformer", "gnn_cliques_wfc_plus_transformer_sec_nmt"),
+            ("gnn+ --> transformer_word", "gnn_cliques_wfc_plus_transformer_sec_words_nmt")
+        ],
+        3: [
+            ("transformer_with_tokenization_repair", "transformer_with_tokenization_repair_sec_nmt"),
+            ("tokenization_repair++", "tokenization_repair_plus_sec")
+        ]
+    }, {"sequence_accuracy", "mean_normalized_edit_distance", "correction_f1"}
+
+
+def get_sec_whitespace_models_and_metrics() -> Tuple[Callable[[str], bool], Dict[int, List[Tuple[str, str]]], Set[str]]:
+    return lambda s: s.split("/")[-2] == "whitespace", {
+        1: [
+            ("transformer_with_tokenization_repair", "transformer_with_tokenization_repair_sec_nmt"),
+            ("tokenization_repair --> gnn+ --> transformer_word", "tr_plus_gnn_plus_words_nmt"),
+            ("tokenization_repair+ --> transformer_word", "tr_plus_plus_words_nmt"),
+            ("tokenization_repair+fixed --> transformer_word", "tr_plus_fixed_plus_words_nmt")
+        ]
+    }, {"sequence_accuracy", "mean_normalized_edit_distance", "correction_f1"}
+
+
+def get_sec_bea_cleaned_models_and_metrics() \
+        -> Tuple[Callable[[str], bool], Dict[int, List[Tuple[str, str]]], Set[str]]:
+    def _valid_benchmark(s: str) -> bool:
+        split = s.split("/")
+        group, split = split[-2], split[-1]
+        return group == "neuspell" and split == "bea60k_cleaned"
+
+    return _valid_benchmark, {
+        0: [
+            ("aspell", "baseline_aspell"),
+            ("jamspell", "baseline_jamspell"),
+            ("language_tool", "baseline_languagetool"),
+            ("close_to_dictionary", "baseline_ctd"),
+            ("do_nothing", "baseline_dummy")
+        ],
+        1: [
+            ("neuspell_bert", "baseline_neuspell_bert")
+        ],
+        2: [
+            ("transformer", "transformer_sec_nmt"),
+            ("transformer_word", "transformer_sec_words_nmt")
+        ],
+        3: [
+            ("gnn+ --> neuspell_bert", "gnn_cliques_wfc_plus_baseline_neuspell_bert")
+        ],
+        4: [
+            ("gnn+ --> transformer", "gnn_cliques_wfc_plus_transformer_sec_nmt"),
+            ("gnn+ --> transformer_word", "gnn_cliques_wfc_plus_transformer_sec_words_nmt")
+        ],
+        5: [
+            ("transformer_with_tokenization_repair", "transformer_with_tokenization_repair_sec_nmt"),
+            ("tokenization_repair++", "tokenization_repair_plus_sec")
+        ]
+    }, {"sequence_accuracy", "mean_normalized_edit_distance", "correction_f1"}
 
 
 if __name__ == "__main__":
@@ -218,29 +281,45 @@ if __name__ == "__main__":
 
     benchmarks = sorted(io.glob_safe(os.path.join(args.benchmark_dir, "*", "*", "corrupt.txt")))
     benchmarks = [os.path.dirname(b) for b in benchmarks]
+
+    if args.benchmark_type in {"sed_words", "sed_sequence"}:
+        filter_fn, models, metric_names = get_sed_models_and_metrics(is_sed_words=args.benchmark_type == "sed_words")
+    elif args.benchmark_type == "sec":
+        filter_fn, models, metric_names = get_sec_models_and_metrics()
+    elif args.benchmark_type == "sec_advanced":
+        filter_fn, models, metric_names = get_sec_advanced_models_and_metrics()
+    elif args.benchmark_type == "sec_whitespace":
+        filter_fn, models, metric_names = get_sec_whitespace_models_and_metrics()
+    elif args.benchmark_type == "sec_bea_cleaned":
+        filter_fn, models, metric_names = get_sec_bea_cleaned_models_and_metrics()
+    else:
+        filter_fn, models, metric_names = get_tokenization_repair_models_and_metrics()
+
+    benchmarks = list(filter(filter_fn, benchmarks))
     benchmark_groups = [b.split("/")[-2] for b in benchmarks]
     benchmark_splits = [b.split("/")[-1] for b in benchmarks]
 
-    if args.benchmark_type in {"sed_words", "sed_sequence"}:
-        models, metric_names = get_sed_models_and_metrics(is_sed_words=args.benchmark_type == "sed_words")
-    elif args.benchmark_type == "sec":
-        models, metric_names = get_sec_models_and_metrics()
-    elif args.benchmark_type == "sec_advanced":
-        models, metric_names = get_sec_advanced_models_and_metrics()
-    else:
-        models, metric_names = get_tokenization_repair_models_and_metrics()
-
     model_groups = sorted(models)
+
+    results = {
+        metric_name: {
+            model_name: [None for _ in range(len(benchmarks))]
+            for model_group in model_groups for model_name, _ in models[model_group]
+        }
+        for metric_name in metric_names
+    }
+
     results_file = os.path.join(args.save_dir, "results.json")
     if os.path.exists(results_file):
         with open(results_file, "r", encoding="utf8") as rf:
-            results = json.load(rf)
-    else:
-        results = {
-            metric_name: {model_name: [None for _ in range(len(benchmarks))]
-                          for model_group in model_groups for model_name, _ in models[model_group]}
-            for metric_name in metric_names
-        }
+            results_json = json.load(rf)
+            for metric_name in results_json:
+                if metric_name not in results:
+                    continue
+                for model_name, scores in results_json[metric_name].items():
+                    if model_name not in results[metric_name]:
+                        continue
+                    results[metric_name][model_name] = scores
 
     for model_group in tqdm(model_groups, desc="evaluating model groups", leave=False):
         for model_name, model_file_name in tqdm(
@@ -282,6 +361,9 @@ if __name__ == "__main__":
                     results[metric_name][model_name][i] = scores
 
             # save intermediate results after each metric, model pair was processed
+            results_dir = os.path.dirname(results_file)
+            if results_dir:
+                os.makedirs(results_dir, exist_ok=True)
             with open(results_file, "w", encoding="utf8") as rf:
                 json.dump(results, rf)
 
@@ -300,8 +382,8 @@ if __name__ == "__main__":
 
         horizontal_lines = []
         for model_group in model_groups:
-            horizontal_lines.extend(([0] * (num_lines_per_model - 1) + [1]) * (len(models[model_group]) - 1))
-            horizontal_lines.extend([0] * (num_lines_per_model - 1) + [2])
+            horizontal_lines.extend(([0] * (num_lines_per_model - 1) + [0]) * (len(models[model_group]) - 1))
+            horizontal_lines.extend([0] * (num_lines_per_model - 1) + [1])
 
         higher_better = _METRIC_TO_HIGHER_BETTER[metric_name]
         best_scores_per_benchmark = [float("-inf")] * len(data[0])

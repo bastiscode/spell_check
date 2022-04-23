@@ -99,3 +99,11 @@ def batch_edit_distance(
 
     """
     return edit_distance_rs.batch_edit_distance(a_list, b_list, with_swap, spaces_insert_delete_only, batch_size)
+
+
+def match_words(a: str, b: str) -> List[Tuple[int, int]]:
+    return edit_distance_rs.match_words(a, b)
+
+
+def batch_match_words(a_list: List[str], b_list: List[str], batch_size: int = 256) -> List[List[Tuple[int, int]]]:
+    return edit_distance_rs.batch_match_words(a_list, b_list, batch_size)

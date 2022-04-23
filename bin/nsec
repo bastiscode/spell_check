@@ -11,7 +11,8 @@ import torch
 from torch.backends import cudnn
 
 import nsc
-from nsc import SpellingErrorCorrector, get_available_spelling_error_correction_models
+from nsc import SpellingErrorCorrector, get_available_spelling_error_correction_models, GreedySearch, SampleSearch, \
+    BeamSearch, BestFirstSearch, SpellingCorrectionScore
 from nsc.api.utils import load_text_file, generate_report, save_text_file
 from nsc.utils import common
 from nsc.tasks import utils as task_utils
@@ -36,10 +37,29 @@ def parse_args() -> argparse.Namespace:
         help="Set the search method to be used during decoding"
     )
     parser.add_argument(
+        "--sample-top-k",
+        type=int,
+        default=5,
+        help="Sample one from the best k candidates"
+    )
+    parser.add_argument(
+        "--beam-width",
+        type=int,
+        default=5,
+        help="Always keep the best beam_width candidates"
+    )
+    parser.add_argument(
         "--score",
         choices=["log_likelihood", "dictionary", "dictionary_or_eq_input", "dictionary_or_in_input"],
         default="log_likelihood",
         help="Set the scoring method to score potential solution candidates during decoding"
+    )
+    parser.add_argument(
+        "--prefix-index",
+        type=str,
+        default=None,
+        help="Path to a prefix index that used when score is not log_likelihood, if not specified a default prefix "
+             "index is provided"
     )
     input_group = parser.add_mutually_exclusive_group()
     input_group.add_argument(
@@ -198,24 +218,37 @@ def run(args: argparse.Namespace) -> None:
             force_download=args.force_download
         )
 
+    if args.search == "greedy":
+        search = GreedySearch()
+    elif args.search == "sample":
+        search = SampleSearch(top_k=args.sample_top_k)
+    elif args.search == "beam":
+        search = BeamSearch(beam_width=args.beam_width)
+    elif args.search == "":
+        search = BestFirstSearch()
+    else:
+        raise RuntimeError("should not happen")
+
+    score = SpellingCorrectionScore(mode=args.score, prefix_index=args.prefix_index)
+
     corrector.set_precision(args.precision)
 
     start = time.perf_counter()
     num_sequences = -1
-    num_characters = -1
+    num_bytes = -1
     if args.correct is not None:
         line, detection = process_input(args.correct, args.sed_in)
-        print(corrector.correct_text(line, detection, sort_by_length=False))
+        print(corrector.correct_text(line, detection, search=search, score=score, sort_by_length=False))
 
     elif args.file is not None:
         lines = load_text_file(args.file)
 
-        num_characters = 0
+        num_bytes = 0
         inputs = []
         for line in lines:
             line, detection = process_input(line, False)
             inputs.append(line)
-            num_characters += len(line)
+            num_bytes += len(line.encode("utf8"))
 
         num_sequences = len(inputs)
 
@@ -228,6 +261,8 @@ def run(args: argparse.Namespace) -> None:
         corrections = corrector.correct_text(
             inputs=inputs,
             detections=detections,
+            search=search,
+            score=score,
             batch_size=args.batch_size,
             sort_by_length=not args.unsorted,
             show_progress=True
@@ -244,7 +279,7 @@ def run(args: argparse.Namespace) -> None:
             try:
                 line = input()
                 line, detection = process_input(line, False)
-                print(corrector.correct_text(line, detection, sort_by_length=False))
+                print(corrector.correct_text(line, detection, search=search, score=score, sort_by_length=False))
             except KeyboardInterrupt:
                 return
     else:
@@ -259,24 +294,28 @@ def run(args: argparse.Namespace) -> None:
                         corrector.correct_text(
                             inputs=line,
                             detections=detection,
+                            search=search,
+                            score=score,
                             sort_by_length=False
                         )
                     )
             else:
                 inputs = []
                 detections = []
-                num_characters = 0
+                num_bytes = 0
                 for line in sys.stdin:
                     line, detection = process_input(line, args.sed_in)
                     inputs.append(line)
                     detections.append(detection)
-                    num_characters += len(line)
+                    num_bytes += len(line.encode("utf8"))
 
                 num_sequences = len(inputs)
 
                 for corrected_line in corrector.correct_text(
                         inputs=inputs,
                         detections=detections if args.sed_in else None,
+                        search=search,
+                        score=score,
                         batch_size=args.batch_size,
                         sort_by_length=not args.unsorted,
                         show_progress=args.progress
@@ -288,7 +327,7 @@ def run(args: argparse.Namespace) -> None:
         except Exception as e:
             raise e
 
-    if args.report and num_sequences >= 0 and num_characters >= 0:
+    if args.report and num_sequences >= 0 and num_bytes >= 0:
         end = time.perf_counter()
 
         sample_inputs = corrector.task.generate_sample_inputs(2)
@@ -301,7 +340,7 @@ def run(args: argparse.Namespace) -> None:
             corrector.model_name,
             parameter_dict["total"] - parameter_dict["unused"],
             num_sequences,
-            num_characters,
+            num_bytes,
             end - start,
             corrector._mixed_precision_dtype,
             args.batch_size,

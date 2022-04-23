@@ -177,7 +177,8 @@ def artificial_edits(word: str, num_edits: int, rand: np.random.Generator) -> st
 def realistic_edits(
         word: str,
         rand: np.random.Generator,
-        word_misspellings: Dict[str, List[str]]) -> str:
+        word_misspellings: Dict[str, List[str]]
+) -> str:
     pot_misspellings = word_misspellings.get(word, word_misspellings.get(word.lower()))
     if pot_misspellings is not None and len(pot_misspellings) > 0:
         return pot_misspellings[rand.integers(len(pot_misspellings))]

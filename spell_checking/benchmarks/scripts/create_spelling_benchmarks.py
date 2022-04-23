@@ -74,7 +74,7 @@ def create(args: argparse.Namespace) -> None:
     else:
         correct_sequences_out_file = None
 
-    edit_token_p = 0.05 if args.output_type == "sed_sequence" else None
+    edit_token_p = 0.05 if args.output_type == "sed_sequence" else 0.2
     min_edit_tokens = 1 if args.output_type == "sed_sequence" else None
     if args.misspelling_type == "artificial":
         noise = preprocessing.ArtificialNoise(

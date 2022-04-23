@@ -1,5 +1,5 @@
 import sys
-from typing import List, Any, Dict, Tuple, Union, Optional
+from typing import List, Any, Dict, Tuple, Union, Optional, Set
 
 import numpy as np
 import torch
@@ -12,6 +12,10 @@ from nsc.data.variants import TokenizationRepairPlusConfig
 from nsc.modules import utils as mod_utils, inference
 from nsc.tasks import utils as task_utils
 from nsc.utils import data_containers, Batch, to, tokenization_repair
+
+
+def _filter_bad_indices(items: List, bad_indices: Set[int]) -> List:
+    return [item for i, item in enumerate(items) if i not in bad_indices]
 
 
 class TokenizationRepairPlus(tasks.Task):
@@ -30,25 +34,15 @@ class TokenizationRepairPlus(tasks.Task):
             batch: Batch,
             device: torch.device
     ) -> Tuple[Dict[str, Any], Any]:
-        label_dict = {
-            "sed_labels": to(torch.cat(batch.info.pop("sed_label")), device)
-        }
+        data_dict = {}
+        label_dict = {}
 
-        data_dict = {
-            "x": batch.data
-        }
-
-        if "tokenization_repair_label" in batch.info:
-            label_dict["tokenization_repair_labels"] = to(
-                torch.cat(batch.info.pop("tokenization_repair_label")),
-                device
-            )
-
+        sec_invalid_indices = set()
         if "sec_label" in batch.info:
             decoder_inputs = []
             decoder_labels = []
             decoder_group_lengths = []
-            for labels in batch.info.pop("sec_label"):
+            for i, labels in enumerate(batch.info.pop("sec_label")):
                 word_decoder_inputs = []
                 word_decoder_labels = []
                 word_decoder_lengths = []
@@ -56,6 +50,11 @@ class TokenizationRepairPlus(tasks.Task):
                     word_decoder_inputs.extend(word_labels[:-1])
                     word_decoder_labels.extend(word_labels[1:])
                     word_decoder_lengths.append(len(word_labels) - 1)
+                if sum(word_decoder_lengths) > 1024:
+                    # this is kind of a temporary hack to skip too long decoding sequences that cause OOM
+                    self.logger.warning(f"skipping sample with decoder length {sum(word_decoder_lengths)}")
+                    sec_invalid_indices.add(i)
+                    continue
                 decoder_inputs.append(torch.tensor(word_decoder_inputs, dtype=torch.long))
                 decoder_labels.append(torch.tensor(word_decoder_labels, dtype=torch.long))
                 decoder_group_lengths.append(torch.tensor(word_decoder_lengths, dtype=torch.long))
@@ -66,12 +65,36 @@ class TokenizationRepairPlus(tasks.Task):
             label_dict["sec_pad_token_id"] = batch.info["sec_pad_token_id"][0]
             data_dict["sec_decoder_inputs"] = decoder_inputs
             data_dict["sec_decoder_group_lengths"] = decoder_group_lengths
-            self.logger.warning(
-                f"input lengths: {[len(t) for t in batch.data]}, "
-                f"target lengths: {[torch.sum(lengths).item() for lengths in decoder_group_lengths]}"
+            # self.logger.warning(
+            #     f"input lengths: {[len(t) for t in batch.data]}, "
+            #     f"target lengths: {[torch.sum(lengths).item() for lengths in decoder_group_lengths]}"
+            # )
+
+        data_dict["x"] = _filter_bad_indices(batch.data, sec_invalid_indices)
+
+        if "tokenization_repair_label" in batch.info:
+            label_dict["tokenization_repair_labels"] = to(
+                torch.cat(_filter_bad_indices(batch.info.pop("tokenization_repair_label"), sec_invalid_indices)),
+                device
             )
 
-        return {**data_dict, **batch.info}, label_dict
+        label_dict["sed_labels"] = to(
+            torch.cat(_filter_bad_indices(batch.info.pop("sed_label"), sec_invalid_indices)),
+            device
+        )
+
+        batch_info = {
+            "word_groups": _filter_bad_indices(batch.info["word_groups"], sec_invalid_indices),
+            "word_ws_groups": _filter_bad_indices(batch.info["word_ws_groups"], sec_invalid_indices),
+            "input_group_lengths": _filter_bad_indices(batch.info["input_group_lengths"], sec_invalid_indices),
+            "word_group_lengths": _filter_bad_indices(batch.info["word_group_lengths"], sec_invalid_indices)
+        }
+        if "word_features" in batch.info:
+            batch_info["word_features"] = _filter_bad_indices(batch.info["word_features"], sec_invalid_indices)
+        if "char_groups" in batch.info:
+            batch_info["char_groups"] = _filter_bad_indices(batch.info["char_groups"], sec_invalid_indices)
+
+        return {**data_dict, **batch_info}, label_dict
 
     def _calc_loss(
             self,

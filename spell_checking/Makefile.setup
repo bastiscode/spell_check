@@ -54,7 +54,18 @@ setup_datasets:
 
 .PHONY: setup_misspellings
 setup_misspellings:
-	python scripts/process_misspellings.py
+	python scripts/process_misspellings.py \
+	--misspellings-dir ../data/raw/misspellings \
+	--data-dir ../data \
+	--dictionary ../data/dictionaries/merged_train_100k.txt \
+	--out-dir ../data/misspellings
+
+	python scripts/process_misspellings.py \
+	--misspellings-dir ../data/raw/misspellings \
+	--data-dir ../data \
+	--dictionary ../data/dictionaries/merged_train_100k.txt \
+	--out-dir ../data/misspellings_no_neuspell_no_bea \
+	--no-neuspell --no-bea
 
 .PHONY: setup_tokenizers
 setup_tokenizers:

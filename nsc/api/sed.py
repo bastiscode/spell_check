@@ -1,6 +1,6 @@
 import os
 import pprint
-from typing import List, Optional, Union, Any, Dict
+from typing import List, Optional, Union, Any, Dict, Tuple
 
 import torch
 
@@ -10,7 +10,7 @@ from nsc.api.utils import (
     load_experiment,
     get_device_info,
     _APIBase,
-    save_text_file
+    save_text_file, load_text_file
 )
 from nsc.data import DatasetVariants
 from nsc.modules import inference
@@ -112,6 +112,7 @@ class SpellingErrorDetector(_APIBase):
     Class to run spelling error detection models.
 
     """
+
     def __init__(
             self,
             model_dir: str,
@@ -210,7 +211,7 @@ class SpellingErrorDetector(_APIBase):
             batch_max_length_factor: Optional[float] = None,
             sort_by_length: bool = True,
             show_progress: bool = False
-    ) -> List[List[int]]:
+    ) -> Tuple[List[List[int]], List[str]]:
         inference_kwargs = {
             "threshold": threshold
         }
@@ -219,6 +220,8 @@ class SpellingErrorDetector(_APIBase):
             inference_kwargs["output_type"] = "sed"
             inference_kwargs["no_repair"] = os.getenv("NSC_TOKENIZATION_REPAIR_PLUS_NO_REPAIR", "false") == "true"
 
+        if isinstance(inputs, str):
+            inputs = load_text_file(inputs)
         all_outputs = super()._run_raw(
             inputs=inputs,
             batch_size=batch_size,
@@ -230,9 +233,9 @@ class SpellingErrorDetector(_APIBase):
         )
 
         if is_tokenization_repair_plus:
-            return [output["sed"] for output in all_outputs]
+            return [output["sed"] for output in all_outputs], [output["tokenization_repair"] for output in all_outputs]
         else:
-            return all_outputs
+            return all_outputs, inputs
 
     def detect_text(
             self,
@@ -242,7 +245,7 @@ class SpellingErrorDetector(_APIBase):
             batch_max_length_factor: Optional[float] = None,
             sort_by_length: bool = True,
             show_progress: bool = False
-    ) -> Union[List[int], List[List[int]]]:
+    ) -> Tuple[Union[List[int], List[List[int]]], Union[str, List[str]]]:
         """
 
         Detect spelling errors in text.
@@ -258,7 +261,8 @@ class SpellingErrorDetector(_APIBase):
             sort_by_length: sort the inputs by length before processing them
             show_progress: display progress bar
 
-        Returns: detections as list of integers or list of lists of integers
+        Returns: tuple of detections as list of integers or list of lists of integers and output strings as
+            str or list of strings
 
         """
         input_is_string = isinstance(inputs, str)
@@ -267,7 +271,7 @@ class SpellingErrorDetector(_APIBase):
                 or (isinstance(inputs, list) and all(isinstance(ipt, str) for ipt in inputs))
         ), f"input needs to be a string or a list of strings"
 
-        outputs = self._detect_text_raw(
+        detections, output_strings = self._detect_text_raw(
             [inputs] if input_is_string else inputs,
             threshold,
             batch_size,
@@ -275,7 +279,7 @@ class SpellingErrorDetector(_APIBase):
             sort_by_length,
             show_progress
         )
-        return outputs[0] if input_is_string else outputs
+        return (detections[0], output_strings[0]) if input_is_string else (detections, output_strings)
 
     def detect_file(
             self,
@@ -286,7 +290,7 @@ class SpellingErrorDetector(_APIBase):
             batch_max_length_factor: Optional[float] = None,
             sort_by_length: bool = True,
             show_progress: bool = True
-    ) -> Optional[Union[List[int], List[List[int]]]]:
+    ) -> Optional[Tuple[List[List[int]], List[str]]]:
         """
 
         Detect spelling errors in a file.
@@ -303,7 +307,8 @@ class SpellingErrorDetector(_APIBase):
             sort_by_length: sort the inputs by length before processing them
             show_progress: display progress bar
 
-        Returns: detections as list of lists of integers if output_file_path is not specified else None
+        Returns: tuple of detections as list of lists of integers and output strings as list of strings
+            if output_file_path is not specified else None
 
         """
         outputs = self._detect_text_raw(

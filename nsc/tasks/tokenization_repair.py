@@ -1,4 +1,4 @@
-from typing import Union, List, Dict, Any, Tuple
+from typing import Union, List, Dict, Any, Tuple, Optional
 
 import torch
 from torch.nn import functional as F
@@ -7,7 +7,7 @@ from nsc import models
 from nsc.data.utils import Sample, InferenceInfo
 from nsc.data.variants import TokenizationRepairConfig
 from nsc.tasks.token_classification import TokenClassification
-from nsc.utils import tokenization_repair, data_containers
+from nsc.utils import tokenization_repair, data_containers, Batch
 from nsc.tasks import utils as task_utils
 
 
@@ -46,16 +46,21 @@ class TokenizationRepair(TokenClassification):
     def inference(
             self,
             model: models.ModelForTokenClassification,
-            inputs: List[Union[str, Sample]],
+            inputs: Union[Batch, List[Union[str, Sample]]],
+            input_strings: Optional[List[str]] = None,
             **kwargs: Any
     ) -> List[str]:
         repair_tokens_list = super().inference(model, inputs, **kwargs)
+        if isinstance(inputs, Batch):
+            assert input_strings is not None
+        else:
+            input_strings = [str(ipt) for ipt in inputs]
         return [
             tokenization_repair.repair_whitespace(
-                str(ipt),
+                ipt,
                 repair_tokens
             )
-            for ipt, repair_tokens in zip(inputs, repair_tokens_list)
+            for ipt, repair_tokens in zip(input_strings, repair_tokens_list)
         ]
 
     def _split_sample_for_inference(
