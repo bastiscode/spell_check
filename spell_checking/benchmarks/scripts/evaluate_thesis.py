@@ -24,7 +24,6 @@ def parse_args():
             "sec",
             "sec_advanced",
             "sec_whitespace",
-            "sec_bea_cleaned",
             "tokenization_repair"
         ],
         required=True
@@ -234,42 +233,6 @@ def get_sec_whitespace_models_and_metrics() -> Tuple[Callable[[str], bool], Dict
     }, {"sequence_accuracy", "mean_normalized_edit_distance", "correction_f1"}
 
 
-def get_sec_bea_cleaned_models_and_metrics() \
-        -> Tuple[Callable[[str], bool], Dict[int, List[Tuple[str, str]]], Set[str]]:
-    def _valid_benchmark(s: str) -> bool:
-        split = s.split("/")
-        group, split = split[-2], split[-1]
-        return group == "neuspell" and split == "bea60k_cleaned"
-
-    return _valid_benchmark, {
-        0: [
-            ("aspell", "baseline_aspell"),
-            ("jamspell", "baseline_jamspell"),
-            ("language_tool", "baseline_languagetool"),
-            ("close_to_dictionary", "baseline_ctd"),
-            ("do_nothing", "baseline_dummy")
-        ],
-        1: [
-            ("neuspell_bert", "baseline_neuspell_bert")
-        ],
-        2: [
-            ("transformer", "transformer_sec_nmt"),
-            ("transformer_word", "transformer_sec_words_nmt")
-        ],
-        3: [
-            ("gnn+ --> neuspell_bert", "gnn_cliques_wfc_plus_baseline_neuspell_bert")
-        ],
-        4: [
-            ("gnn+ --> transformer", "gnn_cliques_wfc_plus_transformer_sec_nmt"),
-            ("gnn+ --> transformer_word", "gnn_cliques_wfc_plus_transformer_sec_words_nmt")
-        ],
-        5: [
-            ("transformer_with_tokenization_repair", "transformer_with_tokenization_repair_sec_nmt"),
-            ("tokenization_repair++", "tokenization_repair_plus_sec")
-        ]
-    }, {"sequence_accuracy", "mean_normalized_edit_distance", "correction_f1"}
-
-
 if __name__ == "__main__":
     args = parse_args()
     logger = common.get_logger("EVALUATE_PAPER")
@@ -290,8 +253,6 @@ if __name__ == "__main__":
         filter_fn, models, metric_names = get_sec_advanced_models_and_metrics()
     elif args.benchmark_type == "sec_whitespace":
         filter_fn, models, metric_names = get_sec_whitespace_models_and_metrics()
-    elif args.benchmark_type == "sec_bea_cleaned":
-        filter_fn, models, metric_names = get_sec_bea_cleaned_models_and_metrics()
     else:
         filter_fn, models, metric_names = get_tokenization_repair_models_and_metrics()
 

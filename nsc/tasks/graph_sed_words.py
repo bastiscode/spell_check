@@ -36,7 +36,7 @@ class GraphSEDWords(MultiNodeClassification):
         super()._update_stats(model, inputs, labels, model_output, stats, step, total_steps)
         for node_type, pred in model_output.items():
             predictions = torch.argmax(pred, dim=1)
-            stats[f"{node_type}_f1_prec_rec"].add((labels[node_type].cpu(), predictions))
+            stats[f"{node_type}_fpr"].add((labels[node_type].cpu(), predictions.cpu()))
 
     @torch.inference_mode()
     def inference(

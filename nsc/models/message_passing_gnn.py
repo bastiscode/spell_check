@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Dict, Callable, Optional
+from typing import Dict, Callable, Optional, Tuple
 
 import dgl
 import torch
@@ -86,7 +86,7 @@ class MessagePassingGNN(models.GNN):
                 self.edge_gates.append(
                     nn.Sequential(
                         nn.Linear(self.edge_hidden_dim, self.edge_hidden_dim),
-                        nn.ReLU(),
+                        nn.GELU(),
                         nn.Dropout(self.cfg.dropout),
                         nn.Linear(self.edge_hidden_dim, 1),
                         nn.Sigmoid()
@@ -175,41 +175,47 @@ class MessagePassingGNN(models.GNN):
 
         return udf
 
+    def _get_node_and_edge_feat(self, g: dgl.DGLHeteroGraph) \
+            -> Tuple[Dict[str, torch.Tensor], Dict[Tuple[str, str, str], torch.Tensor]]:
+        h_n = {g.ntypes[0]: g.ndata[self.hidden_feature]} \
+            if g.is_homogeneous else g.ndata[self.hidden_feature]
+        h_e = {g.canonical_etypes[0]: g.edata[self.hidden_feature]} \
+            if g.is_homogeneous else g.edata[self.hidden_feature]
+        return h_n, h_e
+
     def forward(self, g: dgl.DGLHeteroGraph) -> dgl.DGLHeteroGraph:
-        for i in range(self.cfg.num_layers):
-            i = 0 if self.cfg.recurrent_update else i
+        with g.local_scope():
+            for i in range(self.cfg.num_layers):
+                i = 0 if self.cfg.recurrent_update else i
 
-            for e_type in g.canonical_etypes:
-                if g.num_edges(e_type) == 0:
-                    continue
+                for e_type in g.canonical_etypes:
+                    if g.num_edges(e_type) == 0:
+                        continue
 
-                # compute messages and update edge hidden representations
-                g.apply_edges(
-                    func=self.compute_messages(i),
-                    etype=e_type
+                    # compute messages and update edge hidden representations
+                    g.apply_edges(
+                        func=self.compute_messages(i),
+                        etype=e_type
+                    )
+
+                g.multi_update_all(
+                    {e_type: (
+                        dfn.copy_e("messages", "messages"),
+                        self.reduce_fn
+                    ) for e_type in g.canonical_etypes if g.num_edges(e_type) > 0},
+                    cross_reducer="sum",
+                    apply_node_func=self.update_nodes(i)
                 )
 
-            g.multi_update_all(
-                {e_type: (
-                    dfn.copy_e("messages", "messages"),
-                    self.reduce_fn
-                ) for e_type in g.canonical_etypes if g.num_edges(e_type) > 0},
-                cross_reducer="sum",
-                apply_node_func=self.update_nodes(i)
-            )
+                # normalize node and edge features
+                h_n, h_e = self._get_node_and_edge_feat(g)
+                h_n, h_e = self.norms[i](g, (h_n, h_e))
 
-            # normalize node and edge features
-            h_n = {g.ntypes[0]: g.ndata[self.hidden_feature]} \
-                if g.is_homogeneous else g.ndata[self.hidden_feature]
-            h_e = {g.canonical_etypes[0]: g.edata[self.hidden_feature]} \
-                if g.is_homogeneous else g.edata[self.hidden_feature]
+                g.ndata[self.hidden_feature] = h_n[g.ntypes[0]] if g.is_homogeneous else h_n
+                g.edata[self.hidden_feature] = h_e[g.canonical_etypes[0]] if g.is_homogeneous else h_e
 
-            h_n, h_e = self.norms[i](g, (h_n, h_e))
+            h_n, h_e = self._get_node_and_edge_feat(g)
 
-            g.ndata[self.hidden_feature] = h_n[g.ntypes[0]] if g.is_homogeneous else h_n
-            g.edata[self.hidden_feature] = h_e[g.canonical_etypes[0]] if g.is_homogeneous else h_e
-
-        del g.ndata["message"]
-        del g.edata["messages"]
-
+        g.ndata[self.hidden_feature] = h_n[g.ntypes[0]] if g.is_homogeneous else h_n
+        g.edata[self.hidden_feature] = h_e[g.canonical_etypes[0]] if g.is_homogeneous else h_e
         return g

@@ -28,8 +28,8 @@ if [[ $approach == "transformer" ]]; then
   export NSC_NUM_ENCODER_LAYERS=6
   export NSC_BATCH_MAX_LENGTH=32768
   export NSC_CONFIG=$rel_config
-  export NSC_WORLD_SIZE=12
-  sbatch --nodes=3 spell_checking/scripts/train.sh
+  export NSC_WORLD_SIZE=16
+  sbatch --nodes=4 spell_checking/scripts/train.sh
 
 else
   echo "Unknown approach $approach"

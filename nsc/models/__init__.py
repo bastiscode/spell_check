@@ -1,5 +1,4 @@
 import enum
-import time
 from dataclasses import dataclass
 from typing import Optional, Dict, Tuple, List, Any, Union
 
@@ -37,10 +36,9 @@ class GNNs(enum.IntEnum):
     SIMPLE_GNN = 2
     TRANSFORMER_ENCODER_GNN = 3
     TRANSFORMER_ENCODER = 4
-    HIERARCHICAL_GNN = 5
-    MESSAGE_PASSING_GNN = 6
-    IDENTITY_GNN = 7
-    GENERAL_GNN = 8
+    MESSAGE_PASSING_GNN = 5
+    IDENTITY_GNN = 6
+    GENERAL_GNN = 7
 
 
 @dataclass
@@ -103,7 +101,6 @@ def get_gnn_from_config(
         TransformerEncoder,
         TransformerEncoderConfig
     )
-    from nsc.models.hierarchical_gnn import HierarchicalGNN, HierarchicalGNNConfig
     from nsc.models.message_passing_gnn import MessagePassingGNN, MessagePassingGNNConfig
     from nsc.models.general_gnn import GeneralGNN, GeneralGNNConfig
 
@@ -127,9 +124,6 @@ def get_gnn_from_config(
     elif gnn_type == GNNs.TRANSFORMER_ENCODER:
         kwargs["cfg"] = omegaconf.OmegaConf.structured(TransformerEncoderConfig(**cfg))
         return TransformerEncoder(**kwargs)
-    elif gnn_type == GNNs.HIERARCHICAL_GNN:
-        kwargs["cfg"] = omegaconf.OmegaConf.structured(HierarchicalGNNConfig(**cfg))
-        return HierarchicalGNN(**kwargs)
     elif gnn_type == GNNs.MESSAGE_PASSING_GNN:
         kwargs["cfg"] = omegaconf.OmegaConf.structured(MessagePassingGNNConfig(**cfg))
         return MessagePassingGNN(**kwargs)

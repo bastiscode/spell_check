@@ -23,13 +23,13 @@ if [[ $approach == "transformer" ]]; then
   config="$config_dir/train/sec_nmt_transformer.yaml"
   rel_config=$(realpath "$config" --relative-to "$workspace")
   echo "Starting approach $approach with config $(realpath "$config" --relative-to "$config_dir")"
-  export NSC_EXPERIMENT_NAME="transformer_sec_nmt"
+  export NSC_EXPERIMENT_NAME="transformer_sec_nmt_no_neuspell_no_bea"
   export NSC_MASTER_PORT=$(python -c "import random; print(random.randrange(10000, 60000))")
   export NSC_NUM_ENCODER_LAYERS=6
   export NSC_BATCH_MAX_LENGTH=32768
   export NSC_CONFIG=$rel_config
-  export NSC_WORLD_SIZE=8
-  sbatch --nodes=2 spell_checking/scripts/train.sh
+  export NSC_WORLD_SIZE=12
+  sbatch --nodes=3 spell_checking/scripts/train.sh
 
 elif [[ $approach == "transformer_with_tokenization_repair" ]]; then
   config="$config_dir/train/sec_with_tokenization_repair_nmt_transformer.yaml"

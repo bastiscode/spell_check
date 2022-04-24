@@ -6,8 +6,8 @@ lr_scheduler: ${from_file:lr_scheduler/step_with_0.05_warmup.yaml}
 experiment_dir: ${oc.env:NSC_EXPERIMENT_DIR}
 data_dir: ${oc.env:NSC_DATA_DIR}
 datasets:
-  - ${oc.env:NSC_DATA_DIR}/processed/wikidump_paragraphs_sec_with_tokenization_repair
-  - ${oc.env:NSC_DATA_DIR}/processed/bookcorpus_paragraphs_sec_with_tokenization_repair
+  - ${oc.env:NSC_DATA_DIR}/processed/wikidump_paragraphs_sed_words_and_sec${oc.env:NSC_DATA_DIR_POSTFIX,""}
+  - ${oc.env:NSC_DATA_DIR}/processed/bookcorpus_paragraphs_sed_words_and_sec${oc.env:NSC_DATA_DIR_POSTFIX,""}
 dataset_limits:
   - ${oc.env:NSC_DATA_LIMIT}
   - ${oc.env:NSC_DATA_LIMIT}
@@ -23,3 +23,4 @@ log_per_epoch: ${oc.env:NSC_LOG_PER_EPOCH,100}
 eval_per_epoch: ${oc.env:NSC_EVAL_PER_EPOCH,4}
 seed: 22
 mixed_precision: ${oc.env:NSC_MIXED_PRECISION,true}
+pin_memory: ${oc.env:NSC_PIN_MEMORY,true}

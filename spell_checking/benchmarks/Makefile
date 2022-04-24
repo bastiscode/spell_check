@@ -65,14 +65,6 @@ evaluate_sec:
 
 	@glow -w 150 $(SPLIT)/sec_whitespace_tables/*.md
 
-	@python scripts/evaluate_thesis.py \
-	--benchmark-dir $(SPLIT)/sec \
-	--benchmark-type sec_bea_cleaned \
-	--result-dir $(SPLIT)/sec/results \
-	--save-dir $(SPLIT)/sec_bea_cleaned_tables
-
-	@glow -w 150 $(SPLIT)/sec_bea_cleaned_tables/*.md
-
 .PHONY: evaluate_tokenization_repair
 evaluate_tokenization_repair:
 	@python scripts/evaluate_thesis.py \
