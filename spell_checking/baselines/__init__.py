@@ -81,7 +81,7 @@ def get_baseline(baseline: Baselines, seed: int, **kwargs: Any) -> Baseline:
     elif baseline == Baselines.SEC_NEUSPELL_ELMO:
         return SECNeuspellBaseline(model_name="sclstm_elmo")
     elif baseline == Baselines.SEC_LANGUAGETOOL:
-        return SECLanguagetoolBaseline(edit_whitespaces=False)
+        return SECLanguagetoolBaseline()
     elif baseline == Baselines.SEC_SPELL_CHECK_INDEX:
         return SECSpellCheckIndexBaseline()
     else:

@@ -543,18 +543,18 @@ class ChainedConfig(PreprocessingConfig):
     type: Preprocessings = Preprocessings.CHAINED
 
     cfgs: List[PreprocessingConfig] = MISSING
-    overrides: List[bool] = MISSING
+    overwrites: List[bool] = MISSING
 
 
 class Chained(Preprocessing):
     def __init__(self, cfg: PreprocessingConfig, seed: int) -> None:
         super().__init__(cfg, seed)
         self.cfg: ChainedConfig
-        assert len(self.cfg.cfgs) == len(self.cfg.overrides), \
-            "expected same number of noise configs and override flags"
-        assert not self.cfg.overrides[-1], "last override flag must always be False"
+        assert len(self.cfg.cfgs) == len(self.cfg.overwrites), \
+            "expected same number of noise configs and overwrite flags"
         self.preprocessing = [get_preprocessing_from_config(cfg, seed) for cfg in self.cfg.cfgs]
-        self.overrides = self.cfg.overrides
+        self.overwrites = self.cfg.overwrites
+        self.overwrites[-1] = False
 
     def apply(
             self,
@@ -562,9 +562,9 @@ class Chained(Preprocessing):
             target_sequences: List[str],
             infos: List[Dict[str, Any]]
     ) -> Tuple[List[str], List[str], List[Dict[str, Any]]]:
-        for override, preprocessing in zip(self.overrides, self.preprocessing):
+        for overwrite, preprocessing in zip(self.overwrites, self.preprocessing):
             sequences, target_sequences, infos = preprocessing.apply(sequences, target_sequences, infos)
-            if override:
+            if overwrite:
                 target_sequences = sequences
         return sequences, target_sequences, infos
 

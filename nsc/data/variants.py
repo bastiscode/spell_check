@@ -10,7 +10,6 @@ import torch
 from omegaconf import MISSING, OmegaConf
 
 from nsc.data import graph, tokenization, utils, index
-from nsc.data.preprocessing import get_preprocessing_from_config, PreprocessingConfig, get_preprocessing_fn
 from nsc.data.tokenization import TokenizerConfig, get_tokenizer_from_config
 from nsc.utils import tokenization_repair, io, DataInput
 
@@ -28,8 +27,6 @@ class DatasetVariants(enum.IntEnum):
 class DatasetVariantConfig:
     type: DatasetVariants  # = MISSING
 
-    preprocessing: PreprocessingConfig = MISSING
-
 
 class DatasetVariant:
     def __init__(
@@ -39,19 +36,16 @@ class DatasetVariant:
             tokenization_fn: utils.TokenizationFn,
             unk_token_id: int,
             neighbor_fn: Optional[utils.NeighborFn] = None,
-            **preprocessing_kwargs: Dict[str, Any]
+            **prepare_samples_kwargs: Dict[str, Any]
     ):
         self.cfg = cfg
         self.seed = seed
         self.rand = np.random.default_rng(seed)
 
-        preprocessing = get_preprocessing_from_config(self.cfg.preprocessing, self.seed)
-        self.preprocessing_fn: utils.PreprocessingFn = get_preprocessing_fn(
-            preprocessing,
-            tokenization_fn,
-            neighbor_fn,
-            **preprocessing_kwargs
-        )
+        self.tokenization_fn = tokenization_fn
+        self.neighbor_fn = neighbor_fn
+        self.prepare_samples_kwargs = prepare_samples_kwargs
+
         self.unk_token_id = unk_token_id
 
     @property
@@ -65,16 +59,19 @@ class DatasetVariant:
 
     def get_sample(
             self,
-            sequence: Union[str, utils.Sample],
-            target_sequence: Optional[str] = None,
-            is_inference: bool = False
-    ) -> Tuple[utils.Sample, Optional[str]]:
-        sequence_is_sample = isinstance(sequence, utils.Sample)
-        if is_inference and not sequence_is_sample:
-            sequence = self.preprocessing_fn([sequence], [None], is_inference)[0][0]
-        elif not is_inference and (not sequence_is_sample or target_sequence is None):
-            sequence, target_sequence = self.preprocessing_fn([str(sequence)], [target_sequence], is_inference)[0]
-        return utils.sanitize_sample(sequence, self.unk_token_id), target_sequence
+            sequence: Union[str, utils.Sample]
+    ) -> utils.Sample:
+        if isinstance(sequence, utils.Sample):
+            sample = sequence
+        else:
+            sample = utils.prepare_samples(
+                [sequence],
+                [{}],
+                self.tokenization_fn,
+                self.neighbor_fn,
+                **self.prepare_samples_kwargs
+            )[0]
+        return utils.sanitize_sample(sample, self.unk_token_id)
 
     def get_inputs(
             self,
@@ -123,11 +120,11 @@ class SEDSequence(DatasetVariant):
             neighbor_fn = index.get_neighbor_fn(neighbor_index, cfg.index_num_neighbors)
         else:
             neighbor_fn = None
-        preprocessing_sample_kwargs = {}
+        prepare_sample_kwargs = {}
         if cfg.data_scheme == "word_graph":
-            preprocessing_sample_kwargs["with_dep_parser"] = cfg.add_dependency_info
+            prepare_sample_kwargs["with_dep_parser"] = cfg.add_dependency_info
 
-        super().__init__(cfg, seed, tok_fn, unk_token_id, neighbor_fn, **preprocessing_sample_kwargs)
+        super().__init__(cfg, seed, tok_fn, unk_token_id, neighbor_fn, **prepare_sample_kwargs)
 
     def _construct_input(self, sample: utils.Sample) -> Union[torch.Tensor, dgl.DGLHeteroGraph]:
         self.cfg: SEDSequenceConfig
@@ -183,11 +180,7 @@ class SEDSequence(DatasetVariant):
     ]:
         self.cfg: SEDSequenceConfig
 
-        input_sample, target_sequence = self.get_sample(
-            sequence,
-            target_sequence,
-            is_inference
-        )
+        input_sample = self.get_sample(sequence)
 
         info = {}
         if not is_inference:
@@ -307,11 +300,12 @@ class SEDWords(DatasetVariant):
             neighbor_fn = index.get_neighbor_fn(neighbor_index, cfg.index_num_neighbors)
         else:
             neighbor_fn = None
-        preprocessing_sample_kwargs = {}
-        if cfg.data_scheme == "word_graph":
-            preprocessing_sample_kwargs["with_dep_parser"] = cfg.add_dependency_info
 
-        super().__init__(cfg, seed, tok_fn, unk_token_id, neighbor_fn, **preprocessing_sample_kwargs)
+        prepare_sample_kwargs = {}
+        if cfg.data_scheme == "word_graph":
+            prepare_sample_kwargs["with_dep_parser"] = cfg.add_dependency_info
+
+        super().__init__(cfg, seed, tok_fn, unk_token_id, neighbor_fn, **prepare_sample_kwargs)
 
     def _construct_input(self, sample: utils.Sample) -> Union[torch.Tensor, dgl.DGLHeteroGraph]:
         self.cfg: SEDWordsConfig
@@ -352,11 +346,7 @@ class SEDWords(DatasetVariant):
     ]:
         self.cfg: SEDWordsConfig
 
-        input_sample, target_sequence = self.get_sample(
-            sequence,
-            target_sequence,
-            is_inference
-        )
+        input_sample = self.get_sample(sequence)
 
         info: Dict[str, Any] = {}
         if not is_inference:
@@ -494,11 +484,7 @@ class TokenizationRepair(DatasetVariant):
     ]:
         self.cfg: TokenizationRepairConfig
 
-        input_sample, target_sequence = self.get_sample(
-            sequence,
-            target_sequence,
-            is_inference
-        )
+        input_sample = self.get_sample(sequence)
 
         info = {}
         if not is_inference:
@@ -554,11 +540,11 @@ class SECWordsNMT(DatasetVariant):
             neighbor_fn = index.get_neighbor_fn(neighbor_index, cfg.index_num_neighbors)
         else:
             neighbor_fn = None
-        preprocessing_sample_kwargs = {}
+        prepare_sample_kwargs = {}
         if cfg.data_scheme == "word_graph":
-            preprocessing_sample_kwargs["with_dep_parser"] = cfg.add_dependency_info
+            prepare_sample_kwargs["with_dep_parser"] = cfg.add_dependency_info
 
-        super().__init__(cfg, seed, tok_fn, unk_token_id, neighbor_fn, **preprocessing_sample_kwargs)
+        super().__init__(cfg, seed, tok_fn, unk_token_id, neighbor_fn, **prepare_sample_kwargs)
 
     def _construct_input(
             self,
@@ -600,11 +586,7 @@ class SECWordsNMT(DatasetVariant):
     ]:
         self.cfg: SECWordsNMTConfig
 
-        input_sample, target_sequence = self.get_sample(
-            sequence,
-            target_sequence,
-            is_inference
-        )
+        input_sample = self.get_sample(sequence)
 
         input_words = str(input_sample).split()
         token_group_lengths = [0] * len(input_words)
@@ -693,11 +675,11 @@ class SECNMT(DatasetVariant):
             neighbor_fn = index.get_neighbor_fn(neighbor_index, cfg.index_num_neighbors)
         else:
             neighbor_fn = None
-        preprocessing_sample_kwargs = {}
+        prepare_sample_kwargs = {}
         if cfg.data_scheme == "word_graph":
-            preprocessing_sample_kwargs["with_dep_parser"] = cfg.add_dependency_info
+            prepare_sample_kwargs["with_dep_parser"] = cfg.add_dependency_info
 
-        super().__init__(cfg, seed, tok_fn, unk_token_id, neighbor_fn, **preprocessing_sample_kwargs)
+        super().__init__(cfg, seed, tok_fn, unk_token_id, neighbor_fn, **prepare_sample_kwargs)
 
     def _construct_input(
             self,
@@ -739,11 +721,7 @@ class SECNMT(DatasetVariant):
     ]:
         self.cfg: SECNMTConfig
 
-        input_sample, target_sequence = self.get_sample(
-            sequence,
-            target_sequence,
-            is_inference
-        )
+        input_sample = self.get_sample(sequence)
 
         info = {}
         if not is_inference:
@@ -799,11 +777,7 @@ class TokenizationRepairPlus(TokenizationRepair):
     ]:
         self.cfg: TokenizationRepairPlusConfig
 
-        input_sample, target_sequence = self.get_sample(
-            sequence,
-            target_sequence,
-            is_inference
-        )
+        input_sample = self.get_sample(sequence)
 
         info = {}
         if not is_inference:

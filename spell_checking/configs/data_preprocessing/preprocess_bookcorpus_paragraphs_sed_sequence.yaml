@@ -1,7 +1,7 @@
 data:
   - ${oc.env:NSC_DATA_DIR}/cleaned/bookcorpus_paragraphs/train_files.txt
 
-output_dir: ${oc.env:NSC_DATA_DIR}/processed/bookcorpus_paragraphs_sed_sequence
+output_dir: ${oc.env:NSC_DATA_DIR}/processed/bookcorpus_paragraphs_sed_sequence${oc.env:NSC_OUTPUT_DIR_POSTFIX,""}
 seed: 22
 limit: ${oc.env:NSC_LIMIT,100000000}
 

@@ -224,7 +224,7 @@ def run(args: argparse.Namespace) -> None:
         search = SampleSearch(top_k=args.sample_top_k)
     elif args.search == "beam":
         search = BeamSearch(beam_width=args.beam_width)
-    elif args.search == "":
+    elif args.search == "best_first":
         search = BestFirstSearch()
     else:
         raise RuntimeError("should not happen")

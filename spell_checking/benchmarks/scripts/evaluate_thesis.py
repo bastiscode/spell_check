@@ -2,7 +2,7 @@ import argparse
 import collections
 import json
 import os
-from typing import Dict, Tuple, List, Set, Optional, Callable
+from typing import Dict, Tuple, List, Set, Optional, Callable, Any
 
 from tqdm import tqdm
 
@@ -21,6 +21,7 @@ def parse_args():
         choices=[
             "sed_sequence",
             "sed_words",
+            "sed_words_advanced",
             "sec",
             "sec_advanced",
             "sec_whitespace",
@@ -44,7 +45,7 @@ def evaluate(
         corrupted_file: str,
         metric_names: Set[str],
         dictionary: Optional[Dict[str, int]] = None
-) -> Dict[str, Tuple[float, List[str]]]:
+) -> Dict[str, Tuple[Any, ...]]:
     groundtruths = []
     predictions = []
     corrupted = []
@@ -63,8 +64,7 @@ def evaluate(
         if name == "binary_f1":
             binary_predictions = [int(p) for prediction in predictions for p in prediction.split()]
             binary_labels = [int(l) for label in groundtruths for l in label.split()]
-            f1, prec, rec = metrics.binary_f1_prec_rec(binary_predictions, binary_labels)
-            results[name] = (f1, [f"{100 * f1:.2f}", f"\\footnotesize{100 * prec:.1f} {100 * rec:.1f}"])
+            results[name] = metrics.binary_f1_prec_rec(binary_predictions, binary_labels)
 
         elif name == "word_accuracy":
             assert dictionary is not None
@@ -90,38 +90,26 @@ def evaluate(
             accuracy = metrics.accuracy(word_predictions, word_groundtruths)
             results[name] = (
                 accuracy,
-                [
-                    f"{100 * accuracy:.2f}",
-                    f"\\footnotesize$\\frac{{{sum(real_word_detections):,}}}{{{len(real_word_detections):,}}}$ "
-                    f"$\\frac{{{sum(non_word_detections):,}}}{{{len(non_word_detections):,}}}$"
-                ]
+                # (sum(real_word_detections), len(real_word_detections)),
+                # (sum(non_word_detections), len(non_word_detections))
             )
 
         elif name == "sequence_accuracy":
             accuracy = metrics.accuracy(predictions, groundtruths)
-            results[name] = (accuracy, [f"{100 * accuracy:.2f}"])
+            results[name] = (accuracy,)
 
         elif name == "mean_normalized_edit_distance":
             mned = metrics.mean_normalized_sequence_edit_distance(predictions, groundtruths)
-            results[name] = (mned, [f"{mned:.4f}"])
+            results[name] = (mned,)
 
         elif name == "correction_f1":
-            f1, prec, rec = metrics.correction_f1_prec_rec(corrupted, predictions, groundtruths)
-            results[name] = (f1, [f"{100 * f1:.2f}", f"\\footnotesize{100 * prec:.1f} {100 * rec:.1f}"])
+            results[name] = metrics.correction_f1_prec_rec(corrupted, predictions, groundtruths)
 
         else:
             raise RuntimeError(f"unknown metric {name}")
 
     return results
 
-
-_METRIC_TO_NUM_LINES = {
-    "sequence_accuracy": 1,
-    "binary_f1": 2,
-    "word_accuracy": 2,
-    "mean_normalized_edit_distance": 1,
-    "correction_f1": 2
-}
 
 _METRIC_TO_HIGHER_BETTER = {
     "sequence_accuracy": True,
@@ -130,6 +118,57 @@ _METRIC_TO_HIGHER_BETTER = {
     "mean_normalized_edit_distance": False,
     "correction_f1": True
 }
+
+_METRIC_TO_NUM_COLS = {
+    "sequence_accuracy": 1,
+    "binary_f1": 3,
+    "word_accuracy": 1,
+    "mean_normalized_edit_distance": 2,
+    "correction_f1": 3
+}
+
+
+def get_metric_fmt_fn(metric_name: str, **metric_kwargs: Any) -> Callable[[Any], List[str]]:
+    if metric_name == "sequence_accuracy":
+        def _fmt_seq_acc(acc: float, mark_bea: str = "", **fmt_kwargs: Any) -> List[str]:
+            return [f"{100 * acc:.2f}{mark_bea}"]
+
+        return _fmt_seq_acc
+
+    elif metric_name == "binary_f1":
+        def _fmt_binary_f1(f1: float, prec: float, rec: float, mark_bea: str = "", **fmt_kwargs: Any) -> List[str]:
+            return [f"{100 * f1:.2f}{mark_bea}",
+                    f"\\footnotesize {100 * prec:.2f}",
+                    f"\\footnotesize {100 * rec:.2f}"]
+
+        return _fmt_binary_f1
+
+    elif metric_name == "word_accuracy":
+        def _fmt_word_acc(accuracy: float, mark_bea: str = "", **fmt_kwargs: Any) -> List[str]:
+            return [f"{100 * accuracy:.2f}{mark_bea}"]
+
+        return _fmt_word_acc
+
+    elif metric_name == "mean_normalized_edit_distance":
+        def _fmt_mned(mned: float, mark_bea: str = "", **fmt_kwargs: Any) -> List[str]:
+            if fmt_kwargs["is_baseline"]:
+                return [f"{mned:.4f}{mark_bea}", ""]
+            else:
+                baseline_mned = fmt_kwargs["baseline_scores"][0]
+                return [f"{100 * (mned / baseline_mned - 1):+.1f}%{mark_bea}", f"\\footnotesize {mned:.4f}"]
+
+        return _fmt_mned
+
+    elif metric_name == "correction_f1":
+        def _fmt_correction_f1(f1: float, prec: float, rec: float, mark_bea: str = "", **fmt_kwargs: Any) -> List[str]:
+            return [f"{100 * f1:.2f}{mark_bea}",
+                    f"\\footnotesize {100 * prec:.2f}",
+                    f"\\footnotesize {100 * rec:.2f}"]
+
+        return _fmt_correction_f1
+
+    else:
+        raise RuntimeError("should not happen")
 
 
 def get_tokenization_repair_models_and_metrics() \
@@ -167,18 +206,28 @@ def get_sed_models_and_metrics(is_sed_words: bool) \
         ],
         3: [
             ("transformer+", "transformer"),
-            ("gnn+", "gnn_cliques_wfc")
+            ("gnn+", "gnn_cliques_wfc"),
+            ("gnn+_no_neuspell_no_bea", "gnn_cliques_wfc_no_neuspell_no_bea"),
+            ("transformer_sec_words_nmt", "transformer_sec_words_nmt"),
+            ("transformer_sec_nmt", "transformer_sec_nmt"),
+            ("transformer_sec_nmt_no_neuspell_no_bea", "transformer_sec_nmt_no_neuspell_no_bea"),
         ]
     }
     metric_names = {"binary_f1", "sequence_accuracy"}
     if is_sed_words:
-        dictionary[3].extend([
+        metric_names.add("word_accuracy")
+    return lambda _: True, dictionary, metric_names
+
+
+def get_sed_words_advanced_models_and_metrics() \
+        -> Tuple[Callable[[str], bool], Dict[int, List[Tuple[str, str]]], Set[str]]:
+    return lambda _: True, {
+        1: [
             ("tokenization_repair+", "tokenization_repair_plus_sed"),
             ("tokenization_repair+fixed", "tokenization_repair_plus_fixed"),
             ("tokenization_repair++", "tokenization_repair_plus_sec")
-        ])
-        metric_names.add("word_accuracy")
-    return lambda _: True, dictionary, metric_names
+        ]
+    }, {"binary_f1", "sequence_accuracy", "word_accuracy"}
 
 
 def _regular_sec_benchmark(s: str) -> bool:
@@ -201,36 +250,48 @@ def get_sec_models_and_metrics() -> Tuple[Callable[[str], bool], Dict[int, List[
         ],
         2: [
             ("transformer", "transformer_sec_nmt"),
-            ("transformer_word", "transformer_sec_words_nmt")
+            ("transformer_no_neuspell_no_bea", "transformer_sec_nmt_no_neuspell_no_bea"),
+            ("transformer_word", "transformer_sec_words_nmt"),
+            ("transformer_word_no_neuspell_no_bea", "transformer_sec_words_nmt_no_neuspell_no_bea")
         ]
-    }, {"sequence_accuracy", "mean_normalized_edit_distance", "correction_f1"}
+    }, {"mean_normalized_edit_distance", "correction_f1"}
 
 
 def get_sec_advanced_models_and_metrics() -> Tuple[Callable[[str], bool], Dict[int, List[Tuple[str, str]]], Set[str]]:
     return _regular_sec_benchmark, {
         1: [
-            ("gnn+ --> neuspell_bert", "gnn_cliques_wfc_plus_baseline_neuspell_bert")
+            (r"gnn+ $\rightarrow$ neuspell_bert", "gnn_cliques_wfc_plus_baseline_neuspell_bert"),
+            (r"gnn+ $\rightarrow$ neuspell_bert_no_neuspell_no_bea",
+             "gnn_cliques_wfc_plus_baseline_neuspell_bert_no_neuspell_no_bea")
         ],
         2: [
-            ("gnn+ --> transformer", "gnn_cliques_wfc_plus_transformer_sec_nmt"),
-            ("gnn+ --> transformer_word", "gnn_cliques_wfc_plus_transformer_sec_words_nmt")
+            (r"gnn+ $\rightarrow$ transformer", "gnn_cliques_wfc_plus_transformer_sec_nmt"),
+            (r"gnn+ $\rightarrow$ transformer_no_neuspell_no_bea",
+             "gnn_cliques_wfc_plus_transformer_sec_nmt_no_neuspell_no_bea"),
+            (r"gnn+ $\rightarrow$ transformer_word", "gnn_cliques_wfc_plus_transformer_sec_words_nmt"),
+            (r"gnn+ $\rightarrow$ transformer_word_no_neuspell_no_bea",
+             "gnn_cliques_wfc_plus_transformer_sec_words_nmt_no_neuspell_no_bea")
         ],
         3: [
             ("transformer_with_tokenization_repair", "transformer_with_tokenization_repair_sec_nmt"),
             ("tokenization_repair++", "tokenization_repair_plus_sec")
         ]
-    }, {"sequence_accuracy", "mean_normalized_edit_distance", "correction_f1"}
+    }, {"mean_normalized_edit_distance", "correction_f1"}
 
 
 def get_sec_whitespace_models_and_metrics() -> Tuple[Callable[[str], bool], Dict[int, List[Tuple[str, str]]], Set[str]]:
     return lambda s: s.split("/")[-2] == "whitespace", {
         1: [
+            ("do_nothing", "baseline_dummy")
+        ],
+        2: [
             ("transformer_with_tokenization_repair", "transformer_with_tokenization_repair_sec_nmt"),
-            ("tokenization_repair --> gnn+ --> transformer_word", "tr_plus_gnn_plus_words_nmt"),
-            ("tokenization_repair+ --> transformer_word", "tr_plus_plus_words_nmt"),
-            ("tokenization_repair+fixed --> transformer_word", "tr_plus_fixed_plus_words_nmt")
+            (r"tokenization_repair $\rightarrow$ gnn+ $\rightarrow$ transformer_word", "tr_plus_gnn_plus_words_nmt"),
+            (r"tokenization_repair+ $\rightarrow$ transformer_word", "tr_plus_plus_words_nmt"),
+            (r"tokenization_repair+fixed $\rightarrow$ transformer_word", "tr_plus_fixed_plus_words_nmt"),
+            ("tokenization_repair++", "tokenization_repair_plus_sec")
         ]
-    }, {"sequence_accuracy", "mean_normalized_edit_distance", "correction_f1"}
+    }, {"mean_normalized_edit_distance", "correction_f1"}
 
 
 if __name__ == "__main__":
@@ -247,6 +308,8 @@ if __name__ == "__main__":
 
     if args.benchmark_type in {"sed_words", "sed_sequence"}:
         filter_fn, models, metric_names = get_sed_models_and_metrics(is_sed_words=args.benchmark_type == "sed_words")
+    elif args.benchmark_type == "sed_words_advanced":
+        filter_fn, models, metric_names = get_sed_words_advanced_models_and_metrics()
     elif args.benchmark_type == "sec":
         filter_fn, models, metric_names = get_sec_models_and_metrics()
     elif args.benchmark_type == "sec_advanced":
@@ -328,23 +391,42 @@ if __name__ == "__main__":
             with open(results_file, "w", encoding="utf8") as rf:
                 json.dump(results, rf)
 
+    bea_idx = 0
+    for benchmark in benchmarks:
+        if benchmark.endswith("neuspell/bea60k"):
+            break
+        bea_idx += 1
+    bea_idx = None if bea_idx == len(benchmarks) else bea_idx
+    bea_marks = {}
+    baselines = {"aspell", "jamspell", "language_tool", "out_of_dictionary", "close_to_dictionary", "do_nothing",
+                 "neuspell_bert"}
+
     for metric_name, model_data in results.items():
         if len(model_data) == 0:
             continue
 
-        data = [
-            [model_name] + model_data[model_name]
-            for model_group in model_groups
-            for model_name, _ in models[model_group]
-        ]
+        data = []
+        for model_group in model_groups:
+            for model_name, _ in models[model_group]:
+                if model_name.endswith("_no_neuspell_no_bea"):
+                    continue
+                scores = model_data[model_name]
+                if bea_idx is not None:
+                    if model_name + "_no_neuspell_no_bea" in model_data:
+                        bea_marks[model_name] = r"\textsuperscript{*}"
+                        scores[bea_idx] = model_data[model_name + "_no_neuspell_no_bea"][bea_idx]
+                    else:
+                        bea_marks[model_name] = r"\textsuperscript{$\dagger$}"
 
-        num_lines_per_model = _METRIC_TO_NUM_LINES[metric_name]
-        assert num_lines_per_model in {1, 2}
+                data_line = [model_name] + model_data[model_name]
+                data.append(data_line)
+
+        num_cols_for_metric = _METRIC_TO_NUM_COLS[metric_name]
 
         horizontal_lines = []
         for model_group in model_groups:
-            horizontal_lines.extend(([0] * (num_lines_per_model - 1) + [0]) * (len(models[model_group]) - 1))
-            horizontal_lines.extend([0] * (num_lines_per_model - 1) + [1])
+            horizontal_lines.extend([0] * (sum(not model_name.endswith("_no_neuspell_no_bea")
+                                               for model_name, _ in models[model_group]) - 1) + [1])
 
         higher_better = _METRIC_TO_HIGHER_BETTER[metric_name]
         best_scores_per_benchmark = [float("-inf")] * len(data[0])
@@ -354,36 +436,73 @@ if __name__ == "__main__":
                 if benchmark_scores is None or j == 0:
                     continue
 
-                benchmark_score, _ = benchmark_scores
+                benchmark_score = benchmark_scores[0]
 
                 if not higher_better:
                     benchmark_score = -benchmark_score
 
                 if benchmark_score == best_scores_per_benchmark[j]:
-                    best_models_per_benchmark[j].add(i * num_lines_per_model)
+                    best_models_per_benchmark[j].add(i)
                 elif benchmark_score > best_scores_per_benchmark[j]:
-                    best_models_per_benchmark[j] = {i * num_lines_per_model}
+                    best_models_per_benchmark[j] = {i}
                     best_scores_per_benchmark[j] = benchmark_score
 
         bold_cells = set(
-            (i, j) for j, best_models in enumerate(best_models_per_benchmark) for i in best_models
+            (i, (j - 1 if j > 0 else 0) * num_cols_for_metric + 1)
+            for j, best_models in enumerate(best_models_per_benchmark)
+            for i in best_models
         )
 
+        is_mned = metric_name == "mean_normalized_edit_distance"
+        if is_mned:
+            if args.benchmark_type == "sec":
+                baseline_name = "do_nothing"
+            elif args.benchmark_type == "sec_advanced":
+                baseline_name = r"gnn+ $\rightarrow$ neuspell_bert"
+            elif args.benchmark_type == "sec_whitespace":
+                baseline_name = "do_nothing"
+            else:
+                raise RuntimeError("should not happen")
+            assert baseline_name in model_data and all(s is not None for s in model_data[baseline_name])
+            baseline_scores = model_data[baseline_name]
+
+        metric_fmt_fn = get_metric_fmt_fn(metric_name)
         formatted_data = []
-        for i, line in enumerate(data):
-            for j in range(num_lines_per_model):
-                formatted_line = []
-                if j == 0:
-                    formatted_line.append(line[0])
+        for line in data:
+            fmt_kwargs = {}
+            model_name = line[0]
+            if is_mned:
+                fmt_kwargs["is_baseline"] = model_name == baseline_name
+            formatted_line = [line[0]]
+            for i, scores in enumerate(line[1:]):
+                if is_mned:
+                    fmt_kwargs["baseline_scores"] = baseline_scores[i]
                 else:
-                    formatted_line.append("")
-                formatted_line.extend([scores[1][j] if scores is not None else "-" for scores in line[1:]])
-                formatted_data.append(formatted_line)
+                    fmt_kwargs.pop("baseline_scores", None)
+                if bea_idx is not None and i == bea_idx and model_name not in baselines:
+                    fmt_kwargs["mark_bea"] = bea_marks.get(model_name, "")
+                else:
+                    fmt_kwargs.pop("mark_bea", None)
+                if scores is not None:
+                    formatted_line.extend(metric_fmt_fn(*scores, **fmt_kwargs))
+                else:
+                    formatted_line.extend(["-"] * num_cols_for_metric)
+            formatted_data.append(formatted_line)
+
+        formatted_headers = [["Model"]]
+        if True or num_cols_for_metric == 1:
+            formatted_headers.append([""])
+        for b_group, b_split in zip(benchmark_groups, benchmark_splits):
+            if True or num_cols_for_metric == 1:
+                formatted_headers[0].extend([b_group] + [""] * (num_cols_for_metric - 1))
+                formatted_headers[1].extend([b_split] + [""] * (num_cols_for_metric - 1))
+            else:
+                formatted_headers[0].extend([b_group, b_split] + [""] * (num_cols_for_metric - 2))
 
         formats = [args.format] if args.format != "both" else ["markdown", "latex"]
         for fmt in formats:
             results_table = tables.generate_table(
-                headers=[["Model"] + benchmark_groups, [""] + benchmark_splits],
+                headers=formatted_headers,
                 data=formatted_data,
                 horizontal_lines=horizontal_lines,
                 bold_cells=bold_cells,

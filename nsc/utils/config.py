@@ -100,6 +100,7 @@ def set_nsc_env_vars(
 ) -> None:
     if keep_existing_env_vars is None:
         keep_existing_env_vars = set()
+
     # delete all nsc env vars that should not be kept
     for k in os.environ:
         if k.startswith("NSC_") and k not in keep_existing_env_vars:

@@ -1,4 +1,4 @@
-from typing import List, Tuple
+from typing import List, Tuple, Set
 
 import edit_distance_rs
 
@@ -107,3 +107,37 @@ def match_words(a: str, b: str) -> List[Tuple[int, int]]:
 
 def batch_match_words(a_list: List[str], b_list: List[str], batch_size: int = 256) -> List[List[Tuple[int, int]]]:
     return edit_distance_rs.batch_match_words(a_list, b_list, batch_size)
+
+
+def find_word_boundaries(s: str) -> List[Tuple[int, int]]:
+    word_boundaries = []
+    start_idx = 0
+    for word in s.split():
+        word_boundaries.append((start_idx, start_idx + len(word)))
+        start_idx += len(word) + 1
+    return word_boundaries
+
+
+def get_edited_words(ipts: List[str], tgts: List[str]) -> List[Set[int]]:
+    outputs = []
+    batch_edit_ops = batch_edit_operations(ipts, tgts, spaces_insert_delete_only=True)
+    for ipt, tgt, edit_ops in zip(ipts, tgts, batch_edit_ops):
+        tgt_word_boundaries = find_word_boundaries(tgt)
+        edited_tgt_indices = set()
+        for op_code, ipt_idx, tgt_idx in edit_ops:
+            word_boundary_idx = 0
+            while word_boundary_idx < len(tgt_word_boundaries):
+                word_start, word_end = tgt_word_boundaries[word_boundary_idx]
+                if tgt_idx <= word_end:
+                    break
+                word_boundary_idx += 1
+
+            if op_code == "insert" and tgt[tgt_idx] == " ":
+                assert word_boundary_idx < len(tgt_word_boundaries) - 1
+                edited_tgt_indices.add(word_boundary_idx)
+                edited_tgt_indices.add(word_boundary_idx + 1)
+            else:
+                edited_tgt_indices.add(word_boundary_idx)
+        outputs.append(edited_tgt_indices)
+
+    return outputs

@@ -379,11 +379,11 @@ def best_first_inference(
 
             log_softmax_scores = torch.log_softmax(decoder_output, dim=0)
 
-            top_k = torch.topk(log_softmax_scores, max(10, log_softmax_scores.shape[-1] // 100), dim=-1)
-            top_k_indices = top_k.indices.tolist()
-            top_k_log_p = top_k.values.tolist()
+            top_k_scores = torch.topk(log_softmax_scores, max(10, log_softmax_scores.shape[-1] // 100), dim=-1)
+            top_k_indices = top_k_scores.indices.tolist()
+            top_k_log_p = top_k_scores.values.tolist()
 
-            for token_id, score in zip(top_k_indices.tolist(), top_k_log_p.tolist()):
+            for token_id, score in zip(top_k_indices, top_k_log_p):
                 new_beam = Beam.from_beam(beam, score, token_id)
                 beam_queue.put(
                     (
@@ -642,7 +642,6 @@ def run_inference(
             encoder_outputs=encoder_outputs,
             encoder_lengths=encoder_lengths,
             bos_token_id=bos_token_id,
-            eos_token_id=eos_token_id,
             max_length=max_length,
             score_fn=score_fn,
             stop_fn=stop_fn,

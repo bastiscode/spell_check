@@ -582,9 +582,11 @@ def get_character_groups_from_repaired_doc(
     return torch.tensor(character_groups, dtype=torch.long)
 
 
-def clean_sequence(sequence: str, fix_unicode_errors: bool = False) -> str:
+def clean_sequence(sequence: str, fix_unicode_errors: bool = False, fix_all_uppercase: bool = False) -> str:
     if fix_unicode_errors:
         sequence = "".join(ch for ch in sequence if unicodedata.category(ch)[0] != "C")
+    if fix_all_uppercase and sequence.isupper():
+        sequence = sequence.lower()
     return " ".join(sequence.strip().split())
 
 

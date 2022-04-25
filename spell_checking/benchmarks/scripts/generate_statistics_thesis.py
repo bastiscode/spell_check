@@ -13,7 +13,7 @@ from nsc.data import utils
 from nsc.utils import io, common
 
 from spell_checking.utils.metrics import is_real_word
-from spell_checking.utils.edit_distance import edit_distance
+from spell_checking.utils.edit import edit_distance
 
 
 def parse_args() -> argparse.Namespace:

@@ -15,7 +15,7 @@ from nsc.utils import io
 
 from spell_checking import DICTIONARIES_DIR, SPELL_CHECK_INDEX_DIR
 from spell_checking.baselines import Baseline
-from spell_checking.utils.edit_distance import edit_distance
+from spell_checking.utils.edit import edit_distance
 
 
 class SECCTDBaseline(Baseline):
@@ -368,7 +368,7 @@ class SECSymSpellBaseline(Baseline):
 
 
 class SECLanguagetoolBaseline(Baseline):
-    def __init__(self, edit_whitespaces: bool = False, seed: Optional[int] = None):
+    def __init__(self, edit_whitespaces: bool = True, seed: Optional[int] = None):
         super().__init__(seed)
         port = int(os.getenv("LANGUAGE_TOOL_PORT", 8010))
         host = str(os.getenv("LANGUAGE_TOOL_HOST", "localhost"))

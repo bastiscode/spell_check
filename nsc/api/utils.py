@@ -135,7 +135,7 @@ class _APIBase:
         if isinstance(inputs, str):
             inputs = load_text_file(inputs)
 
-        inputs = [clean_sequence(ipt) for ipt in inputs]
+        inputs = [clean_sequence(ipt, fix_all_uppercase=True) for ipt in inputs]
 
         num_workers = 0 if len(inputs) <= 16 else min(4, len(os.sched_getaffinity(0)))
         dataset, loader = get_inference_dataset_and_loader(

@@ -27,9 +27,11 @@ evaluate_sed_sequence:
 
 	@glow -w 150 $(SPLIT)/sed_sequence_tables/*.md
 
+	cd ../../../latex && pdflatex -synctex=1 -interaction=batchmode thesis_main.tex
+
 .PHONY: evaluate_sed_words
 evaluate_sed_words:
-	@rm $(SPLIT)/sed_words_tables/results.json
+	@#rm $(SPLIT)/sed_words_tables/results.json
 	@python scripts/evaluate_thesis.py \
 	--benchmark-dir $(SPLIT)/sed_words \
 	--benchmark-type sed_words \
@@ -38,6 +40,18 @@ evaluate_sed_words:
 	--dictionary ../../data/dictionaries/merged_train_100k.txt
 
 	@glow -w 150 $(SPLIT)/sed_words_tables/*.md
+
+	@#rm $(SPLIT)/sed_words_advanced_tables/results.json
+	@python scripts/evaluate_thesis.py \
+	--benchmark-dir $(SPLIT)/sed_words \
+	--benchmark-type sed_words_advanced \
+	--result-dir $(SPLIT)/sed_words/results \
+	--save-dir $(SPLIT)/sed_words_advanced_tables \
+	--dictionary ../../data/dictionaries/merged_train_100k.txt
+
+	@glow -w 150 $(SPLIT)/sed_words_advanced_tables/*.md
+
+	cd ../../../latex && pdflatex -synctex=1 -interaction=batchmode thesis_main.tex
 
 .PHONY: evaluate_sec
 evaluate_sec:
@@ -64,6 +78,8 @@ evaluate_sec:
 	--save-dir $(SPLIT)/sec_whitespace_tables
 
 	@glow -w 150 $(SPLIT)/sec_whitespace_tables/*.md
+
+	cd ../../../latex && pdflatex -synctex=1 -interaction=batchmode thesis_main.tex
 
 .PHONY: evaluate_tokenization_repair
 evaluate_tokenization_repair:

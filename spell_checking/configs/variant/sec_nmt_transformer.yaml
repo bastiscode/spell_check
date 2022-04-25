@@ -1,6 +1,5 @@
 type: SEC_NMT
 
-preprocessing: ${from_file:preprocessing/mixed_noise.yaml}
 input_tokenizer: ${from_file:tokenizer/bpe_no_prefix_space.yaml}
 output_tokenizer: ${from_file:tokenizer/bpe_no_prefix_space.yaml}
 

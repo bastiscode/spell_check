@@ -90,7 +90,7 @@ do
 
       bin_name=${benchmark_to_exec[$benchmark]}
       echo "Running experiment $experiment_name ($experiment_type) on $out_dir_rel of $benchmark benchmark"
-      ${bin_dir}/${bin_name} -e $experiment -f $in_file -o $out_file
+      ${bin_dir}/${bin_name} -e $experiment -f $in_file -o $out_file ${ADDITIONAL_ARGS:-""}
     done
   done
 done

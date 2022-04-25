@@ -1,6 +1,5 @@
 type: SED_SEQUENCE
 
-preprocessing: ${from_file:preprocessing/mixed_noise_sed_sequence.yaml}
 tokenizer: ${from_file:tokenizer/bpe_no_prefix_space.yaml}
 
 data_scheme: "tensor"

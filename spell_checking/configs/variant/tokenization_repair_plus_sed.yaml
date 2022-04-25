@@ -1,7 +1,5 @@
 type: TOKENIZATION_REPAIR_PLUS
 
-preprocessing: ${from_file:preprocessing/tokenization_repair_plus.yaml}
-
 data_scheme: "tensor"
 tokenization_level: "char"
 

@@ -1,5 +1,5 @@
-variant: ${from_file:variant/sec_nmt_transformer.yaml}
-model: ${from_file:model/model_for_sec_nmt_transformer.yaml}
+variant: ${from_file:variant/sec_with_tokenization_repair_nmt_transformer.yaml}
+model: ${from_file:model/model_for_sec_with_tokenization_repair_nmt_transformer.yaml}
 optimizer: ${from_file:optimizer/adamw.yaml}
 lr_scheduler: ${from_file:lr_scheduler/step_with_0.05_warmup.yaml}
 
