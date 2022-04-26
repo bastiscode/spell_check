@@ -2,7 +2,6 @@ type: SEC_NMT
 
 input_tokenizer:
   type: CHAR
-output_tokenizer:
-  type: CHAR
+output_tokenizer: ${from_file:tokenizer/bpe_no_prefix_space.yaml}
 
 data_scheme: "tensor"

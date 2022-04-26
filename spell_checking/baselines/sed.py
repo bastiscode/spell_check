@@ -81,7 +81,7 @@ class SEDWordsFromSECBaseline(SEDSequenceFromSECBaseline):
         corrections = self.sec.inference(sequences)
         predictions = []
 
-        batch_edited_indices = edit.get_edited_words(corrections, sequences)
+        batch_edited_indices, _ = edit.get_edited_words(sequences, corrections)
         sed_predictions = []
         for edited_indices, seq in zip(batch_edited_indices, sequences):
             sed_predictions.append(" ".join(["0" if i not in edited_indices else "1" for i in range(len(seq.split()))]))

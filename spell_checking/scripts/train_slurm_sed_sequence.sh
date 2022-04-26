@@ -26,7 +26,7 @@ if [[ $approach == "gnn" ]]; then
     "NSC_ADD_WORD_FEATURES"
     )
   declare -a approach_num_nodes=(
-    "2"
+    "3"
     "3"
   )
   declare -a approaches=(

@@ -53,6 +53,7 @@ class Task:
     def generate_sample_inputs(self, num_samples: int) -> Batch:
         return data_utils.collate([
             self.variant.get_inputs(
+                utils.SAMPLE_SEQUENCE,
                 utils.SAMPLE_SEQUENCE
             ) for _ in range(num_samples)
         ])
@@ -479,11 +480,10 @@ class Task:
             context_length: Optional[int] = None,
             **kwargs: Any
     ) -> Tuple[List[data_utils.Sample], List[data_utils.InferenceInfo]]:
-        samples, _ = zip(*self.variant.preprocessing_fn(sequences, [None] * len(sequences), True))
+        samples = self.variant.get_samples(sequences)
         all_samples = []
         all_infos = []
         for sample in samples:
-            sample = data_utils.sanitize_sample(sample, self.variant.unk_token_id)
             sequence = str(sample)
             length = sum(len(tokens) for tokens in sample.tokens)
             if length <= max_length:
@@ -502,7 +502,7 @@ class Task:
                     if i > 0:
                         # make sure than windows are aligned properly, start of current window is end of previous window
                         assert window_start == windows[i - 1][-1]
-                    sample, _ = self.variant.get_sample(sequence[ctx_start:ctx_end], is_inference=True)
+                    sample = self.variant.get_sample(sequence[ctx_start:ctx_end])
                     length = sum(len(t) for t in sample.tokens)
                     assert length <= max_length, f"sample with length {length} after splitting still exceeds " \
                                                  f"max length of {max_length}, this should not happen"

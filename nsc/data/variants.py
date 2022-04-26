@@ -1,7 +1,7 @@
 import enum
 import hashlib
 from dataclasses import dataclass
-from typing import Tuple, Union, Optional, Dict, Any
+from typing import Tuple, Union, Optional, Dict, Any, List
 
 import dgl
 import numpy as np
@@ -52,26 +52,36 @@ class DatasetVariant:
     def name(self) -> str:
         return self.cfg.type.name
 
-    @property
-    def cfg_string(self) -> str:
-        cfg_yaml = OmegaConf.to_yaml(self.cfg, resolve=True, sort_keys=True)
-        return str(hashlib.sha1(f"{cfg_yaml}_{self.seed}".encode("utf8")).hexdigest())
+    def get_samples(
+            self,
+            sequences: List[Union[str, utils.Sample]]
+    ) -> List[utils.Sample]:
+        output_samples: List[utils.Sample] = [None for _ in range(len(sequences))]
+        sequences_to_prepare = []
+        indices = []
+        for i, sequence in enumerate(sequences):
+            if isinstance(sequence, utils.Sample):
+                output_samples[i] = sequence
+            else:
+                sequences_to_prepare.append(sequence)
+                indices.append(i)
+        samples = utils.prepare_samples(
+            sequences_to_prepare,
+            [{} for _ in range(len(sequences_to_prepare))],
+            self.tokenization_fn,
+            self.neighbor_fn,
+            **self.prepare_samples_kwargs
+        )
+        for idx, sample in zip(indices, samples):
+            output_samples[idx] = sample
+
+        return [utils.sanitize_sample(sample, self.unk_token_id) for sample in output_samples]
 
     def get_sample(
             self,
-            sequence: Union[str, utils.Sample]
+            sequence: str
     ) -> utils.Sample:
-        if isinstance(sequence, utils.Sample):
-            sample = sequence
-        else:
-            sample = utils.prepare_samples(
-                [sequence],
-                [{}],
-                self.tokenization_fn,
-                self.neighbor_fn,
-                **self.prepare_samples_kwargs
-            )[0]
-        return utils.sanitize_sample(sample, self.unk_token_id)
+        return self.get_samples([sequence])[0]
 
     def get_inputs(
             self,
@@ -788,8 +798,7 @@ class TokenizationRepairPlus(TokenizationRepair):
                 )
                 info["tokenization_repair_label"] = torch.tensor(tokenization_repair_label, dtype=torch.long)
 
-            assert "org_sequence" in input_sample.info
-            org_words = input_sample.info["org_sequence"].split()
+            org_words = input_sample.info.get("org_sequence", target_sequence).split()
             target_words = target_sequence.split()
             assert len(target_words) == len(org_words)
 

@@ -153,23 +153,6 @@ TokenizationFn = Callable[[Doc], List[List[int]]]
 NeighborFn = Callable[[List[Doc]], List[List[Neighbors]]]
 
 
-def get_edit_distance_neighbor_fn(dictionary: Dict[str, int], num_neighbors: int,
-                                  normalized: bool = True) -> NeighborFn:
-    def _neigh(docs: List[Doc]) -> List[List[Neighbors]]:
-        neighbor_lists = []
-        for doc in docs:
-            neighbor_list = []
-            for word in doc:
-                pass
-                # closest_words =
-                # neighbors = Neighbors(
-                #     left_contexts=[""],
-                #       right_contexts=[""],
-                #       word_lists=closest_words,
-                #       distances=0
-                # )
-
-
 def prepare_samples(
         sequences: List[str],
         infos: List[Dict[str, Any]],

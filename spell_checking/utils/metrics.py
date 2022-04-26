@@ -1,6 +1,7 @@
 import string
 from typing import Tuple, List, Any, Dict, Set
 
+import ftfy
 import numpy as np
 
 from nsc.data import utils
@@ -164,8 +165,7 @@ def group_words(
             ipt_idx += 1
             pred_idx += total_spaces_inserted + 1
 
-        # assert ipt_idx == len(ipt_word_boundaries) and pred_idx == len(pred.split()), \
-        #     f"{ipt_idx} {len(ipt_word_boundaries)}\n{pred_idx} {len(pred.split())}\n{ipt}\n{pred}"
+        assert ipt_idx == len(ipt_word_boundaries) and pred_idx == len(pred.split())
         outputs.append(correct)
 
     return outputs
@@ -177,9 +177,13 @@ def correction_f1_prec_rec(
         target_sequences: List[str]
 ) -> Tuple[float, float, float]:
     check_same_length(input_sequences, predicted_sequences, target_sequences)
+    import edit_distance_rs
+    # input_sequences = [edit_distance_rs.fix_string(seq) for seq in input_sequences]
+    # predicted_sequences = [edit_distance_rs.fix_string(seq) for seq in predicted_sequences]
+    # target_sequences = [edit_distance_rs.fix_string(seq) for seq in target_sequences]
 
-    misspelled = get_edited_words(input_sequences, target_sequences)
-    changed = get_edited_words(predicted_sequences, input_sequences)
+    _, misspelled = get_edited_words(input_sequences, target_sequences)
+    changed, _ = get_edited_words(input_sequences, predicted_sequences)
     matching_in_pred, restored = match_words(predicted_sequences, target_sequences)
     correct = group_words(input_sequences, predicted_sequences, matching_in_pred)
 
@@ -189,8 +193,8 @@ def correction_f1_prec_rec(
         fn_indices = mis.difference(res)
         fp_indices = cha.difference(cor)
         tp += len(tp_indices)
-        fn += len(fn_indices)
         fp += len(fp_indices)
+        fn += len(fn_indices)
 
     return _tp_fp_fn_to_f1_prec_rec(tp, fp, fn)
 

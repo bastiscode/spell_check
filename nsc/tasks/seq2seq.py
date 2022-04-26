@@ -31,7 +31,14 @@ class Seq2Seq(tasks.Task):
     ) -> Tuple[Dict[str, Any], Any]:
         decoder_inputs = []
         decoder_labels = []
-        for labels in batch.info.pop("label"):
+
+        invalid_indices = set()
+        for i, labels in enumerate(batch.info.pop("label")):
+            if len(labels) - 1 > 1024:
+                # this is kind of a temporary hack to skip too long decoding sequences that cause OOM
+                self.logger.warning(f"skipping sample with decoder length {len(labels) - 1}")
+                invalid_indices.add(i)
+                continue
             decoder_inputs.append(torch.tensor(labels[:-1], dtype=torch.long))
             decoder_labels.append(torch.tensor(labels[1:], dtype=torch.long))
 
@@ -39,9 +46,8 @@ class Seq2Seq(tasks.Task):
 
         return (
             {
-                "x": batch.data,
-                "decoder_inputs": decoder_inputs,
-                **batch.info
+                "x": task_utils.exclude_indices(batch.data, invalid_indices),
+                "decoder_inputs": decoder_inputs
             },
             {"labels": decoder_labels, "pad_token_id": batch.info["pad_token_id"][0]}
         )

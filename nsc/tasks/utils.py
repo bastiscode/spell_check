@@ -97,6 +97,10 @@ def get_batch_size_from_data(data: DataInput) -> int:
         return len(data)
 
 
+def exclude_indices(items: List, indices: Set[int]) -> List:
+    return [item for i, item in enumerate(items) if i not in indices]
+
+
 def get_unused_parameters(model: nn.Module, **inputs: Any) -> Set[str]:
     def _sum(item: Union[torch.Tensor, List, Dict]) -> Union[torch.Tensor, List, Dict]:
         if isinstance(item, torch.Tensor):

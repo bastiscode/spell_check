@@ -6,6 +6,7 @@ from torch.nn import functional as F
 from nsc import models, tasks
 from nsc.data.utils import Sample
 from nsc.modules import utils
+from nsc.tasks import utils as task_utils
 from nsc.utils import data_containers, Batch, to
 
 
@@ -27,7 +28,9 @@ class Token2Seq(tasks.Task):
         decoder_inputs = []
         decoder_labels = []
         decoder_group_lengths = []
-        for labels in batch.info.pop("label"):
+
+        invalid_indices = set()
+        for i, labels in enumerate(batch.info.pop("label")):
             sample_decoder_inputs = []
             sample_decoder_labels = []
             sample_decoder_lengths = []
@@ -35,6 +38,11 @@ class Token2Seq(tasks.Task):
                 sample_decoder_inputs.extend(label[:-1])
                 sample_decoder_labels.extend(label[1:])
                 sample_decoder_lengths.append(len(label) - 1)
+            if sum(sample_decoder_lengths) > 1024:
+                # this is kind of a temporary hack to skip too long decoding sequences that cause OOM
+                self.logger.warning(f"skipping sample with decoder length {sum(sample_decoder_lengths)}")
+                invalid_indices.add(i)
+                continue
             decoder_inputs.append(torch.tensor(sample_decoder_inputs, dtype=torch.long))
             decoder_labels.append(torch.tensor(sample_decoder_labels, dtype=torch.long))
             decoder_group_lengths.append(torch.tensor(sample_decoder_lengths, dtype=torch.long))
@@ -43,10 +51,11 @@ class Token2Seq(tasks.Task):
 
         return (
             {
-                "x": batch.data,
+                "x": task_utils.exclude_indices(batch.data, invalid_indices),
                 "decoder_inputs": decoder_inputs,
                 "decoder_group_lengths": decoder_group_lengths,
-                **batch.info
+                "encoder_group_lengths": task_utils.exclude_indices(batch.info["encoder_group_lengths"],
+                                                                    invalid_indices)
             },
             {"labels": decoder_labels, "pad_token_id": batch.info["pad_token_id"][0]}
         )

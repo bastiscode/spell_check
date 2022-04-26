@@ -60,10 +60,10 @@ do
 
   for benchmark in ${experiment_to_benchmark[$experiment_type]}
   do
-    if [[ $benchmark == "tokenization_repair" ]]; then
-      export NSC_TOKENIZATION_REPAIR_PLUS_NO_REPAIR=false
-    else
+    if [[ $benchmark != "whitespace" ]]; then
       export NSC_TOKENIZATION_REPAIR_PLUS_NO_REPAIR=true
+    else
+      export NSC_TOKENIZATION_REPAIR_PLUS_NO_REPAIR=false
     fi
 
     in_files=`ls $benchmark_dir/$benchmark/*/*/corrupt.txt`
@@ -90,7 +90,7 @@ do
 
       bin_name=${benchmark_to_exec[$benchmark]}
       echo "Running experiment $experiment_name ($experiment_type) on $out_dir_rel of $benchmark benchmark"
-      ${bin_dir}/${bin_name} -e $experiment -f $in_file -o $out_file ${ADDITIONAL_ARGS:-""}
+      ${bin_dir}/${bin_name} -e $experiment -f $in_file -o $out_file${EXTRA_ARGS:-""}
     done
   done
 done

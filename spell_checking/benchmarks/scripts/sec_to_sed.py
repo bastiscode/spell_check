@@ -24,7 +24,7 @@ def sec_to_sed(args: argparse.Namespace) -> None:
     inputs = load_text_file(args.input_file)
     assert len(predictions) == len(inputs)
 
-    batch_edited_indices = edit.get_edited_words(predictions, inputs)
+    batch_edited_indices, _ = edit.get_edited_words(inputs, predictions)
     sed_predictions = []
     for edited_indices, ipt in zip(batch_edited_indices, inputs):
         sed_predictions.append(" ".join(["0" if i not in edited_indices else "1" for i in range(len(ipt.split()))]))

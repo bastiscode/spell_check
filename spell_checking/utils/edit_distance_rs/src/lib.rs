@@ -1,6 +1,5 @@
 extern crate core;
 
-use unicode_segmentation::UnicodeSegmentation;
 use pyo3::prelude::*;
 use rayon::prelude::*;
 use indicatif::{ProgressBar, ParallelProgressIterator, ProgressStyle};
@@ -23,8 +22,8 @@ fn calculate_edit_matrices(
     with_swap: bool,
     spaces_insert_delete_only: bool,
 ) -> (Matrix<usize>, Matrix<EditOp>) {
-    let a_chars = a.graphemes(true).collect::<Vec<&str>>();
-    let b_chars = b.graphemes(true).collect::<Vec<&str>>();
+    let a_chars = a.chars().collect::<Vec<char>>(); //graphemes(true).collect::<Vec<&str>>();
+    let b_chars = b.chars().collect::<Vec<char>>(); //graphemes(true).collect::<Vec<&str>>();
 
     let mut d: Matrix<usize> = vec![vec![0; b_chars.len() + 1]; a_chars.len() + 1];
     let mut ops: Matrix<EditOp> = vec![vec![EditOp::None; b_chars.len() + 1]; a_chars.len() + 1];
@@ -55,7 +54,7 @@ fn calculate_edit_matrices(
             } else {
                 // chars are not equal, only allow replacement if no space is involved
                 // or we are allowed to replace spaces
-                if !spaces_insert_delete_only || (a_char != " " && b_char != " ") {
+                if !spaces_insert_delete_only || (a_char != ' ' && b_char != ' ') {
                     costs.push((d[i - 1][j - 1] + 1, EditOp::Replace));
                 }
             }
@@ -64,7 +63,7 @@ fn calculate_edit_matrices(
             if with_swap && i > 1 && j > 1 && a_char == b_chars[j - 2] && a_chars[i - 2] == b_char {
                 // we can swap the chars, but only allow swapping if no space is involved
                 // or we are allowed to swap spaces
-                if !spaces_insert_delete_only || (a_char != " " && a_chars[i - 2] != " ") {
+                if !spaces_insert_delete_only || (a_char != ' ' && a_chars[i - 2] != ' ') {
                     costs.push((d[i - 2][j - 2] + 1, EditOp::Swap));
                 }
             }
@@ -98,7 +97,6 @@ fn calculate_edit_operations(
             EditOp::Keep => {
                 i -= 1;
                 j -= 1;
-                continue;
             }
             EditOp::Insert => {
                 j -= 1;

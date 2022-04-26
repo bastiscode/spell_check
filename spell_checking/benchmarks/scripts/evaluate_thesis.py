@@ -202,20 +202,22 @@ def get_sed_models_and_metrics(is_sed_words: bool) \
         ],
         2: [
             ("transformer", "transformer_no_feat"),
-            ("gnn", "gnn_no_feat")
+            ("transformer_no_neuspell_no_bea", "transformer_no_feat_no_neuspell_no_bea"),
+            ("gnn", "gnn_no_feat"),
+            ("gnn_no_neuspell_no_bea", "gnn_no_feat_no_neuspell_no_bea"),
         ],
         3: [
             ("transformer+", "transformer"),
+            ("transformer+_no_neuspell_no_bea", "transformer_no_neuspell_no_bea"),
             ("gnn+", "gnn_cliques_wfc"),
-            ("gnn+_no_neuspell_no_bea", "gnn_cliques_wfc_no_neuspell_no_bea"),
-            ("transformer_sec_words_nmt", "transformer_sec_words_nmt"),
-            ("transformer_sec_nmt", "transformer_sec_nmt"),
-            ("transformer_sec_nmt_no_neuspell_no_bea", "transformer_sec_nmt_no_neuspell_no_bea"),
+            ("gnn+_no_neuspell_no_bea", "gnn_cliques_wfc_no_neuspell_no_bea")
         ]
     }
-    metric_names = {"binary_f1", "sequence_accuracy"}
+    metric_names = {"binary_f1"}
     if is_sed_words:
         metric_names.add("word_accuracy")
+    else:
+        metric_names.add("sequence_accuracy")
     return lambda _: True, dictionary, metric_names
 
 
@@ -273,7 +275,6 @@ def get_sec_advanced_models_and_metrics() -> Tuple[Callable[[str], bool], Dict[i
              "gnn_cliques_wfc_plus_transformer_sec_words_nmt_no_neuspell_no_bea")
         ],
         3: [
-            ("transformer_with_tokenization_repair", "transformer_with_tokenization_repair_sec_nmt"),
             ("tokenization_repair++", "tokenization_repair_plus_sec")
         ]
     }, {"mean_normalized_edit_distance", "correction_f1"}
@@ -285,7 +286,9 @@ def get_sec_whitespace_models_and_metrics() -> Tuple[Callable[[str], bool], Dict
             ("do_nothing", "baseline_dummy")
         ],
         2: [
-            ("transformer_with_tokenization_repair", "transformer_with_tokenization_repair_sec_nmt"),
+            ("transformer_with_tokenization_repair", "transformer_with_tokenization_repair_sec_nmt")
+        ],
+        3: [
             (r"tokenization_repair $\rightarrow$ gnn+ $\rightarrow$ transformer_word", "tr_plus_gnn_plus_words_nmt"),
             (r"tokenization_repair+ $\rightarrow$ transformer_word", "tr_plus_plus_words_nmt"),
             (r"tokenization_repair+fixed $\rightarrow$ transformer_word", "tr_plus_fixed_plus_words_nmt"),

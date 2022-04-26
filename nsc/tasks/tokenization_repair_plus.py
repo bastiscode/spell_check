@@ -1,7 +1,5 @@
-import sys
-from typing import List, Any, Dict, Tuple, Union, Optional, Set
+from typing import List, Any, Dict, Tuple, Union, Optional
 
-import numpy as np
 import torch
 from torch.nn import functional as F
 
@@ -12,10 +10,6 @@ from nsc.data.variants import TokenizationRepairPlusConfig
 from nsc.modules import utils as mod_utils, inference
 from nsc.tasks import utils as task_utils
 from nsc.utils import data_containers, Batch, to, tokenization_repair
-
-
-def _filter_bad_indices(items: List, bad_indices: Set[int]) -> List:
-    return [item for i, item in enumerate(items) if i not in bad_indices]
 
 
 class TokenizationRepairPlus(tasks.Task):
@@ -65,34 +59,30 @@ class TokenizationRepairPlus(tasks.Task):
             label_dict["sec_pad_token_id"] = batch.info["sec_pad_token_id"][0]
             data_dict["sec_decoder_inputs"] = decoder_inputs
             data_dict["sec_decoder_group_lengths"] = decoder_group_lengths
-            # self.logger.warning(
-            #     f"input lengths: {[len(t) for t in batch.data]}, "
-            #     f"target lengths: {[torch.sum(lengths).item() for lengths in decoder_group_lengths]}"
-            # )
 
-        data_dict["x"] = _filter_bad_indices(batch.data, sec_invalid_indices)
+        data_dict["x"] = task_utils.exclude_indices(batch.data, sec_invalid_indices)
 
         if "tokenization_repair_label" in batch.info:
             label_dict["tokenization_repair_labels"] = to(
-                torch.cat(_filter_bad_indices(batch.info.pop("tokenization_repair_label"), sec_invalid_indices)),
+                torch.cat(task_utils.exclude_indices(batch.info.pop("tokenization_repair_label"), sec_invalid_indices)),
                 device
             )
 
         label_dict["sed_labels"] = to(
-            torch.cat(_filter_bad_indices(batch.info.pop("sed_label"), sec_invalid_indices)),
+            torch.cat(task_utils.exclude_indices(batch.info.pop("sed_label"), sec_invalid_indices)),
             device
         )
 
         batch_info = {
-            "word_groups": _filter_bad_indices(batch.info["word_groups"], sec_invalid_indices),
-            "word_ws_groups": _filter_bad_indices(batch.info["word_ws_groups"], sec_invalid_indices),
-            "input_group_lengths": _filter_bad_indices(batch.info["input_group_lengths"], sec_invalid_indices),
-            "word_group_lengths": _filter_bad_indices(batch.info["word_group_lengths"], sec_invalid_indices)
+            "word_groups": task_utils.exclude_indices(batch.info["word_groups"], sec_invalid_indices),
+            "word_ws_groups": task_utils.exclude_indices(batch.info["word_ws_groups"], sec_invalid_indices),
+            "input_group_lengths": task_utils.exclude_indices(batch.info["input_group_lengths"], sec_invalid_indices),
+            "word_group_lengths": task_utils.exclude_indices(batch.info["word_group_lengths"], sec_invalid_indices)
         }
         if "word_features" in batch.info:
-            batch_info["word_features"] = _filter_bad_indices(batch.info["word_features"], sec_invalid_indices)
+            batch_info["word_features"] = task_utils.exclude_indices(batch.info["word_features"], sec_invalid_indices)
         if "char_groups" in batch.info:
-            batch_info["char_groups"] = _filter_bad_indices(batch.info["char_groups"], sec_invalid_indices)
+            batch_info["char_groups"] = task_utils.exclude_indices(batch.info["char_groups"], sec_invalid_indices)
 
         return {**data_dict, **batch_info}, label_dict
 

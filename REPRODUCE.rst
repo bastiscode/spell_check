@@ -21,7 +21,7 @@ You also need to set the following two special environment variables:
 .. note::
     Of course you can also copy the training data folder to every other
     place you like and adjust ``NSC_DATA_DIR`` accordingly. But keep in mind that this
-    folder is very large (about 750GB).
+    folder is very large (> 1TB).
 
 After that you can train your own models using a training config.
 All of the training configs this project used to train models can be found here_.
@@ -125,7 +125,7 @@ These scripts do nothing more than setting some environment variables and callin
     Using the ``train_slurm_<task>.sh`` scripts to reproduce results is only possible on a SLURM cluster
     since they call the ``train.sh`` script using SLURMs sbatch command.
 
-Once you finished training you can evaluate the models on the projects benchmarks that are available under
+Once you finished training you can evaluate the models on the projects' benchmarks that are available under
 ``/nfs/students/sebastian-walter/masters_thesis/benchmarks``.
 
 .. _here: https://github.com/bastiscode/spell_check/tree/main/spell_checking/configs/train

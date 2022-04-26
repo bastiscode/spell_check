@@ -149,6 +149,11 @@ def parse_args() -> argparse.Namespace:
         help="Save a runtime report (ignoring startup time) formatted as markdown table to a file, append new line "
              "if file already exists"
     )
+    parser.add_argument(
+        "--tr-plus-no-repair",
+        action="store_true",
+        help="Disable repairing whitespaces before detection when using a tokenization repair plus model"
+    )
     return parser.parse_args()
 
 
@@ -191,12 +196,17 @@ def run(args: argparse.Namespace) -> None:
         )
 
     detector.set_precision(args.precision)
+    detector_kwargs = {
+        "tokenization_repair_plus_no_repair": args.tr_plus_no_repair
+    }
 
     start = time.perf_counter()
     num_sequences = -1
     num_bytes = -1
     if args.detect is not None:
-        detection, output_line = detector.detect_text(args.detect, args.threshold, sort_by_length=False)
+        detection, output_line = detector.detect_text(
+            args.detect, args.threshold, sort_by_length=False, **detector_kwargs
+        )
         print(format_output(detection, output_line, args.sec_out))
 
     elif args.file is not None:
@@ -209,7 +219,8 @@ def run(args: argparse.Namespace) -> None:
             threshold=args.threshold,
             batch_size=args.batch_size,
             sort_by_length=not args.unsorted,
-            show_progress=True
+            show_progress=True,
+            **detector_kwargs
         )
         if args.out_path is None:
             for detection, line in zip(detections, output_lines):
@@ -238,7 +249,9 @@ def run(args: argparse.Namespace) -> None:
             if args.pipe:
                 for line in sys.stdin:
                     line = line.strip()
-                    detection, output_line = detector.detect_text(line, args.threshold, sort_by_length=False)
+                    detection, output_line = detector.detect_text(
+                        line, args.threshold, sort_by_length=False, **detector_kwargs
+                    )
                     print(format_output(detection, output_line, args.sec_out))
             else:
                 lines = [line.strip() for line in sys.stdin]
@@ -247,7 +260,8 @@ def run(args: argparse.Namespace) -> None:
                     threshold=args.threshold,
                     batch_size=args.batch_size,
                     sort_by_length=not args.unsorted,
-                    show_progress=args.progress
+                    show_progress=args.progress,
+                    **detector_kwargs
                 )
                 for detection, line in zip(detections, output_lines):
                     print(format_output(detection, line, args.sec_out))

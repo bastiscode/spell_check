@@ -175,6 +175,22 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Print a report on the runtime (ignoring startup time) formatted as markdown table"
     )
+    parser.add_argument(
+        "--tr-plus-no-repair",
+        action="store_true",
+        help="Disable repairing whitespaces before correcting when using a tokenization repair plus model"
+    )
+    parser.add_argument(
+        "--tr-plus-no-detect",
+        action="store_true",
+        help="Disable detecting spelling errors before correcting when using a tokenization repair plus model"
+    )
+    parser.add_argument(
+        "--tr-plus-threshold",
+        type=float,
+        default=0.05,
+        help="Set the spelling error detection threshold when using a tokenization repair plus model"
+    )
     return parser.parse_args()
 
 
@@ -232,13 +248,20 @@ def run(args: argparse.Namespace) -> None:
     score = SpellingCorrectionScore(mode=args.score, prefix_index=args.prefix_index)
 
     corrector.set_precision(args.precision)
+    corrector_kwargs = {
+        "tokenization_repair_plus_no_repair": args.tr_plus_no_repair,
+        "tokenization_repair_plus_no_detect": args.tr_plus_no_detect,
+        "tokenization_repair_plus_threshold": args.tr_plus_threshold,
+    }
 
     start = time.perf_counter()
     num_sequences = -1
     num_bytes = -1
     if args.correct is not None:
         line, detection = process_input(args.correct, args.sed_in)
-        print(corrector.correct_text(line, detection, search=search, score=score, sort_by_length=False))
+        print(corrector.correct_text(
+            line, detection, search=search, score=score, sort_by_length=False, **corrector_kwargs
+        ))
 
     elif args.file is not None:
         lines = load_text_file(args.file)
@@ -265,7 +288,8 @@ def run(args: argparse.Namespace) -> None:
             score=score,
             batch_size=args.batch_size,
             sort_by_length=not args.unsorted,
-            show_progress=True
+            show_progress=True,
+            **corrector_kwargs
         )
 
         if args.out_path is None:
@@ -279,7 +303,9 @@ def run(args: argparse.Namespace) -> None:
             try:
                 line = input()
                 line, detection = process_input(line, False)
-                print(corrector.correct_text(line, detection, search=search, score=score, sort_by_length=False))
+                print(corrector.correct_text(
+                    line, detection, search=search, score=score, sort_by_length=False, **corrector_kwargs
+                ))
             except KeyboardInterrupt:
                 return
     else:
@@ -296,7 +322,8 @@ def run(args: argparse.Namespace) -> None:
                             detections=detection,
                             search=search,
                             score=score,
-                            sort_by_length=False
+                            sort_by_length=False,
+                            **corrector_kwargs
                         )
                     )
             else:
@@ -318,7 +345,8 @@ def run(args: argparse.Namespace) -> None:
                         score=score,
                         batch_size=args.batch_size,
                         sort_by_length=not args.unsorted,
-                        show_progress=args.progress
+                        show_progress=args.progress,
+                        **corrector_kwargs
                 ):
                     print(corrected_line)
 

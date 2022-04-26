@@ -118,26 +118,59 @@ def find_word_boundaries(s: str) -> List[Tuple[int, int]]:
     return word_boundaries
 
 
-def get_edited_words(ipts: List[str], tgts: List[str]) -> List[Set[int]]:
-    outputs = []
+def get_edited_words(ipts: List[str], tgts: List[str]) -> Tuple[List[Set[int]], List[Set[int]]]:
+    edited_in_ipts = []
+    edited_in_tgts = []
     batch_edit_ops = batch_edit_operations(ipts, tgts, spaces_insert_delete_only=True)
     for ipt, tgt, edit_ops in zip(ipts, tgts, batch_edit_ops):
+        ipt_word_boundaries = find_word_boundaries(ipt)
         tgt_word_boundaries = find_word_boundaries(tgt)
+        edited_ipt_indices = set()
         edited_tgt_indices = set()
         for op_code, ipt_idx, tgt_idx in edit_ops:
-            word_boundary_idx = 0
-            while word_boundary_idx < len(tgt_word_boundaries):
-                word_start, word_end = tgt_word_boundaries[word_boundary_idx]
-                if tgt_idx <= word_end:
+            ipt_word_idx = 0
+            for wb_s, wb_e in ipt_word_boundaries:
+                if wb_s <= ipt_idx < wb_e:
+                    edited_ipt_indices.add(ipt_word_idx)
                     break
-                word_boundary_idx += 1
+                elif ipt_idx == wb_e:
+                    import edit_distance_rs
+                    graphemes = edit_distance_rs.get_graphemes(tgt[tgt_idx - 15: tgt_idx + 16])
+                    assert op_code == "delete" or \
+                           op_code == "insert", \
+                        (ipt[ipt_idx - 15: ipt_idx + 16],
+                         tgt[tgt_idx - 15: tgt_idx + 16],
+                         list(tgt[tgt_idx - 15: tgt_idx + 16]),
+                         graphemes,
+                         "".join(graphemes),
+                         list("".join(graphemes)))
+                    if op_code == "delete":
+                        assert ipt[ipt_idx] == " "
+                        edited_ipt_indices.add(ipt_word_idx)
+                        edited_ipt_indices.add(ipt_word_idx + 1)
+                    else:
+                        edited_ipt_indices.add(ipt_word_idx)
+                    break
+                ipt_word_idx += 1
+            assert ipt_word_idx < len(ipt_word_boundaries)
+            tgt_word_idx = 0
+            for wb_s, wb_e in tgt_word_boundaries:
+                if wb_s <= tgt_idx < wb_e:
+                    edited_tgt_indices.add(tgt_word_idx)
+                    break
+                elif tgt_idx == wb_e:
+                    assert op_code == "delete" or op_code == "insert", (op_code, ipt[ipt_idx], tgt[tgt_idx])
+                    if op_code == "delete":
+                        edited_tgt_indices.add(tgt_word_idx)
+                    else:
+                        assert tgt[tgt_idx] == " "
+                        edited_tgt_indices.add(tgt_word_idx)
+                        edited_tgt_indices.add(tgt_word_idx + 1)
+                    break
+                tgt_word_idx += 1
+            assert tgt_word_idx < len(tgt_word_boundaries)
 
-            if op_code == "insert" and tgt[tgt_idx] == " ":
-                assert word_boundary_idx < len(tgt_word_boundaries) - 1
-                edited_tgt_indices.add(word_boundary_idx)
-                edited_tgt_indices.add(word_boundary_idx + 1)
-            else:
-                edited_tgt_indices.add(word_boundary_idx)
-        outputs.append(edited_tgt_indices)
+        edited_in_ipts.append(edited_ipt_indices)
+        edited_in_tgts.append(edited_tgt_indices)
 
-    return outputs
+    return edited_in_ipts, edited_in_tgts

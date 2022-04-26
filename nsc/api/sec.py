@@ -62,8 +62,10 @@ def get_available_spelling_error_correction_models() -> List[ModelInfo]:
             name="transformer_with_tokenization_repair_nmt",
             description="Transformer model that translates a sequence with spelling and tokenization errors "
                         "into a sequence without spelling errors and tokenization errors. Different from "
-                        "transformer_nmt because this model was trained on text with spelling and tokenization errors, "
-                        "whereas transformer_nmt was trained only on text with spelling errors."
+                        "transformer_nmt because this model tokenizes into characters and "
+                        "was trained on text with spelling and tokenization errors, "
+                        "whereas transformer_nmt tokenizes into sub-words and "
+                        "was trained only on text with spelling errors."
         )
     ]
 
@@ -288,7 +290,8 @@ class SpellingErrorCorrector(_APIBase):
             batch_size: int = 16,
             batch_max_length_factor: Optional[float] = None,
             sort_by_length: bool = True,
-            show_progress: bool = False
+            show_progress: bool = False,
+            **kwargs: Any
     ) -> List[str]:
         if isinstance(inputs, str):
             inputs = load_text_file(inputs)
@@ -299,9 +302,9 @@ class SpellingErrorCorrector(_APIBase):
         inference_kwargs = inference_kwargs_from_search_and_score(search, score, self._get_output_tokenizer())
         if is_tokenization_repair_plus:
             inference_kwargs["output_type"] = "sec"
-            inference_kwargs["no_repair"] = os.getenv("NSC_TOKENIZATION_REPAIR_PLUS_NO_REPAIR", "false") == "true"
-            inference_kwargs["no_detect"] = os.getenv("NSC_TOKENIZATION_REPAIR_PLUS_NO_DETECT", "false") == "true"
-            inference_kwargs["threshold"] = float(os.getenv("NSC_TOKENIZATION_REPAIR_PLUS_THRESHOLD", 0.2))
+            inference_kwargs["no_repair"] = kwargs.get("tokenization_repair_plus_no_repair", False)
+            inference_kwargs["no_detect"] = kwargs.get("tokenization_repair_plus_no_detect", False)
+            inference_kwargs["threshold"] = kwargs.get("tokenization_repair_plus_threshold", 0.5)
 
         num_workers = 0 if len(inputs) <= 16 else min(4, len(os.sched_getaffinity(0)))
         dataset, loader = get_inference_dataset_and_loader(
@@ -403,7 +406,8 @@ class SpellingErrorCorrector(_APIBase):
             batch_size: int = 16,
             batch_max_length_factor: Optional[float] = None,
             sort_by_length: bool = True,
-            show_progress: bool = False
+            show_progress: bool = False,
+            **kwargs: Any
     ) -> StringInputOutput:
         """
 
@@ -441,7 +445,8 @@ class SpellingErrorCorrector(_APIBase):
             batch_size,
             batch_max_length_factor,
             sort_by_length,
-            show_progress
+            show_progress,
+            **kwargs
         )
         return outputs[0] if input_is_string else outputs
 
@@ -455,7 +460,8 @@ class SpellingErrorCorrector(_APIBase):
             batch_size: int = 16,
             batch_max_length_factor: Optional[float] = None,
             sort_by_length: bool = True,
-            show_progress: bool = True
+            show_progress: bool = True,
+            **kwargs: Any
     ) -> Optional[List[str]]:
         """
 
@@ -491,7 +497,8 @@ class SpellingErrorCorrector(_APIBase):
             batch_size,
             batch_max_length_factor,
             sort_by_length,
-            show_progress
+            show_progress,
+            **kwargs
         )
 
         if output_file_path is not None:

@@ -244,7 +244,7 @@ not for training or reproducing the results.</p>
 <p class="admonition-title">Note</p>
 <p>Of course you can also copy the training data folder to every other
 place you like and adjust <code class="docutils literal notranslate"><span class="pre">NSC_DATA_DIR</span></code> accordingly. But keep in mind that this
-folder is very large (about 1TB).</p>
+folder is very large (about 750GB).</p>
 </div>
 <p>After that you can train your own models using a training config.
 All of the training configs this project used to train models can be found <a class="reference external" href="https://github.com/bastiscode/spell_check/tree/main/spell_checking/configs/train">here</a>.</p>
@@ -336,7 +336,7 @@ These scripts do nothing more than setting some environment variables and callin
 <p>Using the <code class="docutils literal notranslate"><span class="pre">train_slurm_&lt;task&gt;.sh</span></code> scripts to reproduce results is only possible on a SLURM cluster
 since they call the <code class="docutils literal notranslate"><span class="pre">train.sh</span></code> script using SLURMs sbatch command.</p>
 </div>
-<p>Once you finished training you can evaluate the models on the projects benchmarks that are available under
+<p>Once you finished training you can evaluate the models on the projects’ benchmarks that are available under
 <code class="docutils literal notranslate"><span class="pre">/nfs/students/sebastian-walter/masters_thesis/benchmarks</span></code>.</p>
 </section>
 </section>
@@ -509,7 +509,7 @@ a word is in a dictionary or is a prefix of a word in a dictionary.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="nsc.SpellingErrorCorrector.correct_file">
-<span class="sig-name descname"><span class="pre">correct_file</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_file_path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_file_path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">detections</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">search</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">GreedySearch()</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">score</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">SpellingCorrectionScore(normalize_by_length=True,</span> <span class="pre">alpha=1.0,</span> <span class="pre">mode='log_likelihood',</span> <span class="pre">prefix_index=None)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">16</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_max_length_factor</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sort_by_length</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show_progress</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#nsc.SpellingErrorCorrector.correct_file" title="Permalink to this definition"></a></dt>
+<span class="sig-name descname"><span class="pre">correct_file</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_file_path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_file_path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">detections</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">search</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">GreedySearch()</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">score</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">SpellingCorrectionScore(normalize_by_length=True,</span> <span class="pre">alpha=1.0,</span> <span class="pre">mode='log_likelihood',</span> <span class="pre">prefix_index=None)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">16</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_max_length_factor</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sort_by_length</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show_progress</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#nsc.SpellingErrorCorrector.correct_file" title="Permalink to this definition"></a></dt>
 <dd><p>Correct spelling errors in a file.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -527,6 +527,7 @@ and batch_max_length_factor is 4 then one batch will contain as many input seque
 512 * 4 = 2048 tokens (takes precedence over batch_size if specified)</p></li>
 <li><p><strong>sort_by_length</strong> (<em>bool</em>) – sort the inputs by length before processing them</p></li>
 <li><p><strong>show_progress</strong> (<em>bool</em>) – display progress bar</p></li>
+<li><p><strong>kwargs</strong> (<em>Any</em>) – </p></li>
 </ul>
 </dd>
 <dt class="field-even">Return type</dt>
@@ -538,7 +539,7 @@ and batch_max_length_factor is 4 then one batch will contain as many input seque
 
 <dl class="py method">
 <dt class="sig sig-object py" id="nsc.SpellingErrorCorrector.correct_text">
-<span class="sig-name descname"><span class="pre">correct_text</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">inputs</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">detections</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">search</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">GreedySearch()</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">score</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">SpellingCorrectionScore(normalize_by_length=True,</span> <span class="pre">alpha=1.0,</span> <span class="pre">mode='log_likelihood',</span> <span class="pre">prefix_index=None)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">16</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_max_length_factor</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sort_by_length</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show_progress</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#nsc.SpellingErrorCorrector.correct_text" title="Permalink to this definition"></a></dt>
+<span class="sig-name descname"><span class="pre">correct_text</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">inputs</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">detections</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">search</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">GreedySearch()</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">score</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">SpellingCorrectionScore(normalize_by_length=True,</span> <span class="pre">alpha=1.0,</span> <span class="pre">mode='log_likelihood',</span> <span class="pre">prefix_index=None)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">16</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_max_length_factor</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sort_by_length</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show_progress</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#nsc.SpellingErrorCorrector.correct_text" title="Permalink to this definition"></a></dt>
 <dd><p>Correct spelling errors in text.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -556,6 +557,7 @@ and batch_max_length_factor is 4 then one batch will contain as many input seque
 512 * 4 = 2048 tokens (takes precedence over batch_size if specified)</p></li>
 <li><p><strong>sort_by_length</strong> (<em>bool</em>) – sort the inputs by length before processing them</p></li>
 <li><p><strong>show_progress</strong> (<em>bool</em>) – display progress bar</p></li>
+<li><p><strong>kwargs</strong> (<em>Any</em>) – </p></li>
 </ul>
 </dd>
 <dt class="field-even">Return type</dt>
@@ -688,7 +690,7 @@ instead.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="nsc.SpellingErrorDetector.detect_file">
-<span class="sig-name descname"><span class="pre">detect_file</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_file_path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_file_path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">16</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_max_length_factor</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sort_by_length</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show_progress</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#nsc.SpellingErrorDetector.detect_file" title="Permalink to this definition"></a></dt>
+<span class="sig-name descname"><span class="pre">detect_file</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_file_path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_file_path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">16</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_max_length_factor</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sort_by_length</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show_progress</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#nsc.SpellingErrorDetector.detect_file" title="Permalink to this definition"></a></dt>
 <dd><p>Detect spelling errors in a file.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -703,18 +705,22 @@ and batch_max_length_factor is 4 then one batch will contain as many input seque
 512 * 4 = 2048 tokens (takes precedence over batch_size if specified)</p></li>
 <li><p><strong>sort_by_length</strong> (<em>bool</em>) – sort the inputs by length before processing them</p></li>
 <li><p><strong>show_progress</strong> (<em>bool</em>) – display progress bar</p></li>
+<li><p><strong>kwargs</strong> (<em>Any</em>) – </p></li>
 </ul>
 </dd>
 <dt class="field-even">Return type</dt>
-<dd class="field-even"><p><em>Optional</em>[<em>Union</em>[<em>List</em>[int], <em>List</em>[<em>List</em>[int]]]]</p>
+<dd class="field-even"><p><em>Optional</em>[<em>Tuple</em>[<em>List</em>[<em>List</em>[int]], <em>List</em>[str]]]</p>
 </dd>
 </dl>
-<p>Returns: detections as list of lists of integers if output_file_path is not specified else None</p>
+<dl class="simple">
+<dt>Returns: tuple of detections as list of lists of integers and output strings as list of strings</dt><dd><p>if output_file_path is not specified else None</p>
+</dd>
+</dl>
 </dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="nsc.SpellingErrorDetector.detect_text">
-<span class="sig-name descname"><span class="pre">detect_text</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">inputs</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">16</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_max_length_factor</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sort_by_length</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show_progress</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#nsc.SpellingErrorDetector.detect_text" title="Permalink to this definition"></a></dt>
+<span class="sig-name descname"><span class="pre">detect_text</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">inputs</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">16</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_max_length_factor</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sort_by_length</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show_progress</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#nsc.SpellingErrorDetector.detect_text" title="Permalink to this definition"></a></dt>
 <dd><p>Detect spelling errors in text.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -728,13 +734,17 @@ and batch_max_length_factor is 4 then one batch will contain as many input seque
 512 * 4 = 2048 tokens (takes precedence over batch_size if specified)</p></li>
 <li><p><strong>sort_by_length</strong> (<em>bool</em>) – sort the inputs by length before processing them</p></li>
 <li><p><strong>show_progress</strong> (<em>bool</em>) – display progress bar</p></li>
+<li><p><strong>kwargs</strong> (<em>Any</em>) – </p></li>
 </ul>
 </dd>
 <dt class="field-even">Return type</dt>
-<dd class="field-even"><p><em>Union</em>[<em>List</em>[int], <em>List</em>[<em>List</em>[int]]]</p>
+<dd class="field-even"><p><em>Tuple</em>[<em>Union</em>[<em>List</em>[int], <em>List</em>[<em>List</em>[int]]], <em>Union</em>[str, <em>List</em>[str]]]</p>
 </dd>
 </dl>
-<p>Returns: detections as list of integers or list of lists of integers</p>
+<dl class="simple">
+<dt>Returns: tuple of detections as list of integers or list of lists of integers and output strings as</dt><dd><p>str or list of strings</p>
+</dd>
+</dl>
 </dd></dl>
 
 <dl class="py method">

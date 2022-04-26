@@ -210,7 +210,8 @@ class SpellingErrorDetector(_APIBase):
             batch_size: int = 16,
             batch_max_length_factor: Optional[float] = None,
             sort_by_length: bool = True,
-            show_progress: bool = False
+            show_progress: bool = False,
+            **kwargs: Any
     ) -> Tuple[List[List[int]], List[str]]:
         inference_kwargs = {
             "threshold": threshold
@@ -218,7 +219,8 @@ class SpellingErrorDetector(_APIBase):
         is_tokenization_repair_plus = isinstance(self.task, tokenization_repair_plus.TokenizationRepairPlus)
         if is_tokenization_repair_plus:
             inference_kwargs["output_type"] = "sed"
-            inference_kwargs["no_repair"] = os.getenv("NSC_TOKENIZATION_REPAIR_PLUS_NO_REPAIR", "false") == "true"
+            inference_kwargs["no_repair"] = kwargs.get("tokenization_repair_plus_no_repair", False)
+            print(inference_kwargs)
 
         if isinstance(inputs, str):
             inputs = load_text_file(inputs)
@@ -244,7 +246,8 @@ class SpellingErrorDetector(_APIBase):
             batch_size: int = 16,
             batch_max_length_factor: Optional[float] = None,
             sort_by_length: bool = True,
-            show_progress: bool = False
+            show_progress: bool = False,
+            **kwargs: Any
     ) -> Tuple[Union[List[int], List[List[int]]], Union[str, List[str]]]:
         """
 
@@ -277,7 +280,8 @@ class SpellingErrorDetector(_APIBase):
             batch_size,
             batch_max_length_factor,
             sort_by_length,
-            show_progress
+            show_progress,
+            **kwargs
         )
         return (detections[0], output_strings[0]) if input_is_string else (detections, output_strings)
 
@@ -289,7 +293,8 @@ class SpellingErrorDetector(_APIBase):
             batch_size: int = 16,
             batch_max_length_factor: Optional[float] = None,
             sort_by_length: bool = True,
-            show_progress: bool = True
+            show_progress: bool = True,
+            **kwargs: Any
     ) -> Optional[Tuple[List[List[int]], List[str]]]:
         """
 
@@ -312,7 +317,7 @@ class SpellingErrorDetector(_APIBase):
 
         """
         outputs = self._detect_text_raw(
-            input_file_path, threshold, batch_size, batch_max_length_factor, sort_by_length, show_progress
+            input_file_path, threshold, batch_size, batch_max_length_factor, sort_by_length, show_progress, **kwargs
         )
         if output_file_path is not None:
             save_text_file(output_file_path, iter(inference.inference_output_to_str(output) for output in outputs))
