@@ -1,0 +1,3 @@
+[submodule "third_party/gector"]
+	path = third_party/gector
+	url = https://github.com/bastiscode/gector.git

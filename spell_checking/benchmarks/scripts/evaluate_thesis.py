@@ -271,6 +271,7 @@ def get_sec_models_and_metrics() -> Tuple[
         ],
         (1, "baselines"): [
             ("gector bert", "gector_bert"),
+            ("gector xlnet", "gector_xlnet"),
             ("neuspell bert", "baseline_neuspell_bert")
         ],
         (2, "models"): [

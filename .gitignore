@@ -14,7 +14,8 @@ sphinx_docs
 
 /experiments
 /data
-/third_party
+/third_party/*
+!/third_party/gector
 
 /spell_checking/utils/edit_distance_rs/target
 /spell_checking/.transformers_cache
