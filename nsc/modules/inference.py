@@ -7,7 +7,7 @@ import torch
 
 from nsc.data import tokenization, index, utils as data_utils
 from nsc.modules import utils
-from nsc.modules.utils import DecoderMixin
+from nsc.modules.utils import DecoderMixin, split
 
 
 class Beam:
@@ -62,15 +62,17 @@ def eos_stop_fn(eos_token_id: int) -> StopFn:
 
 def greedy_select_fn() -> BeamSelectFn:
     def _greedy(beams: List[Tuple[Beam, float]]) -> Beam:
-        return beams[0][0]
+        best_beam, _ = max(beams, key=lambda b: b[1])
+        return best_beam
 
     return _greedy
 
 
 def sample_select_fn(sample_top_k: int) -> BeamSelectFn:
     def _sample(beams: List[Tuple[Beam, float]]) -> Beam:
-        sample_idx = torch.randint(min(len(beams), sample_top_k), (1,)).item()
-        return beams[sample_idx][0]
+        beams_sorted = sorted(beams, key=lambda b: b[1], reverse=True)
+        sample_idx = torch.randint(min(len(beams_sorted), sample_top_k), (1,)).item()
+        return beams_sorted[sample_idx][0]
 
     return _sample
 
@@ -224,11 +226,12 @@ def token_inference(
         inferred_token_ids = []
         inferred_log_prob = []
         batch_indices = torch.where(indices_to_decode)[0].tolist()
+        beams_to_score = []
         for i in range(len(decoder_output)):
             length = lengths[indices_to_decode][i]
             log_softmax_scores = torch.log_softmax(decoder_output[i, length - 1], dim=0)
 
-            top_k = torch.topk(log_softmax_scores, max(10, log_softmax_scores.shape[-1] // 100), dim=-1)
+            top_k = torch.topk(log_softmax_scores, log_softmax_scores.shape[-1], dim=-1)
             top_k_indices = top_k.indices.tolist()
             top_k_log_p = top_k.values.tolist()
 
@@ -240,11 +243,16 @@ def token_inference(
                 beam = Beam()
                 beam.token_ids = current_token_ids + [token_id]
                 beam.log_prob = current_log_prob + [lp]
+                beams_to_score.append(beam)
                 beams_and_scores.append(
-                    (beam, -score_fn(beam, input_strings[batch_idx] if input_strings is not None else None))
+                    (beam, score_fn(beam, input_strings[batch_idx] if input_strings is not None else None))
                 )
-            beams_and_scores = sorted(beams_and_scores, key=lambda e: e[1])
-            selected_beam = select_fn(beams_and_scores)
+
+        beam_scores = []
+
+        for beams, scores in zip(split(beams_to_score, decoder_output.shape[-1]),
+                                 split(beam_scores, decoder_output.shape[-1])):
+            selected_beam = select_fn(list(zip(beams, scores)))
             inferred_token_ids.append(selected_beam.token_ids[-1])
             inferred_log_prob.append(selected_beam.log_prob[-1])
 
@@ -379,7 +387,7 @@ def best_first_inference(
 
             log_softmax_scores = torch.log_softmax(decoder_output, dim=0)
 
-            top_k_scores = torch.topk(log_softmax_scores, max(10, log_softmax_scores.shape[-1] // 100), dim=-1)
+            top_k_scores = torch.topk(log_softmax_scores, log_softmax_scores.shape[-1], dim=-1)
             top_k_indices = top_k_scores.indices.tolist()
             top_k_log_p = top_k_scores.values.tolist()
 
@@ -483,12 +491,13 @@ def beam_inference(
 
             log_softmax_scores = torch.log_softmax(decoder_output, dim=1)
 
-            top_k = torch.topk(log_softmax_scores, max(10, log_softmax_scores.shape[-1] // 100), dim=-1)
+            top_k = torch.topk(log_softmax_scores, log_softmax_scores.shape[-1], dim=-1)
             top_k_indices = top_k.indices.tolist()
             top_k_log_p = top_k.values.tolist()
 
-            start = time.perf_counter()
             beam_candidates = []
+            start = time.perf_counter()
+            total_score = 0
             for beam_idx in range(len(top_k_indices)):
                 for token_id, log_p in zip(top_k_indices[beam_idx], top_k_log_p[beam_idx]):
                     beam_candidate = Beam.from_beam(
@@ -496,6 +505,7 @@ def beam_inference(
                         log_p=log_p,
                         token_id=token_id
                     )
+                    start_score = time.perf_counter()
                     beam_candidates.append(
                         (
                             beam_candidate, -score_fn(
@@ -504,9 +514,14 @@ def beam_inference(
                             )
                         )
                     )
+                    end_score = time.perf_counter()
+                    total_score += end_score - start_score
             end = time.perf_counter()
-            # print(f"scoring beams at depth {search_depth} took {1000 * (end - start):.2f}ms")
-
+            runtime = 1000 * (end - start)
+            score_time = 1000 * total_score
+            print(
+                f"scoring {len(top_k_indices)} beam candidates took {runtime:.2f}ms "
+                f"({100 * score_time / runtime:.2f}% scoring)")
             beam_candidates = sorted(beam_candidates, key=lambda e: e[1])[:2 * beam_width]
 
             current_beams = []

@@ -8,13 +8,13 @@ dist
 .ipynb_checkpoints
 *.pstat
 *.egg-info
-/experiments
-/local_experiments
-/data
-/third_party
 .cache
 *.zip
 sphinx_docs
+
+/experiments
+/data
+/third_party
 
 /spell_checking/utils/edit_distance_rs/target
 /spell_checking/.transformers_cache

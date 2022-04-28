@@ -72,6 +72,16 @@ def parse_args() -> argparse.Namespace:
              "faster repairing but require more memory"
     )
     parser.add_argument(
+        "--batch-max-length-factor",
+        type=float,
+        default=None,
+        help="Process as many inputs at the same as fit within a maximum number of tokens calculated as "
+             "batch_max_length_factor * model_max_length. The model_max_length is the maximum input length in tokens a "
+             "model can handle. It is a fixed value defined by the model. "
+             "Larger factors should usually result in faster repairing but require more memory. "
+             "If this is specified it will take precedence over batch-size."
+    )
+    parser.add_argument(
         "-u",
         "--unsorted",
         action="store_true",
@@ -183,6 +193,7 @@ def run(args: argparse.Namespace) -> None:
         repaired_lines = tok_rep.repair_text(
             inputs=inputs,
             batch_size=args.batch_size,
+            batch_max_length_factor=args.batch_max_length_factor,
             sort_by_length=not args.unsorted,
             show_progress=True
         )
@@ -219,6 +230,7 @@ def run(args: argparse.Namespace) -> None:
                 for repaired_line in tok_rep.repair_text(
                         inputs=lines,
                         batch_size=args.batch_size,
+                        batch_max_length_factor=args.batch_max_length_factor,
                         sort_by_length=not args.unsorted,
                         show_progress=args.progress
                 ):

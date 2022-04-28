@@ -134,16 +134,7 @@ def get_edited_words(ipts: List[str], tgts: List[str]) -> Tuple[List[Set[int]], 
                     edited_ipt_indices.add(ipt_word_idx)
                     break
                 elif ipt_idx == wb_e:
-                    import edit_distance_rs
-                    graphemes = edit_distance_rs.get_graphemes(tgt[tgt_idx - 15: tgt_idx + 16])
-                    assert op_code == "delete" or \
-                           op_code == "insert", \
-                        (ipt[ipt_idx - 15: ipt_idx + 16],
-                         tgt[tgt_idx - 15: tgt_idx + 16],
-                         list(tgt[tgt_idx - 15: tgt_idx + 16]),
-                         graphemes,
-                         "".join(graphemes),
-                         list("".join(graphemes)))
+                    assert op_code == "delete" or op_code == "insert"
                     if op_code == "delete":
                         assert ipt[ipt_idx] == " "
                         edited_ipt_indices.add(ipt_word_idx)
@@ -159,7 +150,7 @@ def get_edited_words(ipts: List[str], tgts: List[str]) -> Tuple[List[Set[int]], 
                     edited_tgt_indices.add(tgt_word_idx)
                     break
                 elif tgt_idx == wb_e:
-                    assert op_code == "delete" or op_code == "insert", (op_code, ipt[ipt_idx], tgt[tgt_idx])
+                    assert op_code == "delete" or op_code == "insert", (op_code, ipt_idx, tgt_idx, ipt, tgt)
                     if op_code == "delete":
                         edited_tgt_indices.add(tgt_word_idx)
                     else:

@@ -27,7 +27,7 @@ if [[ $approach == "gnn" ]]; then
     )
   declare -a approach_num_nodes=(
     "3"
-    "3"
+#    "3"
   )
   declare -a approaches=(
     "false"

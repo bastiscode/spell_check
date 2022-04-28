@@ -34,7 +34,7 @@ class Seq2Seq(tasks.Task):
 
         invalid_indices = set()
         for i, labels in enumerate(batch.info.pop("label")):
-            if len(labels) - 1 > 1024:
+            if len(labels) - 1 > 768:
                 # this is kind of a temporary hack to skip too long decoding sequences that cause OOM
                 self.logger.warning(f"skipping sample with decoder length {len(labels) - 1}")
                 invalid_indices.add(i)

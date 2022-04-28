@@ -177,10 +177,6 @@ def correction_f1_prec_rec(
         target_sequences: List[str]
 ) -> Tuple[float, float, float]:
     check_same_length(input_sequences, predicted_sequences, target_sequences)
-    import edit_distance_rs
-    # input_sequences = [edit_distance_rs.fix_string(seq) for seq in input_sequences]
-    # predicted_sequences = [edit_distance_rs.fix_string(seq) for seq in predicted_sequences]
-    # target_sequences = [edit_distance_rs.fix_string(seq) for seq in target_sequences]
 
     _, misspelled = get_edited_words(input_sequences, target_sequences)
     changed, _ = get_edited_words(input_sequences, predicted_sequences)

@@ -45,7 +45,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--beam-width",
         type=int,
-        default=5,
+        default=10,
         help="Always keep the best beam_width candidates"
     )
     parser.add_argument(
@@ -109,6 +109,16 @@ def parse_args() -> argparse.Namespace:
         default=16,
         help="Determines how many inputs will be processed at the same time, larger values should usually result in "
              "faster repairing but require more memory"
+    )
+    parser.add_argument(
+        "--batch-max-length-factor",
+        type=float,
+        default=None,
+        help="Process as many inputs at the same as fit within a maximum number of tokens calculated as "
+             "batch_max_length_factor * model_max_length. The model_max_length is the maximum input length in tokens a "
+             "model can handle. It is a fixed value defined by the model. "
+             "Larger factors should usually result in faster repairing but require more memory. "
+             "If this is specified it will take precedence over batch-size."
     )
     parser.add_argument(
         "-u",
@@ -287,6 +297,7 @@ def run(args: argparse.Namespace) -> None:
             search=search,
             score=score,
             batch_size=args.batch_size,
+            batch_max_length_factor=args.batch_max_length_factor,
             sort_by_length=not args.unsorted,
             show_progress=True,
             **corrector_kwargs
@@ -344,6 +355,7 @@ def run(args: argparse.Namespace) -> None:
                         search=search,
                         score=score,
                         batch_size=args.batch_size,
+                        batch_max_length_factor=args.batch_max_length_factor,
                         sort_by_length=not args.unsorted,
                         show_progress=args.progress,
                         **corrector_kwargs

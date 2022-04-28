@@ -19,7 +19,7 @@ from spell_checking.utils.edit import edit_distance
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--benchmark-dir", type=str, required=True)
-    parser.add_argument("--benchmark-type", choices=["sed_sequence", "sed_words", "sec"], required=True)
+    parser.add_argument("--benchmark-type", choices=["sed_sequence", "sed_words_and_sec"], required=True)
     parser.add_argument("--dictionary", type=str, required=True)
     parser.add_argument("--out-dir", type=str, required=True)
     parser.add_argument("--fmt", choices=["markdown", "latex"], default="latex")
@@ -47,7 +47,7 @@ def generate_statistics(args: argparse.Namespace) -> None:
     benchmark_groups = {}
     for benchmark in benchmarks:
         group, split = benchmark.split("/")[-2:]
-        if group == "results":
+        if group not in {"wikidump", "bookcorpus", "neuspell"}:
             continue
         if group not in benchmark_groups:
             benchmark_groups[group] = []
@@ -65,10 +65,9 @@ def generate_statistics(args: argparse.Namespace) -> None:
         for split in splits:
             corrupt_lines = load_text_file(os.path.join(args.benchmark_dir, group, split, "corrupt.txt"))
             correct_lines = load_text_file(os.path.join(args.benchmark_dir, group, split, "correct.txt"))
-            if args.benchmark_type != "sec":
-                correct_sequences = load_text_file(
-                    os.path.join(args.benchmark_dir, group, split, "correct.sequences.txt")
-                )
+            correct_sequences_file = os.path.join(args.benchmark_dir, group, split, "correct.sequences.txt")
+            if os.path.exists(correct_sequences_file):
+                correct_sequences = load_text_file(correct_sequences_file)
             else:
                 correct_sequences = [None] * len(corrupt_lines)
             assert len(correct_lines) == len(corrupt_lines) == len(correct_sequences)
@@ -85,7 +84,7 @@ def generate_statistics(args: argparse.Namespace) -> None:
             for corrupt_line, correct_line, correct_sequence in zip(corrupt_lines, correct_lines, correct_sequences):
                 corrupt_words = corrupt_line.split()
                 correct_split = correct_line.split()
-                correct_words = correct_sequence.split() if args.benchmark_type != "sec" else correct_split
+                correct_words = correct_sequence.split() if correct_sequence is not None else correct_split
                 assert len(corrupt_words) == len(correct_words)
 
                 for correct_word, corrupt_word in zip(correct_words, corrupt_words):
@@ -100,28 +99,15 @@ def generate_statistics(args: argparse.Namespace) -> None:
                             non_word_misspellings[corrupt_word] = correct_word
 
                 for corrupt_word, correct_word in zip(corrupt_words, correct_words):
-                    corrupt_regex, _ = utils.tokenize_words_regex(corrupt_word)
-                    correct_regex, _ = utils.tokenize_words_regex(correct_word)
-
-                    num_words += len(corrupt_regex)
-                    if len(corrupt_regex) != len(correct_regex):
-                        ed = edit_distance(corrupt_word, correct_word)
+                    num_words += len(utils.tokenize_words_regex(corrupt_word)[0])
+                    ed = edit_distance(corrupt_word, correct_word)
+                    if corrupt_word != correct_word:
                         if is_real_word(corrupt_word, dictionary):
                             real_word_errors += 1
                             error_edit_distances.append((ed, True))
                         else:
                             non_word_errors += 1
                             error_edit_distances.append((ed, False))
-                    else:
-                        for corrupt, correct in zip(corrupt_regex, correct_regex):
-                            ed = edit_distance(corrupt, correct)
-                            if corrupt != correct:
-                                if is_real_word(corrupt, dictionary):
-                                    real_word_errors += 1
-                                    error_edit_distances.append((ed, True))
-                                else:
-                                    non_word_errors += 1
-                                    error_edit_distances.append((ed, False))
 
                 if args.benchmark_type == "sed_sequence":
                     if len(additional_stats) == 0:
