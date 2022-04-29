@@ -298,6 +298,9 @@ class SpellingErrorCorrector(_APIBase):
 
         inputs = [clean_sequence(ipt) for ipt in inputs]
 
+        assert score.mode == "log_likelihood", \
+            "for spelling correction only the log_likelihood scoring mode is supported for now"
+
         is_tokenization_repair_plus = isinstance(self.task, tokenization_repair_plus.TokenizationRepairPlus)
         inference_kwargs = inference_kwargs_from_search_and_score(search, score, self._get_output_tokenizer())
         if is_tokenization_repair_plus:

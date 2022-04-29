@@ -34,13 +34,8 @@ class Seq2Seq(tasks.Task):
 
         invalid_indices = set()
         for i, labels in enumerate(batch.info.pop("label")):
-            if len(labels) - 1 > 768:
-                # this is kind of a temporary hack to skip too long decoding sequences that cause OOM
-                self.logger.warning(f"skipping sample with decoder length {len(labels) - 1}")
-                invalid_indices.add(i)
-                continue
-            decoder_inputs.append(torch.tensor(labels[:-1], dtype=torch.long))
-            decoder_labels.append(torch.tensor(labels[1:], dtype=torch.long))
+            decoder_inputs.append(torch.tensor(labels[:-1][:512], dtype=torch.long))
+            decoder_labels.append(torch.tensor(labels[1:][:512], dtype=torch.long))
 
         decoder_labels = to(utils.pad(decoder_labels, val=batch.info["pad_token_id"][0]).long(), device)
 

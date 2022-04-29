@@ -108,6 +108,13 @@ def evaluate(
         elif name == "correction_f1":
             results[name] = metrics.correction_f1_prec_rec(corrupted, predictions, groundtruths)
 
+        elif name == "bleu":
+            from nltk.translate.bleu_score import corpus_bleu
+            results[name] = (corpus_bleu(
+                [[gt] for gt in groundtruths],
+                predictions
+            ),)
+
         else:
             raise RuntimeError(f"unknown metric {name}")
 
@@ -119,7 +126,8 @@ _METRIC_TO_HIGHER_BETTER = {
     "binary_f1": True,
     "word_accuracy": True,
     "mean_normalized_edit_distance": False,
-    "correction_f1": True
+    "correction_f1": True,
+    "bleu": True
 }
 
 _METRIC_TO_NUM_COLS = {
@@ -127,7 +135,8 @@ _METRIC_TO_NUM_COLS = {
     "binary_f1": 3,
     "word_accuracy": 3,
     "mean_normalized_edit_distance": 2,
-    "correction_f1": 3
+    "correction_f1": 3,
+    "bleu": 1
 }
 
 
@@ -183,6 +192,12 @@ def get_metric_fmt_fn(metric_name: str, **metric_kwargs: Any) -> Callable[[Any],
                     f"\\footnotesize {100 * rec:.2f}{mark_bea}"]
 
         return _fmt_correction_f1
+
+    elif metric_name == "bleu":
+        def _fmt_bleu(bleu: float, mark_bea: str = "", **fmt_kwargs: Any) -> List[str]:
+            return [f"{bleu:.3f}{mark_bea}"]
+
+        return _fmt_bleu
 
     else:
         raise RuntimeError("should not happen")
@@ -276,11 +291,13 @@ def get_sec_models_and_metrics() -> Tuple[
         ],
         (2, "models"): [
             ("transformer", "transformer_sec_nmt"),
+            (r"transformer\textsubscript{\tiny beam}", "transformer_sec_nmt_beam"),
+            (r"transformer\textsubscript{\tiny beam}_no_neuspell_no_bea", "transformer_sec_nmt_beam_no_neuspell_no_bea"),
             ("transformer_no_neuspell_no_bea", "transformer_sec_nmt_no_neuspell_no_bea"),
             ("transformer word", "transformer_sec_words_nmt"),
             ("transformer word_no_neuspell_no_bea", "transformer_sec_words_nmt_no_neuspell_no_bea")
         ]
-    }, {"mean_normalized_edit_distance", "correction_f1"}
+    }, {"mean_normalized_edit_distance", "correction_f1", "bleu"}
 
 
 def get_sec_advanced_models_and_metrics() \
@@ -306,7 +323,7 @@ def get_sec_advanced_models_and_metrics() \
         (3, "models_advanced"): [
             (r"tokenization repair\textsuperscript{++}", "tokenization_repair_plus_sec")
         ]
-    }, {"mean_normalized_edit_distance", "correction_f1"}
+    }, {"mean_normalized_edit_distance", "correction_f1", "bleu"}
 
 
 def get_sec_whitespace_models_and_metrics() \
@@ -317,15 +334,18 @@ def get_sec_whitespace_models_and_metrics() \
         ],
         (1, "models"): [
             ("transformer with tokenization repair", "transformer_with_tokenization_repair_sec_nmt"),
+            (r"transformer with tokenization repair\textsubscript{\tiny beam}",
+             "transformer_with_tokenization_repair_sec_nmt_beam"),
             (r"tokenization repair\textsuperscript{++}", "tokenization_repair_plus_sec")
         ],
         (2, "models_advanced"): [
-            (r"tokenization repair $\rightarrow$ gnn\textsuperscript{+} $\rightarrow$ transformer word", "tr_plus_gnn_plus_words_nmt"),
+            (r"tokenization repair $\rightarrow$ gnn\textsuperscript{+} $\rightarrow$ transformer word",
+             "tr_plus_gnn_plus_words_nmt"),
             (r"tokenization repair\textsuperscript{+} $\rightarrow$ transformer word", "tr_plus_plus_words_nmt"),
             (r"tokenization repair\rlap{\textsuperscript{+}}\textsubscript{\tiny fixed} $\rightarrow$ transformer word",
              "tr_plus_fixed_plus_words_nmt")
         ]
-    }, {"mean_normalized_edit_distance", "correction_f1"}
+    }, {"mean_normalized_edit_distance", "correction_f1", "bleu"}
 
 
 def get_sec_spell_checking_models_and_metrics() \
@@ -338,12 +358,8 @@ def get_sec_spell_checking_models_and_metrics() \
         (1, "beam"): [
             (r"transformer\textsubscript{\tiny beam}", "transformer_sec_nmt_beam"),
             (r"transformer word\textsubscript{\tiny beam}", "transformer_sec_words_nmt_beam")
-        ],
-        (2, "best_first"): [
-            (r"transformer\textsubscript{\tiny best first}", "transformer_sec_nmt_best_first"),
-            (r"transformer word\textsubscript{\tiny best first}", "transformer_sec_nmt_best_first")
         ]
-    }, {"mean_normalized_edit_distance", "correction_f1"}
+    }, {"mean_normalized_edit_distance", "correction_f1", "bleu"}
 
 
 if __name__ == "__main__":
