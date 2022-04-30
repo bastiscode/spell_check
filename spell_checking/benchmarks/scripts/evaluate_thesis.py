@@ -233,6 +233,8 @@ def get_sed_models_and_metrics(is_sed_words: bool) \
             ("languagetool", "baseline_languagetool")
         ],
         (1, "baselines"): [
+            ("gector bert", "gector_bert"),
+            ("gector xlnet", "gector_xlnet"),
             ("neuspell bert", "baseline_neuspell_bert")
         ],
         (2, "models"): [
@@ -351,11 +353,14 @@ def get_sec_whitespace_models_and_metrics() \
 def get_sec_spell_checking_models_and_metrics() \
         -> Tuple[Callable[[str], bool], Dict[Tuple[int, str], List[Tuple[str, str]]], Set[str]]:
     return lambda s: s.split("/")[-2] == "spell_checking", {
-        (0, "default"): [
+        (0, "baselines"): [
+            ("do nothing", "baseline_dummy")
+        ],
+        (1, "default"): [
             ("transformer", "transformer_sec_nmt"),
             ("transformer word", "transformer_sec_words_nmt")
         ],
-        (1, "beam"): [
+        (2, "beam"): [
             (r"transformer\textsubscript{\tiny beam}", "transformer_sec_nmt_beam"),
             (r"transformer word\textsubscript{\tiny beam}", "transformer_sec_words_nmt_beam")
         ]

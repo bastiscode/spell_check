@@ -31,7 +31,7 @@ evaluate_sed_sequence:
 
 .PHONY: evaluate_sed_words
 evaluate_sed_words:
-	@#rm -f $(SPLIT)/sed_words_tables/results.json
+	@rm -f $(SPLIT)/sed_words_tables/results.json
 	@python scripts/evaluate_thesis.py \
 	--benchmark-dir $(SPLIT)/sed_words \
 	--benchmark-type sed_words \
@@ -41,7 +41,7 @@ evaluate_sed_words:
 
 	@glow -w 150 $(SPLIT)/sed_words_tables/*.md
 
-	@#rm -f $(SPLIT)/sed_words_advanced_tables/results.json
+	@rm -f $(SPLIT)/sed_words_advanced_tables/results.json
 	@python scripts/evaluate_thesis.py \
 	--benchmark-dir $(SPLIT)/sed_words \
 	--benchmark-type sed_words_advanced \

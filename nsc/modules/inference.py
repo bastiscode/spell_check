@@ -271,7 +271,6 @@ def token_inference(
     for i in range(batch_size):
         length = lengths[i]
         outputs.append(token_ids[i][:length])
-
     return outputs
 
 
@@ -294,7 +293,6 @@ def best_first_inference(
     device = utils.device_from_model(model)
 
     score_fn = log_likelihood_score()
-    select_fn = greedy_select_fn()
 
     all_beams: List[List[Beam]] = []
 
@@ -424,7 +422,7 @@ def beam_inference(
 
     while True:
         decoder_mask = [
-            beam_queue.qsize() < beam_width and position + search_depth < max_length and len(beams)
+            bool(beam_queue.qsize() < beam_width and position + search_depth < max_length and len(beams))
             for beam_queue, position, search_depth, beams
             in zip(beam_queues, positions, search_depths, current_beams)
         ]
@@ -435,9 +433,6 @@ def beam_inference(
         indices_to_decode = torch.where(decoder_mask_tensor)[0]
         num_beams = [len(beams) for i, beams in enumerate(current_beams) if decoder_mask[i]]
         num_beams_tensor = torch.tensor(num_beams, dtype=torch.long)
-
-        encoder_outputs_b = sub_select(encoder_outputs, decoder_mask_tensor)
-        encoder_lengths_b = sub_select(encoder_lengths, decoder_mask_tensor)
 
         decoder_log_probs = []
         decoder_inputs = []
@@ -465,23 +460,24 @@ def beam_inference(
             device
         )
 
-        beam_encoder_lengths_b = {
+        beam_encoder_lengths = {
             k: torch.repeat_interleave(v, num_beams_tensor, dim=0)
-            for k, v in encoder_lengths_b.items()
+            for k, v in sub_select(encoder_lengths, decoder_mask_tensor).items()
         }
         num_beams_tensor = to(num_beams_tensor, device)
-        beam_encoder_feats_b = {
+        beam_encoder_outputs = {
             k: torch.repeat_interleave(v, num_beams_tensor, dim=0)
-            for k, v in encoder_outputs_b.items()
+            for k, v in sub_select(encoder_outputs, decoder_mask_tensor).items()
         }
 
         decoder_outputs = model.decode(
             decoder_inputs=decoder_inputs,
             decoder_lengths=decoder_lengths_tensor,
-            encoder_outputs=beam_encoder_feats_b,
-            encoder_lengths=beam_encoder_lengths_b,
+            encoder_outputs=beam_encoder_outputs,
+            encoder_lengths=beam_encoder_lengths,
             decoder_positions=decoder_positions
         )[torch.arange(len(decoder_inputs), device=device), decoder_lengths_tensor - 1, ...]
+
         log_softmax_scores = torch.log_softmax(decoder_outputs, dim=1)
         beam_token_ids, beam_log_probs = select_fn(log_softmax_scores)
         decoder_log_probs = torch.tensor(
@@ -492,17 +488,16 @@ def beam_inference(
         ).tolist()
         beam_token_ids, beam_log_probs = beam_token_ids.tolist(), beam_log_probs.tolist()
 
-        new_current_beams = copy.deepcopy(current_beams)
-        for beam_scores_b, token_ids_b, log_probs_b, idx, beams in zip(
+        for beam_scores_b, token_ids_b, log_probs_b, idx in zip(
                 utils.split(beam_scores, num_beams),
                 utils.split(beam_token_ids, num_beams),
                 utils.split(beam_log_probs, num_beams),
-                indices_to_decode,
-                current_beams
+                indices_to_decode
         ):
+
             beam_candidates = []
             for beam, scores, token_ids, log_probs in zip(
-                    beams, beam_scores_b, token_ids_b, log_probs_b
+                    current_beams[idx], beam_scores_b, token_ids_b, log_probs_b
             ):
                 for token_id, score, log_prob in zip(token_ids, scores, log_probs):
                     beam_candidate = Beam.from_beam(beam, log_prob, token_id)
@@ -510,20 +505,18 @@ def beam_inference(
 
             beam_candidates = sorted(beam_candidates, key=lambda e: e[1], reverse=True)[:2 * beam_width]
 
-            new_current_beams_b = []
+            new_current_beams = []
             for beam, score in beam_candidates:
                 if stop_fn(beam.token_ids, output_strings[idx] if output_strings is not None else None):
                     beam_queues[idx].put((-score, beam))
                 else:
-                    new_current_beams_b.append(beam)
+                    new_current_beams.append(beam)
 
-                if len(new_current_beams_b) >= beam_width:
+                if len(new_current_beams) >= beam_width:
                     break
 
-            new_current_beams[idx] = new_current_beams_b
+            current_beams[idx] = new_current_beams
             search_depths[idx] += 1
-
-        current_beams = new_current_beams
 
     for beam_queue, beams in zip(beam_queues, current_beams):
         if beam_queue.qsize() < beam_width and len(beams):
