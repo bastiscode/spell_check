@@ -254,8 +254,7 @@ def token_inference(
         batch_indices = torch.where(indices_to_decode)[0].tolist()
         new_stop_indices = []
         for idx, length in zip(batch_indices, lengths[indices_to_decode]):
-            new_token_ids = token_ids[idx][:length]
-            if stop_fn(new_token_ids, output_strings[idx] if output_strings is not None else None):
+            if stop_fn(token_ids[idx][:length].tolist(), output_strings[idx] if output_strings is not None else None):
                 new_stop_indices.append(idx)
         non_stop_mask[torch.tensor(new_stop_indices, dtype=torch.long)] = False
 

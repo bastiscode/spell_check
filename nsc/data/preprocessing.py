@@ -554,7 +554,6 @@ class Chained(Preprocessing):
             "expected same number of noise configs and overwrite flags"
         self.preprocessing = [get_preprocessing_from_config(cfg, seed) for cfg in self.cfg.cfgs]
         self.overwrites = self.cfg.overwrites
-        self.overwrites[-1] = False
 
     def apply(
             self,

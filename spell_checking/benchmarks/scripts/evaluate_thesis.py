@@ -1,4 +1,5 @@
 import argparse
+import functools
 import json
 import os
 from typing import Dict, Tuple, List, Set, Optional, Callable, Any
@@ -167,8 +168,8 @@ def get_metric_fmt_fn(metric_name: str, **metric_kwargs: Any) -> Callable[[Any],
         ) -> List[str]:
             return [
                 f"{100 * accuracy:.2f}{mark_bea}",
-                f"\\footnotesize {100 * rw_detections / rw_total:.2f}{mark_bea}",
-                f"\\footnotesize {100 * nw_detections / nw_total:.2f}{mark_bea}"
+                f"\\footnotesize {100 * rw_detections / rw_total:.1f}{mark_bea}",
+                f"\\footnotesize {100 * nw_detections / nw_total:.1f}{mark_bea}"
             ]
             # f"$\\frac{{{rw_detections:,}}}{{{rw_total:,}}}$",
             # f"$\\frac{{{nw_detections:,}}}{{{nw_total:,}}}$"]
@@ -247,6 +248,7 @@ def get_sed_models_and_metrics(is_sed_words: bool) \
             (r"transformer\textsuperscript{+}", "transformer"),
             (r"transformer\textsuperscript{+}_no_neuspell_no_bea", "transformer_no_neuspell_no_bea"),
             (r"gnn\textsuperscript{+}", "gnn_cliques_wfc"),
+            (r"gnn\rlap{\textsuperscript{+}}\textsubscript{\tiny finetuned}", "gnn_cliques_wfc_finetuned"),
             (r"gnn\textsuperscript{+}_no_neuspell_no_bea", "gnn_cliques_wfc_no_neuspell_no_bea")
         ]
     }
@@ -255,12 +257,12 @@ def get_sed_models_and_metrics(is_sed_words: bool) \
         metric_names.add("word_accuracy")
     else:
         metric_names.add("sequence_accuracy")
-    return lambda _: True, dictionary, metric_names
+    return _regular_benchmark, dictionary, metric_names
 
 
 def get_sed_words_advanced_models_and_metrics() \
         -> Tuple[Callable[[str], bool], Dict[Tuple[int, str], List[Tuple[str, str]]], Set[str]]:
-    return lambda _: True, {
+    return functools.partial(_regular_benchmark, with_neuspell=False), {
         (0, "models_advanced"): [
             (r"tokenization repair\textsuperscript{+}", "tokenization_repair_plus_sed"),
             (r"tokenization repair\rlap{\textsuperscript{+}}\textsubscript{\tiny fixed}",
@@ -270,15 +272,17 @@ def get_sed_words_advanced_models_and_metrics() \
     }, {"binary_f1", "sequence_accuracy", "word_accuracy"}
 
 
-def _regular_sec_benchmark(s: str) -> bool:
-    groups = {"neuspell", "bookcorpus", "wikidump"}
+def _regular_benchmark(s: str, with_neuspell: bool = True) -> bool:
+    groups = {"bookcorpus", "wikidump"}
+    if with_neuspell:
+        groups.add("neuspell")
     group = s.split("/")[-2]
     return group in groups
 
 
 def get_sec_models_and_metrics() -> Tuple[
     Callable[[str], bool], Dict[Tuple[int, str], List[Tuple[str, str]]], Set[str]]:
-    return _regular_sec_benchmark, {
+    return _regular_benchmark, {
         (0, "baselines"): [
             ("do nothing", "baseline_dummy"),
             ("close to dictionary", "baseline_ctd"),
@@ -293,9 +297,8 @@ def get_sec_models_and_metrics() -> Tuple[
         ],
         (2, "models"): [
             ("transformer", "transformer_sec_nmt"),
-            (r"transformer\textsubscript{\tiny beam}", "transformer_sec_nmt_beam"),
-            (r"transformer\textsubscript{\tiny beam}_no_neuspell_no_bea", "transformer_sec_nmt_beam_no_neuspell_no_bea"),
             ("transformer_no_neuspell_no_bea", "transformer_sec_nmt_no_neuspell_no_bea"),
+            (r"transformer\rlap{\textsuperscript{+}}\textsubscript{\tiny finetuned}", "transformer_sec_nmt_finetuned"),
             ("transformer word", "transformer_sec_words_nmt"),
             ("transformer word_no_neuspell_no_bea", "transformer_sec_words_nmt_no_neuspell_no_bea")
         ]
@@ -304,7 +307,7 @@ def get_sec_models_and_metrics() -> Tuple[
 
 def get_sec_advanced_models_and_metrics() \
         -> Tuple[Callable[[str], bool], Dict[Tuple[int, str], List[Tuple[str, str]]], Set[str]]:
-    return _regular_sec_benchmark, {
+    return _regular_benchmark, {
         (0, "baselines"): [
             ("do nothing", "baseline_dummy")
         ],
@@ -315,6 +318,9 @@ def get_sec_advanced_models_and_metrics() \
         ],
         (2, "models"): [
             (r"gnn\textsuperscript{+} $\rightarrow$ transformer", "gnn_cliques_wfc_plus_transformer_sec_nmt"),
+            (r"gnn\rlap{\textsuperscript{+}}\textsubscript{\tiny finetuned} "
+             r"$\rightarrow$ transformer\textsubscript{\tiny finetuned}",
+             "gnn_cliques_wfc_plus_transformer_sec_nmt_finetuned"),
             (r"gnn\textsuperscript{+} $\rightarrow$ transformer_no_neuspell_no_bea",
              "gnn_cliques_wfc_plus_transformer_sec_nmt_no_neuspell_no_bea"),
             (r"gnn\textsuperscript{+} $\rightarrow$ transformer word",

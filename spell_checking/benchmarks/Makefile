@@ -31,7 +31,7 @@ evaluate_sed_sequence:
 
 .PHONY: evaluate_sed_words
 evaluate_sed_words:
-	@rm -f $(SPLIT)/sed_words_tables/results.json
+	@#rm -f $(SPLIT)/sed_words_tables/results.json
 	@python scripts/evaluate_thesis.py \
 	--benchmark-dir $(SPLIT)/sed_words \
 	--benchmark-type sed_words \
@@ -41,7 +41,7 @@ evaluate_sed_words:
 
 	@glow -w 150 $(SPLIT)/sed_words_tables/*.md
 
-	@rm -f $(SPLIT)/sed_words_advanced_tables/results.json
+	@#rm -f $(SPLIT)/sed_words_advanced_tables/results.json
 	@python scripts/evaluate_thesis.py \
 	--benchmark-dir $(SPLIT)/sed_words \
 	--benchmark-type sed_words_advanced \
@@ -79,13 +79,13 @@ evaluate_sec:
 
 	@glow -w 150 $(SPLIT)/sec_whitespace_tables/*.md
 
-	@python scripts/evaluate_thesis.py \
-	--benchmark-dir $(SPLIT)/sec \
-	--benchmark-type sec_spell_checking \
-	--result-dir $(SPLIT)/sec/results \
-	--save-dir $(SPLIT)/sec_spell_checking_tables
-
-	@glow -w 150 $(SPLIT)/sec_spell_checking_tables/*.md
+#	@python scripts/evaluate_thesis.py \
+#	--benchmark-dir $(SPLIT)/sec \
+#	--benchmark-type sec_spell_checking \
+#	--result-dir $(SPLIT)/sec/results \
+#	--save-dir $(SPLIT)/sec_spell_checking_tables
+#
+#	@glow -w 150 $(SPLIT)/sec_spell_checking_tables/*.md
 
 	cd ../../../latex && pdflatex -synctex=1 -interaction=batchmode thesis_main.tex
 

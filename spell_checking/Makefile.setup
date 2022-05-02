@@ -49,8 +49,7 @@ setup_datasets:
 	python scripts/prepare_wikidump.py
 	@echo "Setting up Bookcorpus"
 	python scripts/prepare_bookcorpus.py
-	@echo "Setting up Arxiv"
-	python scripts/prepare_arxiv.py
+	@echo "Setting up Neuspell"
 
 .PHONY: setup_misspellings
 setup_misspellings:

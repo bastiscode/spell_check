@@ -1,0 +1,19 @@
+data:
+  - ${oc.env:NSC_DATA_DIR}/cleaned/neuspell/*.jsonl
+
+output_dir: ${oc.env:NSC_DATA_DIR}/processed/neuspell_sed_sequence
+seed: 22
+limit: ${oc.env:NSC_LIMIT,100000000}
+
+max_length: 512
+tokenizer: ${from_file:tokenizer/bpe_no_prefix_space.yaml}
+preprocessing:
+  type: SWITCH
+  cfgs:
+    - type: CHAINED # this branch overwrites target with original sequence to get a sequence-sequence pair (no misspellings)
+      cfgs:
+        - type: NONE
+      overwrites:
+        - true
+    - type: NONE # this branch keeps the original neuspell sequence-target pair (with misspellings)
+  probabilities: [0.5, 0.5]
