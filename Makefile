@@ -24,7 +24,6 @@ run_docker_cpu:
 docs:
 	@echo "Building docs"
 	@cp README.rst sphinx_docs/readme.rst
-	@cp REPRODUCE.rst sphinx_docs/reproduce.rst
 	@sphinx-apidoc -M -f -o sphinx_docs nsc nsc/train.py nsc/version.py nsc/preprocess.py nsc/scripts nsc/utils \
 	nsc/tasks nsc/data nsc/models nsc/modules nsc/api
 	@make -C sphinx_docs singlehtml

@@ -298,7 +298,7 @@ def get_sec_models_and_metrics() -> Tuple[
         (2, "models"): [
             ("transformer", "transformer_sec_nmt"),
             ("transformer_no_neuspell_no_bea", "transformer_sec_nmt_no_neuspell_no_bea"),
-            (r"transformer\rlap{\textsuperscript{+}}\textsubscript{\tiny finetuned}", "transformer_sec_nmt_finetuned"),
+            (r"transformer\textsubscript{\tiny finetuned}", "transformer_sec_nmt_finetuned"),
             ("transformer word", "transformer_sec_words_nmt"),
             ("transformer word_no_neuspell_no_bea", "transformer_sec_words_nmt_no_neuspell_no_bea")
         ]
