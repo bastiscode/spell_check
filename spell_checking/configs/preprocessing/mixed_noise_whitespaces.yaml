@@ -6,6 +6,3 @@ cfgs:
     full_whitespace_p: 0.1
     insert_whitespace_p: 0.1
     delete_whitespace_p: 0.5
-overwrites:
-  - false
-  - false

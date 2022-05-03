@@ -107,7 +107,8 @@ def evaluate(
             results[name] = (mned,)
 
         elif name == "correction_f1":
-            results[name] = metrics.correction_f1_prec_rec(corrupted, predictions, groundtruths)
+            f1_prec_rec, avg_f1_prec_rec = metrics.correction_f1_prec_rec(corrupted, predictions, groundtruths)
+            results[name] = (*f1_prec_rec, *avg_f1_prec_rec)
 
         elif name == "bleu":
             from nltk.translate.bleu_score import corpus_bleu
@@ -136,7 +137,7 @@ _METRIC_TO_NUM_COLS = {
     "binary_f1": 3,
     "word_accuracy": 3,
     "mean_normalized_edit_distance": 2,
-    "correction_f1": 3,
+    "correction_f1": 6,
     "bleu": 1
 }
 
@@ -171,8 +172,6 @@ def get_metric_fmt_fn(metric_name: str, **metric_kwargs: Any) -> Callable[[Any],
                 f"\\footnotesize {100 * rw_detections / rw_total:.1f}{mark_bea}",
                 f"\\footnotesize {100 * nw_detections / nw_total:.1f}{mark_bea}"
             ]
-            # f"$\\frac{{{rw_detections:,}}}{{{rw_total:,}}}$",
-            # f"$\\frac{{{nw_detections:,}}}{{{nw_total:,}}}$"]
 
         return _fmt_word_acc
 
@@ -187,10 +186,24 @@ def get_metric_fmt_fn(metric_name: str, **metric_kwargs: Any) -> Callable[[Any],
         return _fmt_mned
 
     elif metric_name == "correction_f1":
-        def _fmt_correction_f1(f1: float, prec: float, rec: float, mark_bea: str = "", **fmt_kwargs: Any) -> List[str]:
-            return [f"{100 * f1:.2f}{mark_bea}",
-                    f"\\footnotesize {100 * prec:.2f}{mark_bea}",
-                    f"\\footnotesize {100 * rec:.2f}{mark_bea}"]
+        def _fmt_correction_f1(
+                f1: float,
+                prec: float,
+                rec: float,
+                f1_avg: float,
+                prec_avg: float,
+                rec_avg: float,
+                mark_bea: str = "",
+                **fmt_kwargs: Any
+        ) -> List[str]:
+            return [
+                f"{100 * f1:.2f}{mark_bea}",
+                f"\\footnotesize {100 * prec:.2f}{mark_bea}",
+                f"\\footnotesize {100 * rec:.2f}{mark_bea}",
+                f"{100 * f1_avg:.2f}{mark_bea}",
+                f"\\footnotesize {100 * prec_avg:.2f}{mark_bea}",
+                f"\\footnotesize {100 * rec_avg:.2f}{mark_bea}"
+            ]
 
         return _fmt_correction_f1
 
@@ -243,13 +256,20 @@ def get_sed_models_and_metrics(is_sed_words: bool) \
             ("transformer_no_neuspell_no_bea", "transformer_no_feat_no_neuspell_no_bea"),
             ("gnn", "gnn_no_feat"),
             ("gnn_no_neuspell_no_bea", "gnn_no_feat_no_neuspell_no_bea"),
+            ("gnn from words", "gnn_no_feat_from_words"),
+            ("gnn from words_no_neuspell_no_bea", "gnn_no_feat_from_words_no_neuspell_no_bea"),
         ],
         (3, "models+"): [
             (r"transformer\textsuperscript{+}", "transformer"),
             (r"transformer\textsuperscript{+}_no_neuspell_no_bea", "transformer_no_neuspell_no_bea"),
             (r"gnn\textsuperscript{+}", "gnn_cliques_wfc"),
+            (r"gnn\textsuperscript{+}_no_neuspell_no_bea", "gnn_cliques_wfc_no_neuspell_no_bea"),
             (r"gnn\rlap{\textsuperscript{+}}\textsubscript{\tiny finetuned}", "gnn_cliques_wfc_finetuned"),
-            (r"gnn\textsuperscript{+}_no_neuspell_no_bea", "gnn_cliques_wfc_no_neuspell_no_bea")
+            (r"gnn\textsuperscript{+} from words", "gnn_cliques_wfc_from_words"),
+            (r"gnn\textsuperscript{+} from words_no_neuspell_no_bea", "gnn_cliques_wfc_from_words_no_neuspell_no_bea"),
+            (r"transformer\textsuperscript{+} from words", "transformer_from_words"),
+            (r"transformer\textsuperscript{+} from words_no_neuspell_no_bea",
+             "transformer_from_words_no_neuspell_no_bea"),
         ]
     }
     metric_names = {"binary_f1"}
@@ -300,7 +320,8 @@ def get_sec_models_and_metrics() -> Tuple[
             ("transformer_no_neuspell_no_bea", "transformer_sec_nmt_no_neuspell_no_bea"),
             (r"transformer\textsubscript{\tiny finetuned}", "transformer_sec_nmt_finetuned"),
             ("transformer word", "transformer_sec_words_nmt"),
-            ("transformer word_no_neuspell_no_bea", "transformer_sec_words_nmt_no_neuspell_no_bea")
+            ("transformer word_no_neuspell_no_bea", "transformer_sec_words_nmt_no_neuspell_no_bea"),
+            (r"transformer word\textsubscript{\tiny finetuned}", "transformer_sec_words_nmt_finetuned"),
         ]
     }, {"mean_normalized_edit_distance", "correction_f1", "bleu"}
 
@@ -318,9 +339,6 @@ def get_sec_advanced_models_and_metrics() \
         ],
         (2, "models"): [
             (r"gnn\textsuperscript{+} $\rightarrow$ transformer", "gnn_cliques_wfc_plus_transformer_sec_nmt"),
-            (r"gnn\rlap{\textsuperscript{+}}\textsubscript{\tiny finetuned} "
-             r"$\rightarrow$ transformer\textsubscript{\tiny finetuned}",
-             "gnn_cliques_wfc_plus_transformer_sec_nmt_finetuned"),
             (r"gnn\textsuperscript{+} $\rightarrow$ transformer_no_neuspell_no_bea",
              "gnn_cliques_wfc_plus_transformer_sec_nmt_no_neuspell_no_bea"),
             (r"gnn\textsuperscript{+} $\rightarrow$ transformer word",
@@ -328,9 +346,9 @@ def get_sec_advanced_models_and_metrics() \
             (r"gnn\textsuperscript{+} $\rightarrow$ transformer word_no_neuspell_no_bea",
              "gnn_cliques_wfc_plus_transformer_sec_words_nmt_no_neuspell_no_bea")
         ],
-        (3, "models_advanced"): [
-            (r"tokenization repair\textsuperscript{++}", "tokenization_repair_plus_sec")
-        ]
+        # (3, "models_advanced"): [
+        #     (r"tokenization repair\textsuperscript{++}", "tokenization_repair_plus_sec")
+        # ]
     }, {"mean_normalized_edit_distance", "correction_f1", "bleu"}
 
 
@@ -590,10 +608,21 @@ if __name__ == "__main__":
                 additional_headers[0] += [r"\tiny Accuracy", r"\tiny Real word", r"\tiny Non word"]
                 _, _, rw_total, _, nw_total = scores
                 additional_headers[1] += ["", f"\\tiny {{{rw_total:,}}}", f"\\tiny {{{nw_total:,}}}"]
-            elif metric_name in {"correction_f1", "binary_f1"}:
+            elif metric_name == "binary_f1":
                 if not len(additional_headers):
                     additional_headers += [[""]]
                 additional_headers[0] += [r"\tiny F\textsubscript{1}", r"\tiny Precision", r"\tiny Recall"]
+            elif metric_name == "correction_f1":
+                if not len(additional_headers):
+                    additional_headers += [[""]]
+                additional_headers[0] += [
+                    r"\tiny F\textsubscript{1}",
+                    r"\tiny Precision",
+                    r"\tiny Recall",
+                    r"\tiny F\textsubscript{1}",
+                    r"\tiny $\overline{\text{Precision}}$",
+                    r"\tiny $\overline{\text{Recall}}$"
+                ]
 
         for header in additional_headers:
             formatted_headers.append(header)

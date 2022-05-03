@@ -175,7 +175,7 @@ def correction_f1_prec_rec(
         input_sequences: List[str],
         predicted_sequences: List[str],
         target_sequences: List[str]
-) -> Tuple[float, float, float]:
+) -> Tuple[Tuple[float, float, float], Tuple[float, float, float]]:
     check_same_length(input_sequences, predicted_sequences, target_sequences)
 
     _, misspelled = get_edited_words(input_sequences, target_sequences)
@@ -183,6 +183,9 @@ def correction_f1_prec_rec(
     matching_in_pred, restored = match_words(predicted_sequences, target_sequences)
     correct = group_words(input_sequences, predicted_sequences, matching_in_pred)
 
+    f1s = []
+    precs = []
+    recs = []
     tp = fp = fn = 0
     for mis, res, cha, cor in zip(misspelled, restored, changed, correct):
         tp_indices = mis.intersection(res)
@@ -192,7 +195,20 @@ def correction_f1_prec_rec(
         fp += len(fp_indices)
         fn += len(fn_indices)
 
-    return _tp_fp_fn_to_f1_prec_rec(tp, fp, fn)
+        # if the input sequence has no errors, and we did not predict any false positives, value this as correct
+        # (f1 should be 1 and not 0)
+        if len(mis) == 0 and len(cha) == 0:
+            f1, prec, rec = (1., 1., 1.)
+        else:
+            f1, prec, rec = _tp_fp_fn_to_f1_prec_rec(len(tp_indices), len(fp_indices), len(fn_indices))
+        f1s.append(f1)
+        precs.append(prec)
+        recs.append(rec)
+
+    return (
+        _tp_fp_fn_to_f1_prec_rec(tp, fp, fn),
+        (float(np.mean(f1s)), float(np.mean(precs)), float(np.mean(recs)))
+    )
 
 
 def is_real_word(word: str, dictionary: Dict[str, int]) -> bool:

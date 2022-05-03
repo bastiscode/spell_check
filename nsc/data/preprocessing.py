@@ -337,6 +337,7 @@ class Preprocessings(enum.IntEnum):
     NONE = 7
     SUBSTRING = 8
     SAVE = 9
+    REPLACE = 10
 
 
 @dataclass
@@ -543,17 +544,13 @@ class ChainedConfig(PreprocessingConfig):
     type: Preprocessings = Preprocessings.CHAINED
 
     cfgs: List[PreprocessingConfig] = MISSING
-    overwrites: List[bool] = MISSING
 
 
 class Chained(Preprocessing):
     def __init__(self, cfg: PreprocessingConfig, seed: int) -> None:
         super().__init__(cfg, seed)
         self.cfg: ChainedConfig
-        assert len(self.cfg.cfgs) == len(self.cfg.overwrites), \
-            "expected same number of noise configs and overwrite flags"
         self.preprocessing = [get_preprocessing_from_config(cfg, seed) for cfg in self.cfg.cfgs]
-        self.overwrites = self.cfg.overwrites
 
     def apply(
             self,
@@ -561,10 +558,8 @@ class Chained(Preprocessing):
             target_sequences: List[str],
             infos: List[Dict[str, Any]]
     ) -> Tuple[List[str], List[str], List[Dict[str, Any]]]:
-        for overwrite, preprocessing in zip(self.overwrites, self.preprocessing):
+        for preprocessing in self.preprocessing:
             sequences, target_sequences, infos = preprocessing.apply(sequences, target_sequences, infos)
-            if overwrite:
-                target_sequences = sequences
         return sequences, target_sequences, infos
 
 
@@ -724,6 +719,36 @@ class Substring(Preprocessing):
 
 
 @dataclass
+class ReplaceConfig(PreprocessingConfig):
+    type: Preprocessings = Preprocessings.REPLACE
+
+    replace: str = MISSING
+
+
+class Replace(Preprocessing):
+    def __init__(self, cfg: ReplaceConfig, seed: int) -> None:
+        super().__init__(cfg, seed)
+        self.cfg: ReplaceConfig
+        assert self.cfg.replace in {"target_with_input", "input_with_target"}, \
+            f"replace must be one of {{target_with_input, input_with_target}}, but got {self.cfg.replace}"
+
+    def apply(
+            self,
+            sequences: List[str],
+            target_sequences: List[str],
+            infos: List[Dict[str, Any]]
+    ) -> Tuple[List[str], List[str], List[Dict[str, Any]]]:
+        self.cfg: ReplaceConfig
+
+        if self.cfg.replace == "input_with_target":
+            sequences = target_sequences
+        else:
+            target_sequences = sequences
+
+        return sequences, target_sequences, infos
+
+
+@dataclass
 class NoneConfig(PreprocessingConfig):
     type: Preprocessings = Preprocessings.NONE
 
@@ -767,6 +792,9 @@ def get_preprocessing_from_config(cfg: Union[PreprocessingConfig, omegaconf.Dict
     elif preprocessing_type == Preprocessings.SAVE:
         cfg = OmegaConf.structured(SaveConfig(**cfg))
         return Save(cfg, seed)
+    elif preprocessing_type == Preprocessings.REPLACE:
+        cfg = OmegaConf.structured(ReplaceConfig(**cfg))
+        return Replace(cfg, seed)
     else:
         raise ValueError(f"Unknown noise {cfg.type.name}")
 

@@ -33,6 +33,7 @@ declare -A benchmark_to_exec=(
 
 exp_regex=${EXP_REGEX:-"*"}
 benchmark_regex=${BENCHMARK_REGEX:-"*"}
+overwrite=${OVERWRITE:-"false"}
 
 for experiment in $experiments_dir/*/*
 do
@@ -78,7 +79,7 @@ do
       out_dir=$benchmark_dir/$benchmark/results/$out_dir_rel
       out_file=$out_dir/${model_name}.txt
 
-      if [[ -f $out_file ]]; then
+      if [[ -f $out_file && $overwrite != "true" ]]; then
         echo "output file $out_file already exists, skipping"
         continue
       fi

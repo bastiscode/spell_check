@@ -55,13 +55,13 @@ evaluate_sed_words:
 
 .PHONY: evaluate_sec
 evaluate_sec:
-	@python scripts/evaluate_thesis.py \
-	--benchmark-dir $(SPLIT)/sec \
-	--benchmark-type sec \
-	--result-dir $(SPLIT)/sec/results \
-	--save-dir $(SPLIT)/sec_tables
-
-	@glow -w 150 $(SPLIT)/sec_tables/*.md
+#	@python scripts/evaluate_thesis.py \
+#	--benchmark-dir $(SPLIT)/sec \
+#	--benchmark-type sec \
+#	--result-dir $(SPLIT)/sec/results \
+#	--save-dir $(SPLIT)/sec_tables
+#
+#	@glow -w 150 $(SPLIT)/sec_tables/*.md
 
 	@python scripts/evaluate_thesis.py \
 	--benchmark-dir $(SPLIT)/sec \
@@ -71,13 +71,13 @@ evaluate_sec:
 
 	@glow -w 150 $(SPLIT)/sec_advanced_tables/*.md
 
-	@python scripts/evaluate_thesis.py \
-	--benchmark-dir $(SPLIT)/sec \
-	--benchmark-type sec_whitespace \
-	--result-dir $(SPLIT)/sec/results \
-	--save-dir $(SPLIT)/sec_whitespace_tables
-
-	@glow -w 150 $(SPLIT)/sec_whitespace_tables/*.md
+#	@python scripts/evaluate_thesis.py \
+#	--benchmark-dir $(SPLIT)/sec \
+#	--benchmark-type sec_whitespace \
+#	--result-dir $(SPLIT)/sec/results \
+#	--save-dir $(SPLIT)/sec_whitespace_tables
+#
+#	@glow -w 150 $(SPLIT)/sec_whitespace_tables/*.md
 
 #	@python scripts/evaluate_thesis.py \
 #	--benchmark-dir $(SPLIT)/sec \

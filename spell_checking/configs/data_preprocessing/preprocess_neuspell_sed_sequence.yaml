@@ -10,10 +10,7 @@ tokenizer: ${from_file:tokenizer/bpe_no_prefix_space.yaml}
 preprocessing:
   type: SWITCH
   cfgs:
-    - type: CHAINED # this branch overwrites target with original sequence to get a sequence-sequence pair (no misspellings)
-      cfgs:
-        - type: NONE
-      overwrites:
-        - true
+    - type: REPLACE # this branch overwrites original sequence with target sequence to get a target-target pair (no misspellings)
+      replace: input_with_target
     - type: NONE # this branch keeps the original neuspell sequence-target pair (with misspellings)
   probabilities: [0.5, 0.5]

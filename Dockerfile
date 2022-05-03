@@ -11,7 +11,7 @@ COPY setup.py .
 COPY requirements.txt .
 COPY Makefile .
 COPY README.rst .
-COPY REPRODUCE.rst .
+COPY sphinx_docs .
 
 RUN make install
 
