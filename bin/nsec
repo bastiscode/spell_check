@@ -14,7 +14,8 @@ import nsc
 from nsc import SpellingErrorCorrector, get_available_spelling_error_correction_models, GreedySearch, SampleSearch, \
     BeamSearch, BestFirstSearch, SpellingCorrectionScore
 from nsc.api.utils import load_text_file, generate_report, save_text_file
-from nsc.utils import common
+from nsc.modules import inference
+from nsc.utils import common, edit
 from nsc.tasks import utils as task_utils
 
 
@@ -201,6 +202,13 @@ def parse_args() -> argparse.Namespace:
         default=0.05,
         help="Set the spelling error detection threshold when using a tokenization repair plus model"
     )
+    parser.add_argument(
+        "--convert-output",
+        choices=["word_detections", "sequence_detections"],
+        default=None,
+        help="Convert the output of spelling error correction to word level or sequence level spelling error "
+             "detections."
+    )
     return parser.parse_args()
 
 
@@ -214,6 +222,28 @@ def process_input(line: str, sed_in: bool) -> Tuple[str, Optional[List[int]]]:
         return line.strip(), [int(det) for det in detection.split()]
     else:
         return line, None
+
+
+def format_output(correction: str, sequence: str, convert_output: Optional[str]) -> str:
+    return format_output_batch([correction], [sequence], convert_output)[0]
+
+
+def format_output_batch(corrections: List[str], sequences: List[str], convert_outputs: Optional[str]) -> List[str]:
+    if convert_outputs is None:
+        return corrections
+    elif convert_outputs == "word_detections":
+        outputs = []
+        edited_in_sequences, _ = edit.get_edited_words(sequences, corrections)
+        for sequence, edited in zip(sequences, edited_in_sequences):
+            outputs.append(inference.inference_output_to_str(
+                [int(i in edited) for i in range(len(sequence.split()))]
+            ))
+        return outputs
+    elif convert_outputs == "sequence_detections":
+        return [inference.inference_output_to_str(int(correction != sequence))
+                for correction, sequence in zip(corrections, sequences)]
+    else:
+        raise RuntimeError("should not happen")
 
 
 def run(args: argparse.Namespace) -> None:
@@ -269,8 +299,12 @@ def run(args: argparse.Namespace) -> None:
     num_bytes = -1
     if args.correct is not None:
         line, detection = process_input(args.correct, args.sed_in)
-        print(corrector.correct_text(
-            line, detection, search=search, score=score, sort_by_length=False, **corrector_kwargs
+        print(format_output(
+            corrector.correct_text(
+                line, detection, search=search, score=score, sort_by_length=False, **corrector_kwargs
+            ),
+            line,
+            args.convert_output
         ))
 
     elif args.file is not None:
@@ -303,6 +337,8 @@ def run(args: argparse.Namespace) -> None:
             **corrector_kwargs
         )
 
+        corrections = format_output_batch(corrections, inputs, args.convert_output)
+
         if args.out_path is None:
             for correction in corrections:
                 print(correction)
@@ -314,9 +350,11 @@ def run(args: argparse.Namespace) -> None:
             try:
                 line = input()
                 line, detection = process_input(line, False)
-                print(corrector.correct_text(
-                    line, detection, search=search, score=score, sort_by_length=False, **corrector_kwargs
-                ))
+                print(format_output(
+                    corrector.correct_text(
+                        line, detection, search=search, score=score, sort_by_length=False, **corrector_kwargs
+                    ), line, args.convert_output)
+                )
             except KeyboardInterrupt:
                 return
     else:
@@ -327,7 +365,7 @@ def run(args: argparse.Namespace) -> None:
             if args.pipe:
                 for line in sys.stdin:
                     line, detection = process_input(line, args.sed_in)
-                    print(
+                    print(format_output(
                         corrector.correct_text(
                             inputs=line,
                             detections=detection,
@@ -335,8 +373,10 @@ def run(args: argparse.Namespace) -> None:
                             score=score,
                             sort_by_length=False,
                             **corrector_kwargs
-                        )
-                    )
+                        ),
+                        line,
+                        args.convert_output
+                    ))
             else:
                 inputs = []
                 detections = []
@@ -349,16 +389,20 @@ def run(args: argparse.Namespace) -> None:
 
                 num_sequences = len(inputs)
 
-                for corrected_line in corrector.correct_text(
-                        inputs=inputs,
-                        detections=detections if args.sed_in else None,
-                        search=search,
-                        score=score,
-                        batch_size=args.batch_size,
-                        batch_max_length_factor=args.batch_max_length_factor,
-                        sort_by_length=not args.unsorted,
-                        show_progress=args.progress,
-                        **corrector_kwargs
+                for corrected_line in format_output_batch(
+                        corrector.correct_text(
+                            inputs=inputs,
+                            detections=detections if args.sed_in else None,
+                            search=search,
+                            score=score,
+                            batch_size=args.batch_size,
+                            batch_max_length_factor=args.batch_max_length_factor,
+                            sort_by_length=not args.unsorted,
+                            show_progress=args.progress,
+                            **corrector_kwargs
+                        ),
+                        inputs,
+                        args.convert_output
                 ):
                     print(corrected_line)
 

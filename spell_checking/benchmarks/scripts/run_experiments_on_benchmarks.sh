@@ -17,11 +17,11 @@ overwrite=${OVERWRITE:-false}
 
 declare -A experiment_to_benchmark=(
   ["TOKENIZATION_REPAIR"]="tokenization_repair"
-  ["TOKENIZATION_REPAIR_PLUS"]="tokenization_repair sed_words sec"
-  ["SED_WORDS"]="sed_words"
+  ["TOKENIZATION_REPAIR_PLUS"]="tokenization_repair sed_words sec sed_sequence"
+  ["SED_WORDS"]="sed_words sed_sequence"
   ["SED_SEQUENCE"]="sed_sequence"
-  ["SEC_NMT"]="sec"
-  ["SEC_WORDS_NMT"]="sec"
+  ["SEC_NMT"]="sec sed_words sed_sequence"
+  ["SEC_WORDS_NMT"]="sec sed_words sed_sequence"
 )
 
 declare -A benchmark_to_exec=(

@@ -136,8 +136,11 @@ class _APIBase:
             inputs = load_text_file(inputs)
 
         inputs = [clean_sequence(ipt, fix_all_uppercase=True) for ipt in inputs]
+        num_inputs = len(inputs)
+        invalid_inputs = set(i for i in range(num_inputs) if inputs[i] == "")
+        inputs = [ipt for i, ipt in enumerate(inputs) if i not in invalid_inputs]
 
-        num_workers = 0 if len(inputs) <= 16 else min(4, len(os.sched_getaffinity(0)))
+        num_workers = 0 if len(inputs) <= 16 else len(os.sched_getaffinity(0)) - 1
         dataset, loader = get_inference_dataset_and_loader(
             sequences=inputs,
             task=self.task,
@@ -189,9 +192,20 @@ class _APIBase:
 
         pbar.close()
         all_outputs = reorder_data(all_outputs, dataset.indices)
-        return self.task.postprocess_inference_outputs(
+        all_outputs = self.task.postprocess_inference_outputs(
             inputs, dataset.sample_infos, all_outputs, **inference_kwargs
         )
+        # recombine with invalid/empty inputs
+        all_outputs_with_invalid = []
+        output_idx = 0
+        for i in range(num_inputs):
+            if i in invalid_inputs:
+                all_outputs_with_invalid.append(None)
+            else:
+                all_outputs_with_invalid.append(all_outputs[output_idx])
+                output_idx += 1
+        assert output_idx == len(all_outputs)
+        return all_outputs_with_invalid
 
     def set_precision(self, precision: str) -> None:
         """

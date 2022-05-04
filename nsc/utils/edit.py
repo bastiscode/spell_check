@@ -33,7 +33,8 @@ def batch_edit_operations(
         b_list: List[str],
         with_swap: bool = False,
         spaces_insert_delete_only: bool = False,
-        batch_size: int = 256
+        batch_size: int = 256,
+        show_progress: bool = False
 ) -> List[List[Tuple[str, int, int]]]:
     """
     For each a, b pair in a_list, b_list returns the edit operations transforming a into b,
@@ -48,11 +49,14 @@ def batch_edit_operations(
         with_swap: allow swap/transposition operations
         spaces_insert_delete_only: make sure that spaces can only be inserted or deleted
         batch_size: number of strings per batch
+        show_progress: display a progress bar
 
     Returns: list of lists of edit operations
 
     """
-    return edit_distance_rs.batch_edit_operations(a_list, b_list, with_swap, spaces_insert_delete_only, batch_size)
+    return edit_distance_rs.batch_edit_operations(
+        a_list, b_list, with_swap, spaces_insert_delete_only, batch_size, show_progress
+    )
 
 
 def edit_distance(
@@ -82,7 +86,8 @@ def batch_edit_distance(
         b_list: List[str],
         with_swap: bool = False,
         spaces_insert_delete_only: bool = False,
-        batch_size: int = 256
+        batch_size: int = 256,
+        show_progress: bool = False
 ) -> List[int]:
     """
     For each a, b pair in a_list, b_list calculates the minimum number of edit operations required to turn a into b.
@@ -94,19 +99,27 @@ def batch_edit_distance(
         with_swap: allow swap/transposition operations
         spaces_insert_delete_only: make sure that spaces can only be inserted or deleted
         batch_size: number of strings per batch
+        show_progress: display a progress bar
 
     Returns: edit distance
 
     """
-    return edit_distance_rs.batch_edit_distance(a_list, b_list, with_swap, spaces_insert_delete_only, batch_size)
+    return edit_distance_rs.batch_edit_distance(
+        a_list, b_list, with_swap, spaces_insert_delete_only, batch_size, show_progress
+    )
 
 
 def match_words(a: str, b: str) -> List[Tuple[int, int]]:
     return edit_distance_rs.match_words(a, b)
 
 
-def batch_match_words(a_list: List[str], b_list: List[str], batch_size: int = 256) -> List[List[Tuple[int, int]]]:
-    return edit_distance_rs.batch_match_words(a_list, b_list, batch_size)
+def batch_match_words(
+        a_list: List[str],
+        b_list: List[str],
+        batch_size: int = 256,
+        show_progress: bool = False
+) -> List[List[Tuple[int, int]]]:
+    return edit_distance_rs.batch_match_words(a_list, b_list, batch_size, show_progress)
 
 
 def find_word_boundaries(s: str) -> List[Tuple[int, int]]:

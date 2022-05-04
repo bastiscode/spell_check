@@ -1,4 +1,3 @@
-import os
 import pprint
 from typing import List, Optional, Union, Any, Dict, Tuple
 
@@ -162,7 +161,7 @@ class SpellingErrorDetector(_APIBase):
     @property
     def task_name(self) -> str:
         return (
-            "sed_sequence" if self.task.variant_cfg.type == DatasetVariants.SED_SEQUENCE
+            "sed_sequence" if self.task.variant.cfg.type == DatasetVariants.SED_SEQUENCE
             else "sed_words"
         )
 
@@ -220,10 +219,10 @@ class SpellingErrorDetector(_APIBase):
         if is_tokenization_repair_plus:
             inference_kwargs["output_type"] = "sed"
             inference_kwargs["no_repair"] = kwargs.get("tokenization_repair_plus_no_repair", False)
-            print(inference_kwargs)
 
         if isinstance(inputs, str):
             inputs = load_text_file(inputs)
+
         all_outputs = super()._run_raw(
             inputs=inputs,
             batch_size=batch_size,
@@ -235,9 +234,13 @@ class SpellingErrorDetector(_APIBase):
         )
 
         if is_tokenization_repair_plus:
-            return [output["sed"] for output in all_outputs], [output["tokenization_repair"] for output in all_outputs]
+            return (
+                [output["sed"] if output is not None else [] for output in all_outputs],
+                [output["tokenization_repair"] if output is not None else "" for output in all_outputs]
+            )
         else:
-            return all_outputs, inputs
+            fill_invalid = 0 if self.task_name == "sed_sequence" else []
+            return [output if output is not None else fill_invalid for output in all_outputs], inputs
 
     def detect_text(
             self,

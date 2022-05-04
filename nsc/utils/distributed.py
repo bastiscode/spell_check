@@ -6,11 +6,13 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 
 
 class DistributedDevice:
-    def __init__(self,
-                 rank: int,
-                 local_rank: int,
-                 world_size: int,
-                 local_world_size: int) -> None:
+    def __init__(
+            self,
+            rank: int,
+            local_rank: int,
+            world_size: int,
+            local_world_size: int
+    ) -> None:
         self.rank = rank
         self.local_rank = local_rank
         self.world_size = world_size

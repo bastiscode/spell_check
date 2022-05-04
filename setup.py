@@ -41,6 +41,14 @@ setup(
         "index": [
             "nmslib==2.1.1",
             "marisa-trie==0.7.7"
+        ],
+        "docs": [
+            "sphinx==4.5.0"
+        ],
+        "test": [
+            "pycodestyle==2.8.0",
+            "pytest==6.2.5",
+            "pytest-xdist==2.5.0"
         ]
     }
 )

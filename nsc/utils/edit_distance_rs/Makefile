@@ -1,6 +1,6 @@
 .PHONY: setup
 setup:
-	@pip install maturin
+	@pip install maturin==0.12.12
 
 .PHONY: install
 install:

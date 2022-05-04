@@ -25,7 +25,6 @@ from nsc.modules import inference
 from nsc.tasks import graph_sec_nmt, graph_sec_words_nmt, sec_nmt, sec_words_nmt, tokenization_repair_plus
 from nsc.utils import common
 
-
 Detections = Union[List[int], List[List[int]]]
 
 
@@ -197,6 +196,7 @@ class SpellingErrorCorrector(_APIBase):
     Class to run spelling error correction models.
 
     """
+
     def __init__(
             self,
             model_dir: str,
@@ -297,6 +297,15 @@ class SpellingErrorCorrector(_APIBase):
             inputs = load_text_file(inputs)
 
         inputs = [clean_sequence(ipt) for ipt in inputs]
+        num_inputs = len(inputs)
+        invalid_inputs = set(i for i in range(num_inputs) if inputs[i] == "")
+        inputs = [inputs[i] for i in range(num_inputs) if i not in invalid_inputs]
+        if detections is not None:
+            detections = [detections[i] for i in range(num_inputs) if i not in invalid_inputs]
+            assert (
+                    len(detections) == len(inputs)
+                    and all(len(det) == len(ipt.split()) for det, ipt in zip(detections, inputs))
+            ), "expected one detection for every word in every input sequence"
 
         assert score.mode == "log_likelihood", \
             "for spelling correction only the log_likelihood scoring mode is supported for now"
@@ -323,10 +332,6 @@ class SpellingErrorCorrector(_APIBase):
 
         if detections is not None:
             # prepare detections based on inference infos from inference dataset
-            assert (
-                    len(detections) == len(inputs)
-                    and all(len(det) == len(ipt.split()) for det, ipt in zip(detections, inputs))
-            ), "expected one detection for every word in every input sequence"
             new_detections = []
             input_idx = -1
             for info in dataset.sample_infos:
@@ -345,8 +350,6 @@ class SpellingErrorCorrector(_APIBase):
 
             assert input_idx == len(inputs) - 1
             detections = new_detections
-        else:
-            detections = None
 
         pbar = tqdm(
             loader,
@@ -398,7 +401,17 @@ class SpellingErrorCorrector(_APIBase):
         )
         if is_tokenization_repair_plus:
             all_outputs = [output["sec"] for output in all_outputs]
-        return [inference.inference_output_to_str(output) for output in all_outputs]
+
+        all_outputs_with_invalid = []
+        output_idx = 0
+        for i in range(num_inputs):
+            if i in invalid_inputs:
+                all_outputs_with_invalid.append("")
+            else:
+                all_outputs_with_invalid.append(inference.inference_output_to_str(all_outputs[output_idx]))
+                output_idx += 1
+        assert output_idx == len(all_outputs)
+        return all_outputs_with_invalid
 
     def correct_text(
             self,

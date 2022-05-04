@@ -2,7 +2,7 @@ extern crate core;
 
 use pyo3::prelude::*;
 use rayon::prelude::*;
-use indicatif::{ProgressBar, ParallelProgressIterator, ProgressStyle};
+use indicatif::{ProgressBar, ParallelProgressIterator, ProgressStyle, ProgressDrawTarget};
 
 #[derive(Copy, Clone, Debug)]
 enum EditOp {
@@ -224,6 +224,7 @@ fn batch_edit_distance(
     with_swap: bool,
     spaces_insert_delete_only: bool,
     batch_size: usize,
+    show_progress: bool
 ) -> PyResult<Vec<usize>> {
     assert_eq!(a_list.len(), b_list.len());
     let pb = ProgressBar::new(
@@ -233,6 +234,9 @@ fn batch_edit_distance(
             "{msg}: {wide_bar} [{pos}/{len}] [{elapsed_precise}|{eta_precise}]"
         ).unwrap()
         ).with_message("calculating edit distances");
+    if !show_progress {
+        pb.set_draw_target(ProgressDrawTarget::hidden());
+    }
     let edit_distances = a_list
         .par_chunks(batch_size)
         .zip(b_list.par_chunks(batch_size))
@@ -264,6 +268,7 @@ fn batch_edit_operations(
     with_swap: bool,
     spaces_insert_delete_only: bool,
     batch_size: usize,
+    show_progress: bool
 ) -> PyResult<Vec<Vec<(String, usize, usize)>>> {
     assert_eq!(a_list.len(), b_list.len());
     let pb = ProgressBar::new(
@@ -273,6 +278,9 @@ fn batch_edit_operations(
             "{msg}: {wide_bar} [{pos}/{len}] [{elapsed_precise}|{eta_precise}]"
         ).unwrap()
         ).with_message("calculating edit operations");
+    if !show_progress {
+        pb.set_draw_target(ProgressDrawTarget::hidden());
+    }
     let edit_operations = a_list
         .par_chunks(batch_size)
         .zip(b_list.par_chunks(batch_size))
@@ -300,6 +308,7 @@ fn batch_match_words(
     a_list: Vec<String>,
     b_list: Vec<String>,
     batch_size: usize,
+    show_progress: bool
 ) -> PyResult<Vec<Vec<(usize, usize)>>> {
     assert_eq!(a_list.len(), b_list.len());
     let pb = ProgressBar::new(
@@ -309,6 +318,9 @@ fn batch_match_words(
             "{msg}: {wide_bar} [{pos}/{len}] [{elapsed_precise}|{eta_precise}]"
         ).unwrap()
         ).with_message("matching words");
+    if !show_progress {
+        pb.set_draw_target(ProgressDrawTarget::hidden());
+    }
     let word_matchings = a_list
         .par_chunks(batch_size)
         .zip(b_list.par_chunks(batch_size))

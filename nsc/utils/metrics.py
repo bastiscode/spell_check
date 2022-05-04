@@ -1,12 +1,16 @@
 import string
 from typing import Tuple, List, Any, Dict, Set
 
-import ftfy
 import numpy as np
 
 from nsc.data import utils
-from spell_checking.utils.edit import batch_edit_distance, batch_edit_operations, batch_match_words, \
-    find_word_boundaries, get_edited_words
+from nsc.utils.edit import (
+    batch_edit_distance,
+    batch_edit_operations,
+    batch_match_words,
+    find_word_boundaries,
+    get_edited_words
+)
 
 
 def check_same_length(*args: Any) -> None:
@@ -211,6 +215,9 @@ def correction_f1_prec_rec(
     )
 
 
+_PUNCTUATION_SET = set(string.punctuation)
+
+
 def is_real_word(word: str, dictionary: Dict[str, int]) -> bool:
     corrupt_word_split = utils.tokenize_words_regex(word)[0]
-    return all(c in dictionary or c in string.punctuation for c in corrupt_word_split)
+    return all(w in dictionary or all(c in _PUNCTUATION_SET for c in w) for w in corrupt_word_split)

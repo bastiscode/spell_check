@@ -1,7 +1,6 @@
 import collections
 from typing import Any, Tuple, Dict, Union, List
 
-import dgl
 import torch
 from torch.utils import tensorboard
 

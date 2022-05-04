@@ -1,9 +1,9 @@
 .PHONY: install
 install:
 	@echo "Installing nsc library and other relevant software"
-	@pip install .[train,index] -f https://data.dgl.ai/wheels/repo.html
+	@bash nsc/scripts/setup_rust_extensions.sh
+	@pip install .[train,index,docs,test] -f https://data.dgl.ai/wheels/repo.html
 	@python -m spacy download en_core_web_lg
-	@pip install -r requirements.txt
 
 .PHONY: build_docker
 build_docker:

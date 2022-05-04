@@ -156,9 +156,9 @@ class TokenizationRepairer(_APIBase):
         )
 
         if is_tokenization_repair_plus:
-            return [output["tokenization_repair"] for output in all_outputs]
+            return [output["tokenization_repair"] if output is not None else "" for output in all_outputs]
         else:
-            return all_outputs
+            return [output if output is not None else "" for output in all_outputs]
 
     def repair_text(
             self,

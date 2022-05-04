@@ -1,4 +1,4 @@
-import os.path
+import os
 from dataclasses import dataclass
 from typing import Optional, Any, Dict, List, Set
 
