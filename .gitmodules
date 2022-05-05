@@ -1,3 +1,6 @@
 [submodule "third_party/gector"]
 	path = third_party/gector
 	url = https://github.com/bastiscode/gector.git
+[submodule "third_party/gpt3"]
+	path = third_party/gpt3
+	url = https://github.com/bastiscode/openai-quickstart-python.git
