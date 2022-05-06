@@ -13,8 +13,7 @@ from tqdm import tqdm
 
 from nsc.data import utils
 from nsc.utils import common, io
-
-from spell_checking.utils.edit import edit_distance
+from nsc.utils.edit import edit_distance
 
 HUNSPELL = hunspell.HunSpell("/usr/share/hunspell/en_US.dic", "/usr/share/hunspell/en_US.aff")
 

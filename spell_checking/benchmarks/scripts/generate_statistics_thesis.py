@@ -11,9 +11,8 @@ from nsc.api import tables
 from nsc.api.utils import load_text_file, save_text_file
 from nsc.data import utils
 from nsc.utils import io, common
-
-from spell_checking.utils.metrics import is_real_word
-from spell_checking.utils.edit import edit_distance
+from nsc.utils.metrics import is_real_word
+from nsc.utils.edit import edit_distance
 
 
 def parse_args() -> argparse.Namespace:
@@ -47,7 +46,9 @@ def generate_statistics(args: argparse.Namespace) -> None:
     benchmark_groups = {}
     for benchmark in benchmarks:
         group, split = benchmark.split("/")[-2:]
-        if group not in {"wikidump", "bookcorpus", "neuspell"}:
+        if group not in {"wikidump", "bookcorpus", "neuspell"} or (
+                args.benchmark_type == "sed_sequence" and split in {"bea322", "bea4660"}
+        ):
             continue
         if group not in benchmark_groups:
             benchmark_groups[group] = []
@@ -70,6 +71,7 @@ def generate_statistics(args: argparse.Namespace) -> None:
                 correct_sequences = load_text_file(correct_sequences_file)
             else:
                 correct_sequences = [None] * len(corrupt_lines)
+
             assert len(correct_lines) == len(corrupt_lines) == len(correct_sequences)
 
             num_sequences = len(corrupt_lines)
@@ -137,14 +139,12 @@ def generate_statistics(args: argparse.Namespace) -> None:
 
     groups = sorted(statistics)
     headers = [
-        ["Benchmark", "Number of", "Number of", "Average",
-         "Total word", "Word error", "Real word", "Non-word"],
-        ["", "sequences", "words", "sequence length", "errors", "rate", "errors", "errors"]
+        ["Benchmark", r"\#Sequences", r"\#Words", r"$\overline{\text{Sequence length}}$",
+         "Word errors", "Real word errors", "Non word errors"]
     ]
     is_sed_sequence = args.benchmark_type == "sed_sequence"
     if is_sed_sequence:
-        headers[0].extend(["Sequences with", "Sequence error"])
-        headers[1].extend(["errors", "rate"])
+        headers[0].extend(["Sequence errors"])
 
     num_samples = 5
     rand = random.Random(24)
@@ -168,14 +168,14 @@ def generate_statistics(args: argparse.Namespace) -> None:
 
             data.append([
                 f"{group} {split}", f"{num_seq:,}", f"{num_words:,}", f"{avg_seq_length:.1f} chars",
-                f"{total_err:,}", f"{error_percentage: >4.1f}%",
+                f"{total_err:,} ({error_percentage: >4.1f}%)",
                 f"{rw_err:,} ({real_word_percentage: >4.1f}%)", f"{nw_err:,} ({non_word_percentage: >4.1f}%)",
             ])
 
             if is_sed_sequence:
                 sequences_with_errors = additional[0]
                 sequence_error_percentage = 100 * sequences_with_errors / num_seq
-                data[-1].extend([f"{sequences_with_errors:,}", f"{sequence_error_percentage: >4.1f}%"])
+                data[-1].extend([f"{sequences_with_errors:,} ({sequence_error_percentage:.1f}%)"])
 
             sample_headers[0].append(group)
             sample_headers[1].append(split)
@@ -202,18 +202,18 @@ def generate_statistics(args: argparse.Namespace) -> None:
         fmt=args.fmt
     )
 
-    sample_table = tables.generate_table(
-        headers=sample_headers,
-        data=sample_data,
-        horizontal_lines=([False] * (num_samples - 1) + [True]) * 2,
-        fmt=args.fmt
-    )
+    # sample_table = tables.generate_table(
+    #     headers=sample_headers,
+    #     data=sample_data,
+    #     horizontal_lines=([False] * (num_samples - 1) + [True]) * 2,
+    #     fmt=args.fmt
+    # )
 
     logger.info(f"Output table:\n{table}")
-    logger.info(f"Output sample table:\n{sample_table}")
+    # logger.info(f"Output sample table:\n{sample_table}")
 
     save_text_file(os.path.join(args.out_dir, "statistics.tex"), [table])
-    save_text_file(os.path.join(args.out_dir, "samples.tex"), [sample_table])
+    # save_text_file(os.path.join(args.out_dir, "samples.tex"), [sample_table])
 
 
 if __name__ == "__main__":

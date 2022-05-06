@@ -412,32 +412,35 @@ class BucketSampler(Sampler):
             verbose: bool = True
     ) -> None:
         super().__init__(None)
+        assert batch_max_value >= max_value, \
+            f"batch max value {batch_max_value} cannot be smaller than max value {max_value}"
         self.logger = common.get_logger("BUCKET_SAMPLER")
         self.dataset = dataset
         self.values = values
+        self.avg_value = sum(values) / len(values)
         self.batch_max_value = batch_max_value
         self.seed = seed
         self.shuffle = shuffle
         self.bucket_span = bucket_span
         self.max_value = max_value
-        self.batches = []
-        self.rand = random.Random(seed)
+        self.verbose = verbose
 
-        if bucket_span is None:
-            self._build_batches()
+        self.batches = None
+        self.epoch = None
+        self.set_epoch(0)
+
+    def _build_batches(self) -> List[List[int]]:
+        if self.bucket_span is None:
+            batches = self._build_batches_without_buckets()
         else:
-            self._build_batch_buckets()
+            batches = self._build_batches_with_buckets()
+        return batches
 
-        if (verbose and (not dist.is_initialized() or (dist.is_initialized() and dist.get_rank() == 0))):
-            self.logger.info(
-                f"Generated {len(self.batches)} batches with {sum(len(b) for b in self.batches)} items in total "
-                f"(batch_max_value={self.batch_max_value}, bucket_span={self.bucket_span}, max_value={self.max_value})"
-            )
-
-    def _build_batches(self) -> None:
+    def _build_batches_without_buckets(self) -> List[List[int]]:
+        rand = random.Random(self.epoch + self.seed)
         indices = list(range(len(self.dataset)))
         if self.shuffle:
-            self.rand.shuffle(indices)
+            rand.shuffle(indices)
         batches = []
         running_sum = 0
         batch = []
@@ -451,10 +454,9 @@ class BucketSampler(Sampler):
             running_sum += value
         if len(batch) > 0:
             batches.append(batch)
+        return batches
 
-        self.batches = batches
-
-    def _build_batch_buckets(self) -> None:
+    def _build_batches_with_buckets(self) -> List[List[int]]:
         num_buckets = self.max_value // self.bucket_span + 1
         bucket_max_lengths = [min((bucket_idx + 1) * self.bucket_span - 1, self.max_value)
                               for bucket_idx in range(num_buckets)]
@@ -462,9 +464,10 @@ class BucketSampler(Sampler):
                                     for bucket_idx in range(num_buckets)]
         batch_buckets = [[] for _ in range(num_buckets)]
 
+        rand = random.Random(self.epoch + self.seed)
         indices = list(range(len(self.dataset)))
         if self.shuffle:
-            self.rand.shuffle(indices)
+            rand.shuffle(indices)
 
         for idx in indices:
             value = self.values[idx]
@@ -480,16 +483,24 @@ class BucketSampler(Sampler):
 
         batches = [batch for bucket in batch_buckets for batch in bucket if len(batch) > 0]
         if self.shuffle:
-            self.rand.shuffle(batches)
-
-        self.batches = batches
+            rand.shuffle(batches)
+        return batches
 
     def __iter__(self) -> Iterator:
-        for b in self.batches:
-            yield b
+        return iter(self.batches)
 
     def __len__(self) -> int:
         return len(self.batches)
+
+    def set_epoch(self, epoch: int) -> None:
+        if self.batches is None or (epoch != self.epoch and self.shuffle):
+            self.epoch = epoch
+            self.batches = self._build_batches()
+            self.logger.info(
+                f"Epoch was set: {epoch}\n"
+                f"Generated {len(self.batches)} batches with {sum(len(b) for b in self.batches)} items in total "
+                f"(batch_max_value={self.batch_max_value}, bucket_span={self.bucket_span}, max_value={self.max_value})"
+            )
 
 
 def get_word_whitespace_groups(

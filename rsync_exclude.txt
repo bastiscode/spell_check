@@ -11,13 +11,13 @@
 /experiments
 /third_party
 /tensorboard
-/accelerate_config.json
 .*cache
 .idea
 .git
 __pycache__**
 cc.en.*
 
+/nsc/utils/edit_distance_rs/target
 /spell_checking/baselines
 /spell_checking/configs/configs.zip
 /spell_checking/benchmarks/test*

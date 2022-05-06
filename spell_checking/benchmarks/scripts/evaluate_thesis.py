@@ -1,16 +1,13 @@
 import argparse
-import functools
 import json
 import os
 from typing import Dict, Tuple, List, Set, Optional, Callable, Any
 
 from tqdm import tqdm
 
-from nsc.api.utils import tables, save_text_file
+from nsc.api.utils import tables, save_text_file, load_text_file
 from nsc.data.utils import clean_sequence
-from nsc.utils import common, io
-
-from spell_checking.utils import metrics
+from nsc.utils import common, io, metrics
 
 
 def parse_args():
@@ -21,12 +18,13 @@ def parse_args():
         "--benchmark-type",
         choices=[
             "sed_sequence",
+            "sed_sequence_neuspell",
             "sed_words",
-            "sed_words_advanced",
+            "sed_words_neuspell",
             "sec",
-            "sec_advanced",
+            "sec_neuspell",
             "sec_whitespace",
-            "sec_spell_checking",
+            "sec_spelling_correction",
             "tokenization_repair"
         ],
         required=True
@@ -45,19 +43,36 @@ def evaluate(
         groundtruth_file: str,
         predicted_file: str,
         corrupted_file: str,
+        benchmark_group: str,
+        benchmark_split: str,
         metric_names: Set[str],
-        dictionary: Optional[Dict[str, int]] = None
+        dictionary: Optional[Dict[str, int]] = None,
+        lowercase_file: Optional[str] = None
 ) -> Dict[str, Tuple[Any, ...]]:
     groundtruths = []
     predictions = []
     corrupted = []
+    if lowercase_file is not None:
+        lowercase = load_text_file(lowercase_file)
+    else:
+        lowercase = None
     with open(groundtruth_file, "r", encoding="utf8") as gtf, \
             open(predicted_file, "r", encoding="utf8") as pf, \
             open(corrupted_file, "r", encoding="utf8") as cf:
-        for gt, p, c in zip(gtf, pf, cf):
+        for i, (gt, p, c) in enumerate(zip(gtf, pf, cf)):
             groundtruths.append(clean_sequence(gt))
-            predictions.append(clean_sequence(p))
             corrupted.append(clean_sequence(c))
+            # bea322 and bea4660 are both lowercase only benchmarks, so convert the model predictions
+            # into lowercase before evaluation
+            if benchmark_group == "neuspell" and benchmark_split in {"bea322", "bea4660"}:
+                p = p.lower()
+            # spelling correction neuspell is a combination of all neuspell benchmarks, so for line from bea322 and
+            # bea4660 turn the model predictions into lowercase (we know which lines are from bea322 and bea4660 using
+            # lowercase file)
+            elif benchmark_group == "spelling_correction" and benchmark_split == "neuspell":
+                assert lowercase is not None
+                p = p.lower() if lowercase[i] == "1" else p
+            predictions.append(clean_sequence(p))
 
     assert len(predictions) == len(groundtruths) == len(corrupted)
 
@@ -137,7 +152,7 @@ _METRIC_TO_NUM_COLS = {
     "binary_f1": 3,
     "word_accuracy": 3,
     "mean_normalized_edit_distance": 2,
-    "correction_f1": 6,
+    "correction_f1": 3,
     "bleu": 1
 }
 
@@ -200,9 +215,9 @@ def get_metric_fmt_fn(metric_name: str, **metric_kwargs: Any) -> Callable[[Any],
                 f"{100 * f1:.2f}{mark_bea}",
                 f"\\footnotesize {100 * prec:.2f}{mark_bea}",
                 f"\\footnotesize {100 * rec:.2f}{mark_bea}",
-                f"{100 * f1_avg:.2f}{mark_bea}",
-                f"\\footnotesize {100 * prec_avg:.2f}{mark_bea}",
-                f"\\footnotesize {100 * rec_avg:.2f}{mark_bea}"
+                # f"{100 * f1_avg:.2f}{mark_bea}",
+                # f"\\footnotesize {100 * prec_avg:.2f}{mark_bea}",
+                # f"\\footnotesize {100 * rec_avg:.2f}{mark_bea}"
             ]
 
         return _fmt_correction_f1
@@ -236,120 +251,14 @@ def get_tokenization_repair_models_and_metrics() \
     return lambda _: True, dictionary, metric_names
 
 
-def get_sed_models_and_metrics(is_sed_words: bool) \
-        -> Tuple[Callable[[str], bool], Dict[Tuple[int, str], List[Tuple[str, str]]], Set[str]]:
-    dictionary = {
-        (0, "baselines"): [
-            ("do nothing", "baseline_dummy"),
-            ("out of dictionary", "baseline_ood"),
-            ("aspell", "baseline_aspell"),
-            ("jamspell", "baseline_jamspell"),
-            ("languagetool", "baseline_languagetool")
-        ],
-        (1, "baselines"): [
-            ("gector bert", "gector_bert"),
-            ("gector xlnet", "gector_xlnet"),
-            ("neuspell bert", "baseline_neuspell_bert")
-        ],
-        (2, "models"): [
-            ("transformer", "transformer_no_feat"),
-            ("transformer_no_neuspell_no_bea", "transformer_no_feat_no_neuspell_no_bea"),
-            ("gnn", "gnn_no_feat"),
-            ("gnn_no_neuspell_no_bea", "gnn_no_feat_no_neuspell_no_bea"),
-            ("gnn from words", "gnn_no_feat_from_words"),
-            ("gnn from words_no_neuspell_no_bea", "gnn_no_feat_from_words_no_neuspell_no_bea"),
-        ],
-        (3, "models+"): [
-            (r"transformer\textsuperscript{+}", "transformer"),
-            (r"transformer\textsuperscript{+}_no_neuspell_no_bea", "transformer_no_neuspell_no_bea"),
-            (r"gnn\textsuperscript{+}", "gnn_cliques_wfc"),
-            (r"gnn\textsuperscript{+}_no_neuspell_no_bea", "gnn_cliques_wfc_no_neuspell_no_bea"),
-            (r"gnn\rlap{\textsuperscript{+}}\textsubscript{\tiny finetuned}", "gnn_cliques_wfc_finetuned"),
-            (r"gnn\textsuperscript{+} from words", "gnn_cliques_wfc_from_words"),
-            (r"gnn\textsuperscript{+} from words_no_neuspell_no_bea", "gnn_cliques_wfc_from_words_no_neuspell_no_bea"),
-            (r"transformer\textsuperscript{+} from words", "transformer_from_words"),
-            (r"transformer\textsuperscript{+} from words_no_neuspell_no_bea",
-             "transformer_from_words_no_neuspell_no_bea"),
-        ]
+def _regular_benchmark(s: str) -> bool:
+    benchmarks = {
+        "wikidump/realistic",
+        "wikidump/artificial",
+        "bookcorpus/realistic",
+        "bookcorpus/artificial"
     }
-    metric_names = {"binary_f1"}
-    if is_sed_words:
-        metric_names.add("word_accuracy")
-    else:
-        metric_names.add("sequence_accuracy")
-    return _regular_benchmark, dictionary, metric_names
-
-
-def get_sed_words_advanced_models_and_metrics() \
-        -> Tuple[Callable[[str], bool], Dict[Tuple[int, str], List[Tuple[str, str]]], Set[str]]:
-    return functools.partial(_regular_benchmark, with_neuspell=False), {
-        (0, "models_advanced"): [
-            (r"tokenization repair\textsuperscript{+}", "tokenization_repair_plus_sed"),
-            (r"tokenization repair\rlap{\textsuperscript{+}}\textsubscript{\tiny fixed}",
-             "tokenization_repair_plus_fixed"),
-            (r"tokenization repair\textsuperscript{++}", "tokenization_repair_plus_sec")
-        ]
-    }, {"binary_f1", "sequence_accuracy", "word_accuracy"}
-
-
-def _regular_benchmark(s: str, with_neuspell: bool = True) -> bool:
-    groups = {"bookcorpus", "wikidump"}
-    if with_neuspell:
-        groups.add("neuspell")
-    group = s.split("/")[-2]
-    return group in groups
-
-
-def get_sec_models_and_metrics() -> Tuple[
-    Callable[[str], bool], Dict[Tuple[int, str], List[Tuple[str, str]]], Set[str]]:
-    return _regular_benchmark, {
-        (0, "baselines"): [
-            ("do nothing", "baseline_dummy"),
-            ("close to dictionary", "baseline_ctd"),
-            ("aspell", "baseline_aspell"),
-            ("jamspell", "baseline_jamspell"),
-            ("languagetool", "baseline_languagetool")
-        ],
-        (1, "baselines"): [
-            ("gector bert", "gector_bert"),
-            ("gector xlnet", "gector_xlnet"),
-            ("neuspell bert", "baseline_neuspell_bert")
-        ],
-        (2, "models"): [
-            ("transformer", "transformer_sec_nmt"),
-            ("transformer_no_neuspell_no_bea", "transformer_sec_nmt_no_neuspell_no_bea"),
-            (r"transformer\textsubscript{\tiny finetuned}", "transformer_sec_nmt_finetuned"),
-            ("transformer word", "transformer_sec_words_nmt"),
-            ("transformer word_no_neuspell_no_bea", "transformer_sec_words_nmt_no_neuspell_no_bea"),
-            (r"transformer word\textsubscript{\tiny finetuned}", "transformer_sec_words_nmt_finetuned"),
-        ]
-    }, {"mean_normalized_edit_distance", "correction_f1", "bleu"}
-
-
-def get_sec_advanced_models_and_metrics() \
-        -> Tuple[Callable[[str], bool], Dict[Tuple[int, str], List[Tuple[str, str]]], Set[str]]:
-    return _regular_benchmark, {
-        (0, "baselines"): [
-            ("do nothing", "baseline_dummy")
-        ],
-        (1, "baselines"): [
-            (r"gnn\textsuperscript{+} $\rightarrow$ neuspell bert", "gnn_cliques_wfc_plus_baseline_neuspell_bert"),
-            (r"gnn\textsuperscript{+} $\rightarrow$ neuspell bert_no_neuspell_no_bea",
-             "gnn_cliques_wfc_plus_baseline_neuspell_bert_no_neuspell_no_bea")
-        ],
-        (2, "models"): [
-            (r"gnn\textsuperscript{+} $\rightarrow$ transformer", "gnn_cliques_wfc_plus_transformer_sec_nmt"),
-            (r"gnn\textsuperscript{+} $\rightarrow$ transformer_no_neuspell_no_bea",
-             "gnn_cliques_wfc_plus_transformer_sec_nmt_no_neuspell_no_bea"),
-            (r"gnn\textsuperscript{+} $\rightarrow$ transformer word",
-             "gnn_cliques_wfc_plus_transformer_sec_words_nmt"),
-            (r"gnn\textsuperscript{+} $\rightarrow$ transformer word_no_neuspell_no_bea",
-             "gnn_cliques_wfc_plus_transformer_sec_words_nmt_no_neuspell_no_bea")
-        ],
-        # (3, "models_advanced"): [
-        #     (r"tokenization repair\textsuperscript{++}", "tokenization_repair_plus_sec")
-        # ]
-    }, {"mean_normalized_edit_distance", "correction_f1", "bleu"}
+    return "/".join(s.split("/")[-2:]) in benchmarks
 
 
 def get_sec_whitespace_models_and_metrics() \
@@ -371,24 +280,114 @@ def get_sec_whitespace_models_and_metrics() \
             (r"tokenization repair\rlap{\textsuperscript{+}}\textsubscript{\tiny fixed} $\rightarrow$ transformer word",
              "tr_plus_fixed_plus_words_nmt")
         ]
-    }, {"mean_normalized_edit_distance", "correction_f1", "bleu"}
+    }, {"mean_normalized_edit_distance", "correction_f1"}  # , "bleu"}
 
 
-def get_sec_spell_checking_models_and_metrics() \
+def get_sed_models_and_metrics(is_neuspell: bool, is_sed_words: bool) \
         -> Tuple[Callable[[str], bool], Dict[Tuple[int, str], List[Tuple[str, str]]], Set[str]]:
-    return lambda s: s.split("/")[-2] == "spell_checking", {
+    models = {
         (0, "baselines"): [
-            ("do nothing", "baseline_dummy")
+            ("do nothing", "baseline_dummy"),
+            ("out of dictionary", "baseline_ood"),
+            ("aspell", "baseline_aspell"),
+            ("jamspell", "baseline_jamspell"),
+            ("languagetool", "baseline_languagetool")
         ],
-        (1, "default"): [
+        (1, "baselines"): [
+            ("gector bert", "gector_bert"),
+            ("gector xlnet", "gector_xlnet"),
+            ("neuspell bert", "baseline_neuspell_bert")
+        ],
+        (2, "default"): [
+            ("transformer", "transformer_no_feat"),
+            ("gnn", "gnn_no_feat"),
+            (r"transformer\textsuperscript{+}", "transformer"),
+            (r"gnn\textsuperscript{+}", "gnn_cliques_wfc"),
+        ]
+    }
+    metric_names = {"binary_f1"}
+    if is_sed_words:
+        metric_names.add("word_accuracy")
+    else:
+        metric_names.add("sequence_accuracy")
+
+    if is_neuspell:
+        b_fn = lambda s: "/".join(s.split("/")[-2:]) in {"neuspell/bea60k", "neuspell/jfleg"}
+    else:
+        b_fn = _regular_benchmark
+        models[(3, "advanced")] = [
+            (r"tokenization repair\textsuperscript{+}", "tokenization_repair_plus_sed"),
+            (r"tokenization repair\rlap{\textsuperscript{+}}\textsubscript{\tiny fixed}",
+             "tokenization_repair_plus_fixed"),
+            (r"tokenization repair\textsuperscript{++}", "tokenization_repair_plus_sec")
+        ]
+
+    return b_fn, models, metric_names
+
+
+def get_sec_models_and_metrics(
+        is_neuspell: bool
+) -> Tuple[Callable[[str], bool], Dict[Tuple[int, str], List[Tuple[str, str]]], Set[str]]:
+    models = {
+        (0, "baselines"): [
+            ("do nothing", "baseline_dummy"),
+            ("close to dictionary", "baseline_ctd"),
+            ("aspell", "baseline_aspell"),
+            ("jamspell", "baseline_jamspell"),
+            ("languagetool", "baseline_languagetool")
+        ],
+        (1, "baselines"): [
+            ("gector bert", "gector_bert"),
+            ("gector xlnet", "gector_xlnet"),
+            ("neuspell bert", "baseline_neuspell_bert")
+        ],
+        (2, "default"): [
             ("transformer", "transformer_sec_nmt"),
             ("transformer word", "transformer_sec_words_nmt")
         ],
-        (2, "beam"): [
-            (r"transformer\textsubscript{\tiny beam}", "transformer_sec_nmt_beam"),
-            (r"transformer word\textsubscript{\tiny beam}", "transformer_sec_words_nmt_beam")
+        (3, "advanced"): [
+            (r"gnn\textsuperscript{+} $\rightarrow$ neuspell bert", "gnn_cliques_wfc_plus_baseline_neuspell_bert"),
+            (r"gnn\textsuperscript{+} $\rightarrow$ transformer", "gnn_cliques_wfc_plus_transformer_sec_nmt"),
+            (r"gnn\textsuperscript{+} $\rightarrow$ transformer word",
+             "gnn_cliques_wfc_plus_transformer_sec_words_nmt"),
         ]
-    }, {"mean_normalized_edit_distance", "correction_f1", "bleu"}
+    }
+
+    if is_neuspell:
+        b_fn = lambda s: s.split("/")[-2] == "neuspell"
+    else:
+        b_fn = _regular_benchmark
+        models[(4, "tr+")] = [
+            (r"tokenization repair\textsuperscript{+}", "tokenization_repair_plus_sed"),
+            (r"tokenization repair\rlap{\textsuperscript{+}}\textsubscript{\tiny fixed}",
+             "tokenization_repair_plus_fixed"),
+            (r"tokenization repair\textsuperscript{++}", "tokenization_repair_plus_sec")
+        ]
+    return b_fn, models, {"mean_normalized_edit_distance", "correction_f1"}  # , "bleu"}
+
+
+def get_sec_spelling_correction_models_and_metrics(
+) -> Tuple[Callable[[str], bool], Dict[Tuple[int, str], List[Tuple[str, str]]], Set[str]]:
+    models = {
+        (0, "baselines"): [
+            ("do nothing", "baseline_dummy")
+        ],
+        (1, "baselines"): [
+            ("gpt3", "gpt3_davinci_edit")
+        ],
+        (2, "advanced"): [
+            (r"gnn\textsuperscript{+} $\rightarrow$ neuspell bert", "gnn_cliques_wfc_plus_baseline_neuspell_bert"),
+            (r"gnn\textsuperscript{+} $\rightarrow$ transformer", "gnn_cliques_wfc_plus_transformer_sec_nmt"),
+            (r"gnn\textsuperscript{+} $\rightarrow$ transformer word",
+             "gnn_cliques_wfc_plus_transformer_sec_words_nmt"),
+        ]
+    }
+
+    return (
+        lambda s: s.split("/")[-2] == "spelling_correction",
+        models,
+        {"mean_normalized_edit_distance", "correction_f1"}  # , "bleu"}
+    )
 
 
 if __name__ == "__main__":
@@ -403,20 +402,21 @@ if __name__ == "__main__":
     benchmarks = sorted(io.glob_safe(os.path.join(args.benchmark_dir, "*", "*", "corrupt.txt")))
     benchmarks = [os.path.dirname(b) for b in benchmarks]
 
-    if args.benchmark_type in {"sed_words", "sed_sequence"}:
-        filter_fn, models, metric_names = get_sed_models_and_metrics(is_sed_words=args.benchmark_type == "sed_words")
-    elif args.benchmark_type == "sed_words_advanced":
-        filter_fn, models, metric_names = get_sed_words_advanced_models_and_metrics()
-    elif args.benchmark_type == "sec":
-        filter_fn, models, metric_names = get_sec_models_and_metrics()
-    elif args.benchmark_type == "sec_advanced":
-        filter_fn, models, metric_names = get_sec_advanced_models_and_metrics()
+    if args.benchmark_type in {"sed_words", "sed_words_neuspell", "sed_sequence", "sed_sequence_neuspell"}:
+        filter_fn, models, metric_names = get_sed_models_and_metrics(
+            is_neuspell=args.benchmark_type.endswith("neuspell"),
+            is_sed_words=args.benchmark_type.startswith("sed_words")
+        )
+    elif args.benchmark_type in {"sec", "sec_neuspell"}:
+        filter_fn, models, metric_names = get_sec_models_and_metrics(args.benchmark_type.endswith("neuspell"))
     elif args.benchmark_type == "sec_whitespace":
         filter_fn, models, metric_names = get_sec_whitespace_models_and_metrics()
-    elif args.benchmark_type == "sec_spell_checking":
-        filter_fn, models, metric_names = get_sec_spell_checking_models_and_metrics()
-    else:
+    elif args.benchmark_type == "sec_spelling_correction":
+        filter_fn, models, metric_names = get_sec_spelling_correction_models_and_metrics()
+    elif args.benchmark_type == "tokenization_repair":
         filter_fn, models, metric_names = get_tokenization_repair_models_and_metrics()
+    else:
+        raise RuntimeError("should not happen")
 
     benchmarks = list(filter(filter_fn, benchmarks))
     benchmark_groups = [b.split("/")[-2] for b in benchmarks]
@@ -426,7 +426,7 @@ if __name__ == "__main__":
 
     results = {
         metric_name: {
-            model_name: [None for _ in range(len(benchmarks))]
+            model_name: {group + split: None for group, split in zip(benchmark_groups, benchmark_splits)}
             for model_group in model_groups for model_name, _ in models[model_group]
         }
         for metric_name in metric_names
@@ -439,10 +439,13 @@ if __name__ == "__main__":
             for metric_name in results_json:
                 if metric_name not in results:
                     continue
-                for model_name, scores in results_json[metric_name].items():
+                for model_name in results_json[metric_name]:
                     if model_name not in results[metric_name]:
                         continue
-                    results[metric_name][model_name] = scores
+                    for group_split, scores in results_json[metric_name][model_name].items():
+                        if group_split not in results[metric_name][model_name]:
+                            continue
+                        results[metric_name][model_name][group_split] = scores
 
     for model_group in tqdm(model_groups, desc="evaluating model groups", leave=False):
         for model_name, model_file_name in tqdm(
@@ -450,8 +453,8 @@ if __name__ == "__main__":
                 desc=f"evaluating models in group {model_group}",
                 leave=False
         ):
-            for i, (benchmark, benchmark_group, benchmark_split) in tqdm(
-                    enumerate(zip(benchmarks, benchmark_groups, benchmark_splits)),
+            for benchmark, benchmark_group, benchmark_split in tqdm(
+                    zip(benchmarks, benchmark_groups, benchmark_splits),
                     total=len(benchmarks),
                     desc=f"evaluating model {model_name} from group {model_group} on benchmarks",
                     leave=False
@@ -470,18 +473,30 @@ if __name__ == "__main__":
                     if (
                             metric_name in results
                             and model_name in results[metric_name]
-                            and results[metric_name][model_name][i] is not None
+                            and results[metric_name][model_name][benchmark_group + benchmark_split] is not None
                             and not (args.overwrite and metric_name in args.overwrite)
                     ):
                         continue
                     filtered_metrics.add(metric_name)
 
+                if benchmark_group == "spelling_correction" and benchmark_split == "neuspell":
+                    lowercase_file = os.path.join(benchmark, "lowercase.txt")
+                else:
+                    lowercase_file = None
+
                 m = evaluate(
-                    benchmark_gt, model_prediction, benchmark_input, filtered_metrics, dictionary
+                    benchmark_gt,
+                    model_prediction,
+                    benchmark_input,
+                    benchmark_group,
+                    benchmark_split,
+                    filtered_metrics,
+                    dictionary,
+                    lowercase_file=lowercase_file
                 )
 
                 for metric_name, scores in m.items():
-                    results[metric_name][model_name][i] = scores
+                    results[metric_name][model_name][benchmark_group + benchmark_split] = scores
 
             # save intermediate results after each metric, model pair was processed
             results_dir = os.path.dirname(results_file)
@@ -489,14 +504,6 @@ if __name__ == "__main__":
                 os.makedirs(results_dir, exist_ok=True)
             with open(results_file, "w", encoding="utf8") as rf:
                 json.dump(results, rf)
-
-    bea_idx = 0
-    for benchmark in benchmarks:
-        if benchmark.endswith("neuspell/bea60k"):
-            break
-        bea_idx += 1
-    bea_idx = None if bea_idx == len(benchmarks) else bea_idx
-    bea_marks = {}
 
     for metric_name, model_data in results.items():
         if len(model_data) == 0:
@@ -507,17 +514,10 @@ if __name__ == "__main__":
         for model_group in model_groups:
             group_idx, group_name = model_group
             for model_name, _ in models[model_group]:
-                if model_name.endswith("_no_neuspell_no_bea"):
-                    continue
-                scores = model_data[model_name]
-                if bea_idx is not None:
-                    if model_name + "_no_neuspell_no_bea" in model_data:
-                        bea_marks[model_name] = r"\textsuperscript{*}"
-                        scores[bea_idx] = model_data[model_name + "_no_neuspell_no_bea"][bea_idx]
-                    else:
-                        bea_marks[model_name] = r"\textsuperscript{$\dagger$}"
-
-                data_line = [model_name] + model_data[model_name]
+                data_line: List[Any] = [model_name] + [
+                    model_data[model_name][group + split]
+                    for group, split in zip(benchmark_groups, benchmark_splits)
+                ]
                 data.append(data_line)
                 group_names.append(group_name)
 
@@ -525,8 +525,7 @@ if __name__ == "__main__":
 
         horizontal_lines = []
         for model_group in model_groups:
-            horizontal_lines.extend([0] * (sum(not model_name.endswith("_no_neuspell_no_bea")
-                                               for model_name, _ in models[model_group]) - 1) + [1])
+            horizontal_lines.extend([0] * (len(models[model_group]) - 1) + [1])
 
         higher_better = _METRIC_TO_HIGHER_BETTER[metric_name]
         best_scores_per_benchmark = [float("-inf")] * len(data[0])
@@ -555,13 +554,8 @@ if __name__ == "__main__":
 
         is_mned = metric_name == "mean_normalized_edit_distance"
 
-        if args.benchmark_type == "sed_words_advanced":
-            baseline_name = r"tokenization repair\textsuperscript{+}"
-        elif args.benchmark_type == "sec_spell_checking":
-            baseline_name = "transformer"
-        else:
-            baseline_name = "do nothing"
-        assert baseline_name in model_data and all(s is not None for s in model_data[baseline_name])
+        baseline_name = "do nothing"
+        assert baseline_name in model_data and all(v is not None for k, v in model_data[baseline_name].items())
         baseline_scores = model_data[baseline_name]
 
         metric_fmt_fn = get_metric_fmt_fn(metric_name)
@@ -572,15 +566,11 @@ if __name__ == "__main__":
             if is_mned:
                 fmt_kwargs["is_baseline"] = model_name == baseline_name
             formatted_line = [line[0]]
-            for i, scores in enumerate(line[1:]):
+            for scores, group, split in zip(line[1:], benchmark_groups, benchmark_splits):
                 if is_mned:
-                    fmt_kwargs["baseline_scores"] = baseline_scores[i]
+                    fmt_kwargs["baseline_scores"] = baseline_scores[group + split]
                 else:
                     fmt_kwargs.pop("baseline_scores", None)
-                if bea_idx is not None and i == bea_idx and group_name not in {"baselines"}:
-                    fmt_kwargs["mark_bea"] = bea_marks.get(model_name, "")
-                else:
-                    fmt_kwargs.pop("mark_bea", None)
                 if scores is not None:
                     formatted_line.extend(metric_fmt_fn(*scores, **fmt_kwargs))
                 else:
@@ -592,11 +582,12 @@ if __name__ == "__main__":
             formatted_headers.append([""])
 
         additional_headers = []
-        for b_group, b_split, scores in zip(benchmark_groups, benchmark_splits, baseline_scores):
+        for b_group, b_split in zip(benchmark_groups, benchmark_splits):
             formatted_headers[0].extend([b_group] + [""] * (num_cols_for_metric - 1))
             if len(benchmark_groups) > 1:
                 formatted_headers[1].extend([b_split] + [""] * (num_cols_for_metric - 1))
 
+            scores = baseline_scores[b_group + b_split]
             additional_header = []
             if is_mned:
                 if not len(additional_headers):
@@ -619,9 +610,9 @@ if __name__ == "__main__":
                     r"\tiny F\textsubscript{1}",
                     r"\tiny Precision",
                     r"\tiny Recall",
-                    r"\tiny F\textsubscript{1}",
-                    r"\tiny $\overline{\text{Precision}}$",
-                    r"\tiny $\overline{\text{Recall}}$"
+                    # r"\tiny F\textsubscript{1}",
+                    # r"\tiny $\overline{\text{Precision}}$",
+                    # r"\tiny $\overline{\text{Recall}}$"
                 ]
 
         for header in additional_headers:

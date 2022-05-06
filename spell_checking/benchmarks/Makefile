@@ -18,7 +18,7 @@ create_own_benchmarks:
 
 .PHONY: evaluate_sed_sequence
 evaluate_sed_sequence:
-	@rm -f $(SPLIT)/sed_sequence_tables/results.json
+	@#rm -f $(SPLIT)/sed_sequence_tables/results.json
 	@python scripts/evaluate_thesis.py \
 	--benchmark-dir $(SPLIT)/sed_sequence \
 	--benchmark-type sed_sequence \
@@ -26,6 +26,16 @@ evaluate_sed_sequence:
 	--save-dir $(SPLIT)/sed_sequence_tables
 
 	@glow -w 150 $(SPLIT)/sed_sequence_tables/*.md
+
+	@#rm -f $(SPLIT)/sed_sequence_neuspell_tables/results.json
+	@python scripts/evaluate_thesis.py \
+	--benchmark-dir $(SPLIT)/sed_sequence \
+	--benchmark-type sed_sequence_neuspell \
+	--result-dir $(SPLIT)/sed_sequence/results \
+	--save-dir $(SPLIT)/sed_sequence_neuspell_tables \
+	--dictionary ../../data/dictionaries/merged_train_100k.txt
+
+	@glow -w 150 $(SPLIT)/sed_sequence_neuspell_tables/*.md
 
 	cd ../../../latex && pdflatex -synctex=1 -interaction=batchmode thesis_main.tex
 
@@ -41,51 +51,50 @@ evaluate_sed_words:
 
 	@glow -w 150 $(SPLIT)/sed_words_tables/*.md
 
-	@#rm -f $(SPLIT)/sed_words_advanced_tables/results.json
 	@python scripts/evaluate_thesis.py \
 	--benchmark-dir $(SPLIT)/sed_words \
-	--benchmark-type sed_words_advanced \
+	--benchmark-type sed_words_neuspell \
 	--result-dir $(SPLIT)/sed_words/results \
-	--save-dir $(SPLIT)/sed_words_advanced_tables \
+	--save-dir $(SPLIT)/sed_words_neuspell_tables \
 	--dictionary ../../data/dictionaries/merged_train_100k.txt
 
-	@glow -w 150 $(SPLIT)/sed_words_advanced_tables/*.md
+	@glow -w 150 $(SPLIT)/sed_words_neuspell_tables/*.md
 
 	cd ../../../latex && pdflatex -synctex=1 -interaction=batchmode thesis_main.tex
 
 .PHONY: evaluate_sec
 evaluate_sec:
-#	@python scripts/evaluate_thesis.py \
-#	--benchmark-dir $(SPLIT)/sec \
-#	--benchmark-type sec \
-#	--result-dir $(SPLIT)/sec/results \
-#	--save-dir $(SPLIT)/sec_tables
-#
-#	@glow -w 150 $(SPLIT)/sec_tables/*.md
+	@python scripts/evaluate_thesis.py \
+	--benchmark-dir $(SPLIT)/sec \
+	--benchmark-type sec \
+	--result-dir $(SPLIT)/sec/results \
+	--save-dir $(SPLIT)/sec_tables
+
+	@glow -w 150 $(SPLIT)/sec_tables/*.md
 
 	@python scripts/evaluate_thesis.py \
 	--benchmark-dir $(SPLIT)/sec \
-	--benchmark-type sec_advanced \
+	--benchmark-type sec_neuspell \
 	--result-dir $(SPLIT)/sec/results \
-	--save-dir $(SPLIT)/sec_advanced_tables
+	--save-dir $(SPLIT)/sec_neuspell_tables
 
-	@glow -w 150 $(SPLIT)/sec_advanced_tables/*.md
+	@glow -w 150 $(SPLIT)/sec_neuspell_tables/*.md
 
-#	@python scripts/evaluate_thesis.py \
-#	--benchmark-dir $(SPLIT)/sec \
-#	--benchmark-type sec_whitespace \
-#	--result-dir $(SPLIT)/sec/results \
-#	--save-dir $(SPLIT)/sec_whitespace_tables
-#
-#	@glow -w 150 $(SPLIT)/sec_whitespace_tables/*.md
+	@python scripts/evaluate_thesis.py \
+	--benchmark-dir $(SPLIT)/sec \
+	--benchmark-type sec_spelling_correction \
+	--result-dir $(SPLIT)/sec/results \
+	--save-dir $(SPLIT)/sec_spelling_correction_tables
 
-#	@python scripts/evaluate_thesis.py \
-#	--benchmark-dir $(SPLIT)/sec \
-#	--benchmark-type sec_spell_checking \
-#	--result-dir $(SPLIT)/sec/results \
-#	--save-dir $(SPLIT)/sec_spell_checking_tables
-#
-#	@glow -w 150 $(SPLIT)/sec_spell_checking_tables/*.md
+	@glow -w 150 $(SPLIT)/sec_spelling_correction_tables/*.md
+
+	@python scripts/evaluate_thesis.py \
+	--benchmark-dir $(SPLIT)/sec \
+	--benchmark-type sec_whitespace \
+	--result-dir $(SPLIT)/sec/results \
+	--save-dir $(SPLIT)/sec_whitespace_tables
+
+	@glow -w 150 $(SPLIT)/sec_whitespace_tables/*.md
 
 	cd ../../../latex && pdflatex -synctex=1 -interaction=batchmode thesis_main.tex
 

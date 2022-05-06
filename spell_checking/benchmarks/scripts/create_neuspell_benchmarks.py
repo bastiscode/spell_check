@@ -49,13 +49,18 @@ if __name__ == "__main__":
             correct_b = os.path.join(benchmark_dir, "correct.txt")
             corrupt_b = os.path.join(benchmark_dir, "corrupt.txt")
             correct_seq_b = os.path.join(benchmark_dir, "correct.sequences.txt")
+
+            if (
+                    os.path.exists(corrupt_b)
+                    and os.path.exists(correct_b)
+                    and (output_type == "sec" or os.path.exists(correct_seq_b))
+            ):
+                continue
+
             if output_type != "sec":
                 correct_seq_b_file = open(correct_seq_b, "w", encoding="utf8")
             else:
                 correct_seq_b_file = None
-
-            if os.path.exists(corrupt_b) and os.path.exists(correct_b):
-                continue
 
             with open(correct_src, "r", encoding="utf8") as correct_inf, \
                     open(correct_b, "w", encoding="utf8") as correct_of, \

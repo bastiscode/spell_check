@@ -4,11 +4,10 @@ from typing import List, Optional, Any, Dict
 from spacy.tokens import Token
 
 from nsc.data import utils
-from nsc.utils import io
+from nsc.utils import io, edit
 
 from spell_checking import DICTIONARIES_DIR
 from spell_checking.baselines import Baselines, Baseline
-from spell_checking.utils import edit
 
 
 class SEDSequenceOODBaseline(Baseline):
@@ -79,11 +78,10 @@ class SEDWordsOODBaseline(SEDSequenceOODBaseline):
 class SEDWordsFromSECBaseline(SEDSequenceFromSECBaseline):
     def inference(self, sequences: List[str], **kwargs: Dict[str, Any]) -> List[List[int]]:
         corrections = self.sec.inference(sequences)
-        predictions = []
 
         batch_edited_indices, _ = edit.get_edited_words(sequences, corrections)
         sed_predictions = []
         for edited_indices, seq in zip(batch_edited_indices, sequences):
             sed_predictions.append(" ".join(["0" if i not in edited_indices else "1" for i in range(len(seq.split()))]))
 
-        return predictions
+        return sed_predictions

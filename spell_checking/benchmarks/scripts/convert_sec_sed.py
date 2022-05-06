@@ -2,8 +2,7 @@ import argparse
 import os.path
 
 from nsc.api.utils import load_text_file, save_text_file
-
-from spell_checking.utils import edit
+from nsc.utils import edit
 
 
 def parse_args() -> argparse.Namespace:
@@ -11,7 +10,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--prediction-file", type=str, required=True)
     parser.add_argument("--input-file", type=str, required=True)
     parser.add_argument("--out-file", type=str, required=True)
-    parser.add_argument("--convert", choices=["sedw_to_seds", "sec_to_sedw", "sedw_to_seds"], required=True)
+    parser.add_argument("--convert",
+                        choices=["sedw_to_seds", "sec_to_sedw", "sec_to_seds"],
+                        required=True)
     parser.add_argument("--overwrite", action="store_true")
     return parser.parse_args()
 

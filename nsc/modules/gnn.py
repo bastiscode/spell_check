@@ -335,7 +335,8 @@ class MessagePassingLayer(nn.Module):
         if "edge" in edges.data:
             uve_feat.append(edges.data["edge"])
         messages_fn = _cat_and_forward_checkpoint(self.edge_transforms[e_type])
-        messages = cp(messages_fn, *uve_feat)
+        messages = messages_fn(*uve_feat)
+        # messages = cp(messages_fn, *uve_feat)
         # messages = self.edge_transforms[e_type](torch.cat(uve_feat, dim=1))
         if self.message_gating:
             gating_fn = _cat_and_forward_checkpoint(self.gate_transforms[e_type])

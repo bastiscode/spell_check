@@ -159,12 +159,15 @@ def train(args: argparse.Namespace, device: DistributedDevice) -> None:
 
     unused_parameters = task.disable_unused_parameters(model, device)
     # static graph makes sure we can use DDP with parameter sharing and gradient checkpointing,
-    # but we have to make sure that our models do not have any control flow in them (e.g. if statements) that changes
-    # the parameters receiving gradients in each iteration, which is not the case for most of our models
+    # but we have to make sure that our models do not have any control flow or other stuff in them
+    # (e.g. if statements) that changes the parameters receiving gradients in each iteration,
+    # which is not the case for most of our models
     # see: https://github.com/pytorch/pytorch/blob/master/torch/nn/parallel/distributed.py#L1627
+    static_graph = os.getenv("NSC_STATIC_GRAPH", "true") == "true"
     model = DistributedDataParallel(
         model,
-        static_graph=os.getenv("NSC_STATIC_GRAPH", "true") == "true"
+        static_graph=static_graph,
+        find_unused_parameters=not static_graph
     )
 
     train_dataset, val_dataset = nsc.data.get_train_val_datasets(

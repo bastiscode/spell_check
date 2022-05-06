@@ -12,10 +12,10 @@ from spacy.tokens import Doc
 
 from nsc.data import utils, index
 from nsc.utils import io
+from nsc.utils.edit import edit_distance, batch_edit_distance
 
 from spell_checking import DICTIONARIES_DIR, SPELL_CHECK_INDEX_DIR
 from spell_checking.baselines import Baseline
-from spell_checking.utils.edit import edit_distance
 
 
 class SECCTDBaseline(Baseline):
@@ -23,6 +23,8 @@ class SECCTDBaseline(Baseline):
         super().__init__(seed)
         self.dictionary = io.dictionary_from_file(os.path.join(DICTIONARIES_DIR, "merged_train_100k.txt"))
         self.rand = np.random.RandomState(seed)
+
+        self._dictionary_words = list(self.dictionary)
 
     @property
     def name(self) -> str:
@@ -34,9 +36,10 @@ class SECCTDBaseline(Baseline):
     def _closest_words_in_dict(self, word: str) -> List[str]:
         min_ed = float("inf")
 
+        edit_distances = batch_edit_distance([word] * len(self._dictionary_words), self._dictionary_words)
         closest_words: Dict[str, int] = {}
-        for w, freq in self.dictionary.items():
-            edit_dist = edit_distance(w, word)
+        for w, edit_dist in zip(self._dictionary_words, edit_distances):
+            freq = self.dictionary[w]
             if edit_dist < min_ed:
                 closest_words = {w: freq}
                 min_ed = edit_dist
@@ -200,10 +203,10 @@ class SECAspellBaseline(Baseline):
 
 
 class SECNeuspellBaseline(Baseline):
-    def __init__(self, model_name: str, seed: Optional[int] = None):
+    def __init__(self, model_name: str, seed: Optional[int] = None, force_cpu: bool = False):
         super().__init__(seed)
         import neuspell
-        device = "cuda" if torch.cuda.is_available() else "cpu"
+        device = "cuda" if torch.cuda.is_available() and not force_cpu else "cpu"
         if model_name == "bert":
             self.spell_checker = neuspell.BertChecker(
                 pretrained=True,
