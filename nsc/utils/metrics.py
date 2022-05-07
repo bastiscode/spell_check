@@ -4,6 +4,7 @@ from typing import Tuple, List, Any, Dict, Set
 import numpy as np
 
 from nsc.data import utils
+from nsc.utils import tokenization_repair
 from nsc.utils.edit import (
     batch_edit_distance,
     batch_edit_operations,
@@ -213,6 +214,71 @@ def correction_f1_prec_rec(
         _tp_fp_fn_to_f1_prec_rec(tp, fp, fn),
         (float(np.mean(f1s)), float(np.mean(precs)), float(np.mean(recs)))
     )
+
+
+def _insertions_and_deletions(repair_ops: List[int]) -> Set[Tuple[int, int]]:
+    insertions_and_deletions = set()
+    for i, op in enumerate(repair_ops):
+        if op != 0:
+            insertions_and_deletions.add((i, op))
+    return insertions_and_deletions
+
+
+def tok_rep_f1_prec_rec(
+        sequences: List[str],
+        target_sequences: List[str],
+        input_sequences: List[str],
+        mode: str = "insertions_and_deletions"
+) -> Tuple[float, float, float, float, float, float]:
+    assert mode in {"insertions_and_deletions", "insertions", "deletions"}
+    tp = 0
+    fp = 0
+    fn = 0
+
+    f1s = []
+    precs = []
+    recs = []
+
+    for seq, gt, ipt in zip(sequences, target_sequences, input_sequences):
+        gt_ops = tokenization_repair.get_whitespace_operations(ipt, gt)
+        pred_ops = tokenization_repair.get_whitespace_operations(ipt, seq)
+        assert len(gt_ops) == len(pred_ops)
+
+        gt_insertions_and_deletions = _insertions_and_deletions(gt_ops)
+        pred_insertions_and_deletions = _insertions_and_deletions(pred_ops)
+
+        if mode == "insertions":
+            gt_insertions_and_deletions = set(filter(lambda e: e[1] == 1, gt_insertions_and_deletions))
+            pred_insertions_and_deletions = set(filter(lambda e: e[1] == 1, pred_insertions_and_deletions))
+        elif mode == "deletions":
+            gt_insertions_and_deletions = set(filter(lambda e: e[1] == 2, gt_insertions_and_deletions))
+            pred_insertions_and_deletions = set(filter(lambda e: e[1] == 2, pred_insertions_and_deletions))
+
+        tp_ = len(gt_insertions_and_deletions.intersection(pred_insertions_and_deletions))
+        fp_ = len(pred_insertions_and_deletions.difference(gt_insertions_and_deletions))
+        fn_ = len(gt_insertions_and_deletions.difference(pred_insertions_and_deletions))
+
+        tp += tp_
+        fp += fp_
+        fn += fn_
+
+        # if there are no groundtruth operations (tp == fp == fn == 0) and we also did not predict any operations,
+        # we count this as 1
+        if len(gt_insertions_and_deletions) == 0 and len(pred_insertions_and_deletions) == 0:
+            scores = (1, 1, 1)
+        else:
+            scores = _tp_fp_fn_to_f1_prec_rec(tp, fp, fn)
+
+        f1, prec, rec = scores
+        f1s.append(f1)
+        precs.append(prec)
+        recs.append(rec)
+
+    f1_seq, prec_seq, rec_seq = np.mean(f1s) if f1s else 0, np.mean(precs) if precs else 0, np.mean(
+        recs) if recs else 0
+    f1_mic, prec_mic, rec_mic = _tp_fp_fn_to_f1_prec_rec(tp, fp, fn)
+
+    return f1_mic, prec_mic, rec_mic, f1_seq, prec_seq, rec_seq
 
 
 _PUNCTUATION_SET = set(string.punctuation)

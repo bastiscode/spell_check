@@ -441,7 +441,7 @@ def get_device_info(device: torch.device) -> str:
 
 
 def get_cache_dir() -> str:
-    return os.path.join(os.path.dirname(__file__), ".cache")
+    return os.getenv("NSC_CACHE_DIR", os.path.join(os.path.dirname(__file__), ".cache"))
 
 
 def load_experiment_config(

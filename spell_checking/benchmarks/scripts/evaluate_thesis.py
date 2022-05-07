@@ -247,7 +247,7 @@ def get_tokenization_repair_models_and_metrics() \
             (r"tokenization repair\textsuperscript{++}", "tokenization_repair_plus_sec"),
         ]
     }
-    metric_names = {"sequence_accuracy"}
+    metric_names = {"sequence_accuracy", "tok_rep_f1"}
     return lambda _: True, dictionary, metric_names
 
 
@@ -269,8 +269,6 @@ def get_sec_whitespace_models_and_metrics() \
         ],
         (1, "models"): [
             ("transformer with tokenization repair", "transformer_with_tokenization_repair_sec_nmt"),
-            (r"transformer with tokenization repair\textsubscript{\tiny beam}",
-             "transformer_with_tokenization_repair_sec_nmt_beam"),
             (r"tokenization repair\textsuperscript{++}", "tokenization_repair_plus_sec")
         ],
         (2, "models_advanced"): [

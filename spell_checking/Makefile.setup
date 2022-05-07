@@ -45,11 +45,9 @@ download_misspellings:
 
 .PHONY: setup_datasets
 setup_datasets:
-	@echo "Setting up Wikidump"
-	python scripts/prepare_wikidump.py
-	@echo "Setting up Bookcorpus"
-	python scripts/prepare_bookcorpus.py
-	@echo "Setting up Neuspell"
+	python scripts/prepare_wikidump.py --in-dir ../data/raw/wikidump --out-dir ../data/cleaned/wikidump --use-paragraphs
+	python scripts/prepare_bookcorpus.py --in-dir ../data/raw/bookcorpus --out-dir ../data/cleaned/bookcorpus --use-paragraphs
+	python scripts/prepare_neuspell.py --in-dir ../data/raw/neuspell/traintest --out-dir ../data/cleaned/neuspell
 
 .PHONY: setup_misspellings
 setup_misspellings:
@@ -90,25 +88,9 @@ setup_dictionaries:
 	--out-file ../data/dictionaries/bookcorpus_train_100k.txt --top-k 100000 --max-sequences 20000000
 
 	@echo "Creating merged dictionaries"
-	python ../nsc/scripts/merge_dictionaries.py --dictionaries ../data/dictionaries/*_train_100k.txt \
+	python ../nsc/scripts/merge_dictionaries.py \
+	--dictionaries ../data/dictionaries/wikidump_train_100k.txt ../data/dictionaries/bookcorpus_train_100k.txt \
 	--out-file ../data/dictionaries/merged_train_100k.txt --min-freq 0
 
-.PHONY: setup_spell_check_index
-setup_spell_check_index:
-	cd .. && \
-	python nsc/scripts/create_spell_check_index.py \
-	--in-file data/cleaned/wikidump/train_files.txt data/cleaned/bookcorpus/train_files.txt \
-	--context-length 0 \
-	--out-dir data/spell_check_index/ctx_0_ned_string \
-	--dist norm_edit_distance \
-	--vectorizer string \
-	--dictionary-file data/dictionaries/merged_train_100k.txt \
-	--max-files 2000
-
-.PHONY: setup_vectorizer
-setup_vectorizer:
-	@bash scripts/setup_vectorizer.sh
-
 .PHONY: setup_data
-setup_data: setup_datasets setup_tokenizers setup_dictionaries setup_misspellings \
-	setup_vectorizer setup_spell_check_index
+setup_data: setup_datasets setup_tokenizers setup_dictionaries setup_misspellings

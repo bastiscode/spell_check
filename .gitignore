@@ -11,6 +11,7 @@ dist
 .cache
 *.zip
 /sphinx_docs/_build
+.nsc_cache
 
 /experiments
 /data

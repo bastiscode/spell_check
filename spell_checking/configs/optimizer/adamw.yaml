@@ -1,4 +1,4 @@
 type: ADAMW
-lr: ${oc.env:NSC_LR,0.0001}
-weight_decay: ${oc.env:NSC_WEIGHT_DECAY,0.001}
+lr: ${oc.env:NSC_LR}
+weight_decay: ${oc.env:NSC_WEIGHT_DECAY,0.01}
 zero_redundancy: false

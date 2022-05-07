@@ -409,7 +409,7 @@ class BucketSampler(Sampler):
             shuffle: bool = False,
             bucket_span: Optional[int] = None,
             max_value: int = 512,
-            verbose: bool = True
+            verbose: bool = False
     ) -> None:
         super().__init__(None)
         assert batch_max_value >= max_value, \
@@ -496,11 +496,12 @@ class BucketSampler(Sampler):
         if self.batches is None or (epoch != self.epoch and self.shuffle):
             self.epoch = epoch
             self.batches = self._build_batches()
-            self.logger.info(
-                f"Epoch was set: {epoch}\n"
-                f"Generated {len(self.batches)} batches with {sum(len(b) for b in self.batches)} items in total "
-                f"(batch_max_value={self.batch_max_value}, bucket_span={self.bucket_span}, max_value={self.max_value})"
-            )
+            if self.verbose:
+                self.logger.info(
+                    f"Epoch was set: {epoch}\n"
+                    f"Generated {len(self.batches)} batches with {sum(len(b) for b in self.batches)} items in total "
+                    f"(batch_max_value={self.batch_max_value}, bucket_span={self.bucket_span}, max_value={self.max_value})"
+                )
 
 
 def get_word_whitespace_groups(

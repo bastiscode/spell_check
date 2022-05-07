@@ -13,12 +13,12 @@ build_docker:
 .PHONY: run_docker_gpu
 run_docker_gpu:
 	@echo "Running nsc image with GPU support"
-	@docker run -it --gpus all --name nsc_gpu nsc
+	@docker run -v $(shell pwd)/.nsc_cache:/nsc_cache -e NSC_CACHE_DIR=/nsc_cache --rm -it --gpus all --name nsc_gpu nsc
 
 .PHONY: run_docker_cpu
 run_docker_cpu:
 	@echo "Running nsc image on CPU"
-	@docker run -it --name nsc_cpu nsc
+	@docker run -v $(shell pwd)/.nsc_cache:/nsc_cache -e NSC_CACHE_DIR=/nsc_cache --rm -it --name nsc_cpu nsc
 
 .PHONY: docs
 docs:

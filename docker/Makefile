@@ -1,4 +1,3 @@
-
 help:
 	@bash help.sh
 

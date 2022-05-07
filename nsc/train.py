@@ -211,7 +211,8 @@ def train(args: argparse.Namespace, device: DistributedDevice) -> None:
                 batch_max_value=cfg.batch_max_length // device.world_size,
                 bucket_span=cfg.bucket_span,
                 seed=cfg.seed,
-                shuffle=True
+                shuffle=True,
+                verbose=device.is_main_process
             ),
             device=device,
             seed=cfg.seed,
@@ -225,7 +226,8 @@ def train(args: argparse.Namespace, device: DistributedDevice) -> None:
             batch_max_value=cfg.batch_max_length // device.world_size,
             bucket_span=cfg.bucket_span,
             seed=cfg.seed,
-            shuffle=False
+            shuffle=False,
+            verbose=device.is_main_process
         )
 
     train_loader = data.DataLoader(

@@ -327,19 +327,15 @@ class MessagePassingLayer(nn.Module):
     def generate_messages(self, edges: EdgeBatch) -> Dict[str, torch.Tensor]:
         rel_type_str = "_".join(edges.canonical_etype)
         e_type = edges.canonical_etype[1]
-        # we use gradient checkpointing here for message computing
-        # and message gating because this layer otherwise consumes way too much memory
-        # because of this user defined message function, which copies the src and dst node features
-        # and the tensor concatenation which then creates a new tensor out of these two
         uve_feat = [edges.src["src"], edges.dst["dst"]]
         if "edge" in edges.data:
             uve_feat.append(edges.data["edge"])
         messages_fn = _cat_and_forward_checkpoint(self.edge_transforms[e_type])
-        messages = messages_fn(*uve_feat)
-        # messages = cp(messages_fn, *uve_feat)
-        # messages = self.edge_transforms[e_type](torch.cat(uve_feat, dim=1))
+        # messages = messages_fn(*uve_feat)
+        messages = cp(messages_fn, *uve_feat)
         if self.message_gating:
             gating_fn = _cat_and_forward_checkpoint(self.gate_transforms[e_type])
+            # messages = gating_fn(*uve_feat) * messages
             messages = cp(gating_fn, *uve_feat) * messages
         return {f"messages_{rel_type_str}": messages}
 
