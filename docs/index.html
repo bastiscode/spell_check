@@ -339,6 +339,7 @@ your own models and evaluating them on benchmarks, but not for training.</p>
 </section>
 <span id="document-reproduce"></span><section id="training-and-reproducing-results">
 <h1>Training and reproducing results<a class="headerlink" href="#training-and-reproducing-results" title="Permalink to this headline"></a></h1>
+<p>You can skip the following training section</p>
 <section id="training">
 <h2>Training<a class="headerlink" href="#training" title="Permalink to this headline"></a></h2>
 <p>Before starting training you need the get the training data. Everything you need
@@ -438,13 +439,20 @@ training on <a class="reference external" href="https://slurm.schedmd.com/docume
 <span class="nv">NSC_FORCE_LOCAL</span><span class="o">=</span><span class="nb">true</span> <span class="nv">NSC_CONFIG</span><span class="o">=</span>spell_checking/configs/sed_words.yaml spell_checking/scripts/train.sh
 </pre></div>
 </div>
+<p>To retrain the models of this project see the <code class="docutils literal notranslate"><span class="pre">train_slurm_&lt;task&gt;.sh</span></code> scripts in this <a class="reference external" href="https://github.com/bastiscode/spell_check/tree/main/spell_checking/scripts">directory</a> which were used for training all models.
+These scripts do nothing more than setting some environment variables and calling the <a class="reference external" href="https://github.com/bastiscode/spell_check/tree/main/spell_checking/scripts/train.sh">train.sh</a>  script.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Using the <code class="docutils literal notranslate"><span class="pre">train_slurm_&lt;task&gt;.sh</span></code> scripts for training is only possible on a SLURM cluster
+since they call the <code class="docutils literal notranslate"><span class="pre">train.sh</span></code> script using SLURMs sbatch command.</p>
+</div>
 </section>
 <section id="reproduce">
 <h2>Reproduce<a class="headerlink" href="#reproduce" title="Permalink to this headline"></a></h2>
-<p>We make all models that are needed to reproduce the results on the project benchmarks available as pretrained models.
+<p>We make all models that are needed to reproduce the results on the projects’ benchmarks available as pretrained models.
 All pretrained models can be accessed either through the command line interface (<code class="docutils literal notranslate"><span class="pre">nsec</span></code>, <code class="docutils literal notranslate"><span class="pre">nsed</span></code>, <code class="docutils literal notranslate"><span class="pre">ntr</span></code>)
 or the Python API.</p>
-<p>The project benchmarks and can be found here: <code class="docutils literal notranslate"><span class="pre">/nfs/students/sebastian-walter/masters_thesis/benchmarks</span></code>.
+<p>The benchmarks can be found here: <code class="docutils literal notranslate"><span class="pre">/nfs/students/sebastian-walter/masters_thesis/benchmarks</span></code>.
 Every benchmark follows the same directory structure:</p>
 <ul class="simple">
 <li><p>&lt;task&gt;/&lt;benchmark_group&gt;/&lt;benchmark_split&gt;/corrupt.txt</p></li>
@@ -457,9 +465,9 @@ the wikidump realistic benchmark using the command line interface:</p>
 <ol class="arabic simple">
 <li><p>Run model on benchmark:</p></li>
 </ol>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>nsed -m gnn+ <span class="se">\</span>
--f /nfs/students/sebastian-walter/masters_thesis/benchmarks/sed_words/wikidump/realistic/corrupt.txt <span class="se">\</span>
--o gnn_plus_predictions.txt
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>nsed -m gnn+ <span class="se">\ </span> <span class="c1"># choose the model</span>
+-f /nfs/students/sebastian-walter/masters_thesis/benchmarks/sed_words/wikidump/realistic/corrupt.txt <span class="se">\ </span> <span class="c1"># input file</span>
+-o gnn_plus_predictions.txt  <span class="c1"># save output to file</span>
 </pre></div>
 </div>
 <ol class="arabic simple" start="2">
@@ -477,7 +485,7 @@ gnn_plus_predictions.txt  <span class="c1"># predicted file</span>
 <p>By default a pretrained model is downloaded as a zip file and then extracted when you first use it. Since some models
 are quite large this can take some time. To cut this time all pretrained models can also be found as zip files in the directory
 <code class="docutils literal notranslate"><span class="pre">/nfs/students/sebastian-walter/masters_thesis/zipped</span></code>. If you set the env variable
-<code class="docutils literal notranslate"><span class="pre">NSC_DOWNLOAD_DIR</span></code> to this directory, the models are loaded from this directory and must not be downloaded.
+<code class="docutils literal notranslate"><span class="pre">NSC_DOWNLOAD_DIR</span></code> to this directory, the models are loaded from this directory and must not be downloaded first.
 If you are running this project using Docker you can mount the directory to the containers download directory
 by passing the additional volume flag <code class="docutils literal notranslate"><span class="pre">-v</span> <span class="pre">/nfs/students/sebastian-walter/masters_thesis/zipped:/nsc_download</span></code>.</p>
 </div>
@@ -487,13 +495,6 @@ by passing the additional volume flag <code class="docutils literal notranslate"
 inside the Docker container using <code class="docutils literal notranslate"><span class="pre">-v</span> <span class="pre">/nfs/students/sebastian-walter/masters_thesis/benchmarks:/benchmarks</span></code>.
 The Docker container also provides additional commands for evaluating benchmarks that are basically
 wrappers around the <a class="reference external" href="https://github.com/bastiscode/spell_check/blob/main/spell_checking/benchmarks/scripts/evaluate.py">evaluation script</a> mentioned above.</p>
-</div>
-<p>To retrain the models of this project see the <code class="docutils literal notranslate"><span class="pre">train_slurm_&lt;task&gt;.sh</span></code> scripts in this <a class="reference external" href="https://github.com/bastiscode/spell_check/tree/main/spell_checking/scripts">directory</a> which were used for training all models.
-These scripts do nothing more than setting some environment variables and calling the <code class="docutils literal notranslate"><span class="pre">train.sh</span></code> script mentioned above.</p>
-<div class="admonition note">
-<p class="admonition-title">Note</p>
-<p>Using the <code class="docutils literal notranslate"><span class="pre">train_slurm_&lt;task&gt;.sh</span></code> scripts for training is only possible on a SLURM cluster
-since they call the <code class="docutils literal notranslate"><span class="pre">train.sh</span></code> script using SLURMs sbatch command.</p>
 </div>
 </section>
 </section>

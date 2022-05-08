@@ -466,6 +466,8 @@ T}	T{
 T}
 _
 .TE
+.sp
+You can skip the following training section
 .SH TRAINING
 .sp
 Before starting training you need the get the training data. Everything you need
@@ -611,13 +613,24 @@ NSC_FORCE_LOCAL=true NSC_CONFIG=spell_checking/configs/sed_words.yaml spell_chec
 .fi
 .UNINDENT
 .UNINDENT
+.sp
+To retrain the models of this project see the \fBtrain_slurm_<task>.sh\fP scripts in this \fI\%directory\fP which were used for training all models.
+These scripts do nothing more than setting some environment variables and calling the \fI\%train.sh\fP  script.
+.sp
+\fBNOTE:\fP
+.INDENT 0.0
+.INDENT 3.5
+Using the \fBtrain_slurm_<task>.sh\fP scripts for training is only possible on a SLURM cluster
+since they call the \fBtrain.sh\fP script using SLURMs sbatch command.
+.UNINDENT
+.UNINDENT
 .SH REPRODUCE
 .sp
-We make all models that are needed to reproduce the results on the project benchmarks available as pretrained models.
+We make all models that are needed to reproduce the results on the projects’ benchmarks available as pretrained models.
 All pretrained models can be accessed either through the command line interface (\fBnsec\fP, \fBnsed\fP, \fBntr\fP)
 or the Python API.
 .sp
-The project benchmarks and can be found here: \fB/nfs/students/sebastian\-walter/masters_thesis/benchmarks\fP\&.
+The benchmarks can be found here: \fB/nfs/students/sebastian\-walter/masters_thesis/benchmarks\fP\&.
 Every benchmark follows the same directory structure:
 .INDENT 0.0
 .IP \(bu 2
@@ -640,9 +653,9 @@ Run model on benchmark:
 .sp
 .nf
 .ft C
-nsed \-m gnn+ \e
-\-f /nfs/students/sebastian\-walter/masters_thesis/benchmarks/sed_words/wikidump/realistic/corrupt.txt \e
-\-o gnn_plus_predictions.txt
+nsed \-m gnn+ \e  # choose the model
+\-f /nfs/students/sebastian\-walter/masters_thesis/benchmarks/sed_words/wikidump/realistic/corrupt.txt \e  # input file
+\-o gnn_plus_predictions.txt  # save output to file
 .ft P
 .fi
 .UNINDENT
@@ -672,7 +685,7 @@ gnn_plus_predictions.txt  # predicted file
 By default a pretrained model is downloaded as a zip file and then extracted when you first use it. Since some models
 are quite large this can take some time. To cut this time all pretrained models can also be found as zip files in the directory
 \fB/nfs/students/sebastian\-walter/masters_thesis/zipped\fP\&. If you set the env variable
-\fBNSC_DOWNLOAD_DIR\fP to this directory, the models are loaded from this directory and must not be downloaded.
+\fBNSC_DOWNLOAD_DIR\fP to this directory, the models are loaded from this directory and must not be downloaded first.
 If you are running this project using Docker you can mount the directory to the containers download directory
 by passing the additional volume flag \fB\-v /nfs/students/sebastian\-walter/masters_thesis/zipped:/nsc_download\fP\&.
 .UNINDENT
@@ -685,17 +698,6 @@ To access the benchmarks if you are running this project with Docker you can mou
 inside the Docker container using \fB\-v /nfs/students/sebastian\-walter/masters_thesis/benchmarks:/benchmarks\fP\&.
 The Docker container also provides additional commands for evaluating benchmarks that are basically
 wrappers around the \fI\%evaluation script\fP mentioned above.
-.UNINDENT
-.UNINDENT
-.sp
-To retrain the models of this project see the \fBtrain_slurm_<task>.sh\fP scripts in this \fI\%directory\fP which were used for training all models.
-These scripts do nothing more than setting some environment variables and calling the \fBtrain.sh\fP script mentioned above.
-.sp
-\fBNOTE:\fP
-.INDENT 0.0
-.INDENT 3.5
-Using the \fBtrain_slurm_<task>.sh\fP scripts for training is only possible on a SLURM cluster
-since they call the \fBtrain.sh\fP script using SLURMs sbatch command.
 .UNINDENT
 .UNINDENT
 .INDENT 0.0
