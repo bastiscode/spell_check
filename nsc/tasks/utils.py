@@ -44,17 +44,18 @@ def class_voting(
     else:
         assert len(thresholds) == len(logits)
 
-    logits = [torch.tensor(l, dtype=torch.float) if not isinstance(l, torch.Tensor) else l for l in logits]
+    logits = [torch.tensor(logit, dtype=torch.float) if not isinstance(logit, torch.Tensor) else logit
+              for logit in logits]
 
     if method == "hard":  # predict the class with the most individual predictions
         predictions = torch.stack([
-            class_predictions(l, threshold=thres, temperature=temp)
-            for l, thres, temp in zip(logits, thresholds, temperatures)
+            class_predictions(logit, threshold=thres, temperature=temp)
+            for logit, thres, temp in zip(logits, thresholds, temperatures)
         ], dim=-1)
         most_freq_classes = torch.mode(predictions, dim=-1).values
         return most_freq_classes
     elif method == "soft":  # predict the class with the highest total probability (requires good calibrated models)
-        soft_predictions = [torch.softmax(l / t, dim=-1) for l, t in zip(logits, temperatures)]
+        soft_predictions = [torch.softmax(logit / t, dim=-1) for logit, t in zip(logits, temperatures)]
         summed_predictions = torch.stack(soft_predictions).sum(dim=0)
         return torch.argmax(summed_predictions, dim=-1).long()
     else:

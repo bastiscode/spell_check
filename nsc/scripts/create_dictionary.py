@@ -66,7 +66,7 @@ def create(args: argparse.Namespace) -> None:
                 total=len(files),
                 desc="calculating word frequencies from files",
                 leave=False,
-            disable=common.disable_tqdm()
+                disable=common.disable_tqdm()
         ):
             dictionary += d
 

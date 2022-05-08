@@ -1,15 +1,15 @@
 import re
-from typing import List, Any, Union, Tuple, Optional, Dict
+from typing import List, Any, Union, Tuple, Optional
 
 import torch
 
 from nsc import models
 from nsc.data import tokenization
 from nsc.data.utils import Sample, InferenceInfo
-from nsc.modules import inference, utils
+from nsc.modules import inference
 from nsc.tasks import utils as task_utils
 from nsc.tasks.seq2seq import Seq2Seq
-from nsc.utils import Batch, to
+from nsc.utils import Batch
 
 
 def _match_input_output(input_string: str, output_string: str) -> str:

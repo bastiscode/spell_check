@@ -11,7 +11,7 @@ from torch.nn import functional as F
 from tqdm import tqdm
 
 import nsc
-import nsc.data.utils
+from nsc.api.utils import load_experiment, get_string_dataset_and_loader
 from nsc.data import utils
 from nsc.utils import common
 
@@ -97,11 +97,13 @@ def calibrate(args: argparse.Namespace) -> None:
 
     device = torch.device(args.device)
 
-    cfg, task, model = nsc.load_experiment(args.experiment, args.device, {"NSC_DATA_DIR": args.data_dir,
-                                                                              "NSC_CONFIG_DIR": args.config_dir})
+    cfg, task, model = load_experiment(
+        args.experiment, args.device, {"NSC_DATA_DIR": args.data_dir,
+                                       "NSC_CONFIG_DIR": args.config_dir}
+    )
 
-    dataset, loader = utils.get_string_dataset_and_loader(args.in_file, False, args.batch_size)
-    label_dataset, label_loader = utils.get_string_dataset_and_loader(args.label_file, False, 1)
+    dataset, loader = get_string_dataset_and_loader(args.in_file, False, args.batch_size)
+    label_dataset, label_loader = get_string_dataset_and_loader(args.label_file, False, 1)
 
     logger.info(f"Dataset/input contains {len(dataset)} samples")
 
@@ -148,6 +150,7 @@ def calibrate(args: argparse.Namespace) -> None:
 
     all_outputs = all_outputs.to(device)
     all_labels = all_labels.to(device)
+
     def _closure():
         loss = F.cross_entropy(temp_scaling(all_outputs.view(-1, 2), temperature), all_labels)
         loss.backward()

@@ -30,4 +30,3 @@ from nsc.api.tokenization_repair import (
     get_available_tokenization_repair_models
 )
 from nsc.version import __version__
-

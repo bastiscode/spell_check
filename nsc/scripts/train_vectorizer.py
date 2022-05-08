@@ -278,8 +278,10 @@ def train(args: argparse.Namespace) -> None:
                 correct_emb = encoder(correct)
                 misspelled_emb = encoder(misspelled)
 
-                correct_context_emb = encoder([l + index.WORD_PLACEHOLDER + r for l, r in correct_context])
-                misspelled_context_emb = encoder([l + index.WORD_PLACEHOLDER + r for l, r in misspelled_context])
+                correct_context_emb = encoder([left + index.WORD_PLACEHOLDER + right
+                                               for left, right in correct_context])
+                misspelled_context_emb = encoder([left + index.WORD_PLACEHOLDER + right
+                                                  for left, right in misspelled_context])
 
                 loss = (
                         clf_loss_fn(
@@ -314,9 +316,10 @@ def train(args: argparse.Namespace) -> None:
                         correct_emb = encoder(correct)
                         misspelled_emb = encoder(misspelled)
 
-                        correct_context_emb = encoder([l + index.WORD_PLACEHOLDER + r for l, r in correct_context])
+                        correct_context_emb = encoder([left + index.WORD_PLACEHOLDER + right
+                                                       for left, right in correct_context])
                         misspelled_context_emb = encoder(
-                            [l + index.WORD_PLACEHOLDER + r for l, r in misspelled_context])
+                            [left + index.WORD_PLACEHOLDER + right for left, right in misspelled_context])
 
                         loss = (
                                 clf_loss_fn(

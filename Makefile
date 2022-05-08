@@ -33,9 +33,10 @@ docs:
 
 .PHONY: checkstyle
 checkstyle:
-	@echo "Running pep8 (pycodestyle)\n-----------------"
+	@echo "Running pep8 (pycodestyle)\n--------------------------"
 	@pycodestyle --exclude="data,spell_checking,third_party" --max-line-length=120 .
 
 .PHONY: tests
 tests:
+	@echo "Running pytest\n--------------"
 	@pytest -s tests -n auto --disable-pytest-warnings
