@@ -16,15 +16,13 @@ DOCKER_ARGS ?= ""
 run_docker_gpu:
 	@echo "Running nsc image with GPU support"
 	@docker run -e NSC_CACHE_DIR=/nsc_cache -e NSC_DOWNLOAD_DIR=/nsc_download \
-	--rm -it --gpus all --name nsc_gpu \
-	$(DOCKER_ARGS) nsc
+	--rm -it --gpus all --name nsc_gpu$(DOCKER_ARGS) nsc
 
 .PHONY: run_docker_cpu
 run_docker_cpu:
 	@echo "Running nsc image on CPU"
 	@docker run -e NSC_CACHE_DIR=/nsc_cache -e NSC_DOWNLOAD_DIR=/nsc_download \
-	--rm -it --name nsc_cpu \
-	$(DOCKER_ARGS) nsc
+	--rm -it --name nsc_cpu$(DOCKER_ARGS) nsc
 
 .PHONY: docs
 docs:

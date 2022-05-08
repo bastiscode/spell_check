@@ -43,7 +43,8 @@ setup(
             "marisa-trie==0.7.7"
         ],
         "docs": [
-            "sphinx==4.5.0"
+            "sphinx==4.5.0",
+            "sphinx-rtd-theme==1.0.0"
         ],
         "test": [
             "pycodestyle==2.8.0",

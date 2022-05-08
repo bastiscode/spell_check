@@ -307,23 +307,26 @@ class SpellingErrorCorrector(_APIBase):
         num_inputs = len(inputs)
         invalid_inputs = set(i for i in range(num_inputs) if inputs[i] == "")
         inputs = [inputs[i] for i in range(num_inputs) if i not in invalid_inputs]
+
+        assert score.mode == "log_likelihood", \
+            "for spelling correction only the log_likelihood scoring mode is supported for now"
+
+        inference_kwargs = inference_kwargs_from_search_and_score(search, score, self._get_output_tokenizer())
+        is_tokenization_repair_plus = isinstance(self.task, tokenization_repair_plus.TokenizationRepairPlus)
+        if is_tokenization_repair_plus:
+            # ignore detections with tr+
+            detections = None
+            inference_kwargs["output_type"] = "sec"
+            inference_kwargs["no_repair"] = kwargs.get("tokenization_repair_plus_no_repair", False)
+            inference_kwargs["no_detect"] = kwargs.get("tokenization_repair_plus_no_detect", False)
+            inference_kwargs["threshold"] = kwargs.get("tokenization_repair_plus_threshold", 0.5)
+
         if detections is not None:
             detections = [detections[i] for i in range(num_inputs) if i not in invalid_inputs]
             assert (
                     len(detections) == len(inputs)
                     and all(len(det) == len(ipt.split()) for det, ipt in zip(detections, inputs))
             ), "expected one detection for every word in every input sequence"
-
-        assert score.mode == "log_likelihood", \
-            "for spelling correction only the log_likelihood scoring mode is supported for now"
-
-        is_tokenization_repair_plus = isinstance(self.task, tokenization_repair_plus.TokenizationRepairPlus)
-        inference_kwargs = inference_kwargs_from_search_and_score(search, score, self._get_output_tokenizer())
-        if is_tokenization_repair_plus:
-            inference_kwargs["output_type"] = "sec"
-            inference_kwargs["no_repair"] = kwargs.get("tokenization_repair_plus_no_repair", False)
-            inference_kwargs["no_detect"] = kwargs.get("tokenization_repair_plus_no_detect", False)
-            inference_kwargs["threshold"] = kwargs.get("tokenization_repair_plus_threshold", 0.5)
 
         num_workers = 0 if len(inputs) <= 16 else min(4, len(os.sched_getaffinity(0)))
         dataset, loader = get_inference_dataset_and_loader(

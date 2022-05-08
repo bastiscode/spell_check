@@ -12,13 +12,14 @@ RUN echo "alias evaluate_seds='python /spell_check/evaluate.py sed_sequence'" >>
 RUN echo "alias evaluate_sedw='python /spell_check/evaluate.py sed_words'" >> ~/.bashrc
 RUN echo "alias evaluate_sec='python /spell_check/evaluate.py sec'" >> ~/.bashrc
 
-RUN apt-get update && apt-get install -y build-essential man
+RUN apt-get update && apt-get install -y build-essential curl man
 
 COPY nsc nsc
+COPY bin bin
 COPY setup.py .
 COPY Makefile .
 COPY README.rst .
-COPY sphinx_docs .
+COPY sphinx_docs sphinx_docs
 
 RUN make install
 

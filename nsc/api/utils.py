@@ -320,6 +320,8 @@ def _download_zip(
                            f"status {response.status_code}, {response.reason}")
 
     directory = os.path.dirname(zip_file_path)
+    if directory:
+        os.makedirs(directory, exist_ok=True)
     try:
         file_size = int(response.headers.get("content-length", 0))
         pbar = tqdm(
@@ -332,18 +334,12 @@ def _download_zip(
             unit_divisor=1024
         )
 
-        buf = io.BytesIO()
-        for data in response.iter_content():
-            buf.write(data)
-            pbar.update(len(data))
+        with open(zip_file_path, "wb") as of:
+            for data in response.iter_content():
+                of.write(data)
+                pbar.update(len(data))
 
         pbar.close()
-
-        if directory:
-            os.makedirs(directory, exist_ok=True)
-
-        with open(zip_file_path, "wb") as of:
-            of.write(buf.read())
 
     except Exception as e:
         # only remove the dir on error when it did not exist before

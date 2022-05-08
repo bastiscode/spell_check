@@ -1,1 +1,1 @@
-{"transformer_nmt": [87.042771901999, 175867], "transformer_words_nmt": [65.56247996300044, 175867]}
+{"transformer": [65.08325776700076, 174880], "transformer word": [27.980680926999412, 174880], "transformer with tokenization repair": [71.14561433800009, 174880], "tokenization repair\\textsuperscript{++}": [40.56263757399938, 174880]}

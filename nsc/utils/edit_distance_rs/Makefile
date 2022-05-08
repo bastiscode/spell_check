@@ -4,4 +4,5 @@ setup:
 
 .PHONY: install
 install:
-	@maturin develop --release
+	@maturin build --release
+	@pip install .

@@ -1,1 +1,1 @@
-{"transformer_nmt": [60.42482022100012, 175867], "transformer_words_nmt": [25.30526070400083, 175867]}
+{"gnn\\textsuperscript{+} $\\rightarrow$ transformer": [48.11032603499916, 174880], "gnn\\textsuperscript{+} $\\rightarrow$ transformer word": [17.158479727000667, 174880], "tokenization repair\\textsuperscript{++}": [19.9617370570013, 174880]}
