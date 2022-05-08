@@ -1,6 +1,8 @@
 Training and reproducing results
 ================================
 
+You can skip the following training section
+
 Training
 --------
 
@@ -114,14 +116,22 @@ training on SLURM_ clusters. Training using this script would look something lik
     # start training without sbatch
     NSC_FORCE_LOCAL=true NSC_CONFIG=spell_checking/configs/sed_words.yaml spell_checking/scripts/train.sh
 
+To retrain the models of this project see the ``train_slurm_<task>.sh`` scripts in this directory_ which were used for training all models.
+These scripts do nothing more than setting some environment variables and calling the `train.sh`_  script.
+
+.. note::
+
+    Using the ``train_slurm_<task>.sh`` scripts for training is only possible on a SLURM cluster
+    since they call the ``train.sh`` script using SLURMs sbatch command.
+
 Reproduce
 ---------
 
-We make all models that are needed to reproduce the results on the project benchmarks available as pretrained models.
+We make all models that are needed to reproduce the results on the projects' benchmarks available as pretrained models.
 All pretrained models can be accessed either through the command line interface (``nsec``, ``nsed``, ``ntr``)
 or the Python API.
 
-The project benchmarks and can be found here: ``/nfs/students/sebastian-walter/masters_thesis/benchmarks``.
+The benchmarks can be found here: ``/nfs/students/sebastian-walter/masters_thesis/benchmarks``.
 Every benchmark follows the same directory structure:
 
 - <task>/<benchmark_group>/<benchmark_split>/corrupt.txt
@@ -137,9 +147,9 @@ the wikidump realistic benchmark using the command line interface:
 
 .. code-block:: bash
 
-   nsed -m gnn+ \
-   -f /nfs/students/sebastian-walter/masters_thesis/benchmarks/sed_words/wikidump/realistic/corrupt.txt \
-   -o gnn_plus_predictions.txt
+   nsed -m gnn+ \  # choose the model
+   -f /nfs/students/sebastian-walter/masters_thesis/benchmarks/sed_words/wikidump/realistic/corrupt.txt \  # input file
+   -o gnn_plus_predictions.txt  # save output to file
 
 2. Evaluate model predictions:
 
@@ -156,7 +166,7 @@ the wikidump realistic benchmark using the command line interface:
     By default a pretrained model is downloaded as a zip file and then extracted when you first use it. Since some models
     are quite large this can take some time. To cut this time all pretrained models can also be found as zip files in the directory
     ``/nfs/students/sebastian-walter/masters_thesis/zipped``. If you set the env variable
-    ``NSC_DOWNLOAD_DIR`` to this directory, the models are loaded from this directory and must not be downloaded.
+    ``NSC_DOWNLOAD_DIR`` to this directory, the models are loaded from this directory and must not be downloaded first.
     If you are running this project using Docker you can mount the directory to the containers download directory
     by passing the additional volume flag ``-v /nfs/students/sebastian-walter/masters_thesis/zipped:/nsc_download``.
 
@@ -166,14 +176,6 @@ the wikidump realistic benchmark using the command line interface:
     inside the Docker container using ``-v /nfs/students/sebastian-walter/masters_thesis/benchmarks:/benchmarks``.
     The Docker container also provides additional commands for evaluating benchmarks that are basically
     wrappers around the `evaluation script`_ mentioned above.
-
-To retrain the models of this project see the ``train_slurm_<task>.sh`` scripts in this directory_ which were used for training all models.
-These scripts do nothing more than setting some environment variables and calling the ``train.sh`` script mentioned above.
-
-.. note::
-
-    Using the ``train_slurm_<task>.sh`` scripts for training is only possible on a SLURM cluster
-    since they call the ``train.sh`` script using SLURMs sbatch command.
 
 .. _here: https://github.com/bastiscode/spell_check/tree/main/spell_checking/configs/train
 .. _config for this task: https://github.com/bastiscode/spell_check/tree/main/spell_checking/configs/train/sed_words.yaml

@@ -225,11 +225,11 @@ def _insertions_and_deletions(repair_ops: List[int]) -> Set[Tuple[int, int]]:
 
 
 def tok_rep_f1_prec_rec(
-        sequences: List[str],
-        target_sequences: List[str],
         input_sequences: List[str],
+        predicted_sequences: List[str],
+        target_sequences: List[str],
         mode: str = "insertions_and_deletions"
-) -> Tuple[float, float, float, float, float, float]:
+) -> Tuple[Tuple[float, float, float], Tuple[float, float, float]]:
     assert mode in {"insertions_and_deletions", "insertions", "deletions"}
     tp = 0
     fp = 0
@@ -239,9 +239,9 @@ def tok_rep_f1_prec_rec(
     precs = []
     recs = []
 
-    for seq, gt, ipt in zip(sequences, target_sequences, input_sequences):
+    for pred, gt, ipt in zip(predicted_sequences, target_sequences, input_sequences):
         gt_ops = tokenization_repair.get_whitespace_operations(ipt, gt)
-        pred_ops = tokenization_repair.get_whitespace_operations(ipt, seq)
+        pred_ops = tokenization_repair.get_whitespace_operations(ipt, pred)
         assert len(gt_ops) == len(pred_ops)
 
         gt_insertions_and_deletions = _insertions_and_deletions(gt_ops)
@@ -265,7 +265,7 @@ def tok_rep_f1_prec_rec(
         # if there are no groundtruth operations (tp == fp == fn == 0) and we also did not predict any operations,
         # we count this as 1
         if len(gt_insertions_and_deletions) == 0 and len(pred_insertions_and_deletions) == 0:
-            scores = (1, 1, 1)
+            scores = (1., 1., 1.)
         else:
             scores = _tp_fp_fn_to_f1_prec_rec(tp, fp, fn)
 
@@ -274,11 +274,10 @@ def tok_rep_f1_prec_rec(
         precs.append(prec)
         recs.append(rec)
 
-    f1_seq, prec_seq, rec_seq = np.mean(f1s) if f1s else 0, np.mean(precs) if precs else 0, np.mean(
-        recs) if recs else 0
+    f1_seq, prec_seq, rec_seq = float(np.mean(f1s)), float(np.mean(precs)), float(np.mean(recs))
     f1_mic, prec_mic, rec_mic = _tp_fp_fn_to_f1_prec_rec(tp, fp, fn)
 
-    return f1_mic, prec_mic, rec_mic, f1_seq, prec_seq, rec_seq
+    return (f1_mic, prec_mic, rec_mic), (f1_seq, prec_seq, rec_seq)
 
 
 _PUNCTUATION_SET = set(string.punctuation)

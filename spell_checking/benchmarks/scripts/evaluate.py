@@ -70,7 +70,7 @@ def evaluate(
             print(f"Correction F1: {100 * f1:.2f} (Precision: {100 * prec:.2f}%, Recall: {100 * rec:.2f}%)")
 
         elif name == "tok_rep_f1":
-            f1, prec, rec = 0, 0, 0
+            (f1, prec, rec), _ = metrics.tok_rep_f1_prec_rec(corrupted, predictions, groundtruths)
             print(f"Tokenization repair F1: {100 * f1:.2f} (Precision: {100 * prec:.2f}%, Recall: {100 * rec:.2f}%)")
 
         else:
