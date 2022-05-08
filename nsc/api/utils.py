@@ -102,6 +102,7 @@ class _APIBase:
             task: str,
             model: str,
             device: Union[str, int],
+            download_dir: Optional[str],
             cache_dir: Optional[str],
             force_download: bool
     ) -> "_APIBase":
@@ -113,7 +114,8 @@ class _APIBase:
             task: name of the task
             model: name of the pretrained model
             device: device to load the model to (e.g. "cuda", "cpu" or integer denoting GPU device index)
-            cache_dir: local cache directory to store the pretrained model
+            download_dir: directory where the compressed model will be downloaded to
+            cache_dir: directory where the downloaded, compressed model will be extracted to
             force_download: force download the pretrained model again even if it already exists in the cache_dir
 
         Returns: NSC instance
@@ -282,28 +284,34 @@ class _APIBase:
         return self.cfg.experiment_name
 
     @staticmethod
-    def _download(task: str, model: str, cache_dir: Optional[str], force_download: bool) -> Tuple[str, str, str]:
+    def _download(
+            task: str,
+            model: str,
+            download_dir: Optional[str],
+            cache_dir: Optional[str],
+            force_download: bool
+    ) -> Tuple[str, str, str]:
         logger = common.get_logger("DOWNLOAD")
 
-        data_dir = download_data(force_download, logger, cache_dir)
+        data_dir = download_data(force_download, logger, download_dir, cache_dir)
 
         model_dir = download_model(
             task=task,
             name=model,
+            download_dir=download_dir,
             cache_dir=cache_dir,
             force_download=force_download,
             logger=logger
         )
 
-        config_dir = download_configs(force_download, logger, cache_dir)
+        config_dir = download_configs(force_download, logger, download_dir, cache_dir)
 
         return model_dir, data_dir, config_dir
 
 
-def _download_and_unpack_zip(
+def _download_zip(
         url: str,
-        directory: str,
-        remove_on_error: bool,
+        zip_file_path: str,
         description: Optional[str] = None
 ) -> None:
     response = requests.get(url, stream=True)
@@ -311,6 +319,7 @@ def _download_and_unpack_zip(
         raise RuntimeError(f"error downloading file from from {url}: "
                            f"status {response.status_code}, {response.reason}")
 
+    directory = os.path.dirname(zip_file_path)
     try:
         file_size = int(response.headers.get("content-length", 0))
         pbar = tqdm(
@@ -328,54 +337,89 @@ def _download_and_unpack_zip(
             buf.write(data)
             pbar.update(len(data))
 
-        with zipfile.ZipFile(buf, "r") as zip_file:
-            shutil.rmtree(directory, ignore_errors=True)
-            os.makedirs(directory)
-            zip_file.extractall(directory)
-
         pbar.close()
 
+        if directory:
+            os.makedirs(directory, exist_ok=True)
+
+        with open(zip_file_path, "wb") as of:
+            of.write(buf.read())
+
     except Exception as e:
-        # only remove the model dir on error when it did not exist before
-        if remove_on_error:
-            shutil.rmtree(directory)
+        # only remove the dir on error when it did not exist before
+        shutil.rmtree(zip_file_path, ignore_errors=True)
         raise e
 
 
-def download_data(force_download: bool, logger: logging.Logger, cache_dir: Optional[str] = None) -> str:
-    data_dir = os.path.join(cache_dir or get_cache_dir(), "data")
-    data_dir_does_not_exist = not os.path.exists(data_dir)
-    if data_dir_does_not_exist or force_download:
-        logger.info(f"downloading data files from {_DATA_URL} to data cache directory {data_dir}")
-        _download_and_unpack_zip(
+def _unpack_zip(
+        zip_file_path: str,
+        directory: str
+) -> None:
+    with zipfile.ZipFile(zip_file_path, "r") as zip_file:
+        zip_file.extractall(directory)
+
+
+def download_data(
+        force_download: bool,
+        logger: logging.Logger,
+        download_dir: Optional[str] = None,
+        cache_dir: Optional[str] = None
+) -> str:
+    download_dir = download_dir or get_download_dir()
+    zip_file_path = os.path.join(download_dir, "data.zip")
+    data_zip_not_downloaded = not os.path.exists(zip_file_path)
+    if data_zip_not_downloaded or force_download:
+        logger.info(f"downloading data files from {_DATA_URL} to data directory {download_dir}")
+        _download_zip(
             _DATA_URL,
-            data_dir,
-            remove_on_error=data_dir_does_not_exist,
+            zip_file_path,
             description="Downloading data files"
         )
-    else:
-        logger.info(f"data files were already downloaded to data cache directory {data_dir}")
+
+    cache_dir = cache_dir or get_cache_dir()
+    data_dir = os.path.join(cache_dir, "data")
+    data_zip_not_extracted = not os.path.exists(data_dir)
+    if data_zip_not_extracted or force_download:
+        shutil.rmtree(data_dir, ignore_errors=True)
+        _unpack_zip(zip_file_path, data_dir)
+
     return data_dir
 
 
-def download_configs(force_download: bool, logger: logging.Logger, cache_dir: Optional[str] = None) -> str:
-    config_dir = os.path.join(cache_dir or get_cache_dir(), "configs")
-    config_dir_does_not_exist = not os.path.exists(config_dir)
-    if config_dir_does_not_exist or force_download:
-        logger.info(f"downloading config files from {_CONFIGS_URL} to config cache directory {config_dir}")
-        _download_and_unpack_zip(
+def download_configs(
+        force_download: bool,
+        logger: logging.Logger,
+        download_dir: Optional[str] = None,
+        cache_dir: Optional[str] = None
+) -> str:
+    download_dir = download_dir or get_download_dir()
+    zip_file_path = os.path.join(download_dir, "configs.zip")
+    config_zip_not_downloaded = not os.path.exists(zip_file_path)
+    if config_zip_not_downloaded or force_download:
+        logger.info(f"downloading data files from {_CONFIGS_URL} to directory {download_dir}")
+        _download_zip(
             _CONFIGS_URL,
-            config_dir,
-            remove_on_error=config_dir_does_not_exist,
+            zip_file_path,
             description="Downloading config files"
         )
-    else:
-        logger.info(f"config files were already downloaded to config cache directory {config_dir}")
+
+    cache_dir = cache_dir or get_cache_dir()
+    config_dir = os.path.join(cache_dir, "configs")
+    config_zip_not_extracted = not os.path.exists(config_dir)
+    if config_zip_not_extracted or force_download:
+        shutil.rmtree(config_dir, ignore_errors=True)
+        _unpack_zip(zip_file_path, config_dir)
+
     return config_dir
 
 
 def download_model(
-        task: str, name: str, force_download: bool, logger: logging.Logger, cache_dir: Optional[str] = None
+        task: str,
+        name: str,
+        force_download: bool,
+        logger: logging.Logger,
+        download_dir: Optional[str] = None,
+        cache_dir: Optional[str] = None
 ) -> str:
     """
 
@@ -383,28 +427,33 @@ def download_model(
 
     :param task: task name
     :param name: unique name of the model
-    :param cache_dir: directory to store the model
-    :param force_download: download model even if it is already in the cache dir
+    :param download_dir: directory where compressed models will be saved to
+    :param cache_dir: directory where downloaded models are extracted to
+    :param force_download: download and extract model even if it is already in the download or cache dir
     :param logger: instance of a logger to log some useful information
     :return: path of the model directory
     """
-    cache_dir = cache_dir or get_cache_dir()
-    model_dir = os.path.join(cache_dir, task, name)
-    model_does_not_exist = not os.path.exists(model_dir)
-    if model_does_not_exist or force_download:
-        if task not in _TASK_AND_NAME_TO_URL or name not in _TASK_AND_NAME_TO_URL[task]:
-            raise RuntimeError(f"no URL for task {task} and model {name}, should not happen")
+    if task not in _TASK_AND_NAME_TO_URL or name not in _TASK_AND_NAME_TO_URL[task]:
+        raise RuntimeError(f"no URL for task {task} and model {name}, should not happen")
+    url = _TASK_AND_NAME_TO_URL[task][name]
 
-        url = _TASK_AND_NAME_TO_URL[task][name]
-        logger.info(f"downloading model {name} for task {task} from {url} to cache directory {cache_dir}")
-        _download_and_unpack_zip(
+    download_dir = download_dir or get_download_dir()
+    zip_file_path = os.path.join(download_dir, "zipped", url.split("/")[-1])
+    model_zip_not_downloaded = not os.path.exists(zip_file_path)
+    if model_zip_not_downloaded or force_download:
+        logger.info(f"downloading model {name} for task {task} from {url} to directory {download_dir}")
+        _download_zip(
             url,
-            model_dir,
-            remove_on_error=model_does_not_exist,
+            zip_file_path,
             description=f"Downloading model {name} for task {task}"
         )
-    else:
-        logger.info(f"model {name} for task {task} was already downloaded to cache directory {cache_dir}")
+
+    cache_dir = cache_dir or get_cache_dir()
+    model_dir = os.path.join(cache_dir, task, name)
+    model_zip_not_extracted = not os.path.exists(model_dir)
+    if model_zip_not_extracted or force_download:
+        shutil.rmtree(model_dir, ignore_errors=True)
+        _unpack_zip(zip_file_path, model_dir)
 
     experiment_dir = os.listdir(model_dir)
     assert len(experiment_dir) == 1, f"zip file for model {name} for task {task} should contain" \
@@ -442,6 +491,10 @@ def get_device_info(device: torch.device) -> str:
 
 def get_cache_dir() -> str:
     return os.getenv("NSC_CACHE_DIR", os.path.join(os.path.dirname(__file__), ".cache"))
+
+
+def get_download_dir() -> str:
+    return os.getenv("NSC_DOWNLOAD_DIR", os.path.join(os.path.dirname(__file__), ".download"))
 
 
 def load_experiment_config(

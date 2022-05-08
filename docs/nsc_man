@@ -268,12 +268,16 @@ To start a Docker container
 .ft C
 # run the docker container with GPU support
 make run_docker_gpu
-# or with CPU support
+# or with CPU support only
 make run_docker_cpu
 .ft P
 .fi
 .UNINDENT
 .UNINDENT
+.sp
+You can also pass additional Docker arguments to the make commands by specifying \fBDOCKER_ARGS\fP\&. For example,
+to mount an additional directory inside the container you can execute
+\fBmake DOCKER_ARGS="\-v /path/to/outside/directory:/path/to/container/directory" run_docker_gpu\fP\&.
 .sp
 \fBNOTE:\fP
 .INDENT 0.0
@@ -609,19 +613,91 @@ NSC_FORCE_LOCAL=true NSC_CONFIG=spell_checking/configs/sed_words.yaml spell_chec
 .UNINDENT
 .SH REPRODUCE
 .sp
-To reproduce the results of this project see the \fBtrain_slurm_<task>.sh\fP scripts in this \fI\%directory\fP which were used for training all models.
+We make all models that are needed to reproduce the results on the project benchmarks available as pretrained models.
+All pretrained models can be accessed either through the command line interface (\fBnsec\fP, \fBnsed\fP, \fBntr\fP)
+or the Python API.
+.sp
+The project benchmarks and can be found here: \fB/nfs/students/sebastian\-walter/masters_thesis/benchmarks\fP\&.
+Every benchmark follows the same directory structure:
+.INDENT 0.0
+.IP \(bu 2
+<task>/<benchmark_group>/<benchmark_split>/corrupt.txt
+.IP \(bu 2
+<task>/<benchmark_group>/<benchmark_split>/correct.txt
+.UNINDENT
+.sp
+Here corrupt.txt is the input containing misspelled text and correct.txt is the groundtruth output. We
+provide a \fI\%evaluation script\fP that can be used to evaluate model predictions on a given benchmark.
+.sp
+As an example, lets look at the steps that are necessary to evaluate our gnn+ model for word level spelling error detection on
+the wikidump realistic benchmark using the command line interface:
+.INDENT 0.0
+.IP 1. 3
+Run model on benchmark:
+.UNINDENT
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+nsed \-m gnn+ \e
+\-f /nfs/students/sebastian\-walter/masters_thesis/benchmarks/sed_words/wikidump/realistic/corrupt.txt \e
+\-o gnn_plus_predictions.txt
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.INDENT 0.0
+.IP 2. 3
+Evaluate model predictions:
+.UNINDENT
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+python spell_checking/benchmarks/scripts/evaluate.py \e
+sed_words \e  # benchmark type
+/nfs/students/sebastian\-walter/masters_thesis/benchmarks/sed_words/wikidump/realistic/corrupt.txt \e  # input file
+/nfs/students/sebastian\-walter/masters_thesis/benchmarks/sed_words/wikidump/realistic/correct.txt \e  # groundtruth file
+gnn_plus_predictions.txt  # predicted file
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+\fBHINT:\fP
+.INDENT 0.0
+.INDENT 3.5
+By default a pretrained model is downloaded as a zip file and then extracted when you first use it. Since some models
+are quite large this can take some time. To cut this time all pretrained models can also be found as zip files in the directory
+\fB/nfs/students/sebastian\-walter/masters_thesis/zipped\fP\&. If you set the env variable
+\fBNSC_DOWNLOAD_DIR\fP to this directory, the models are loaded from this directory and must not be downloaded.
+If you are running this project using Docker you can mount the directory to the containers download directory
+by passing the additional volume flag \fB\-v /nfs/students/sebastian\-walter/masters_thesis/zipped:/nsc_download\fP\&.
+.UNINDENT
+.UNINDENT
+.sp
+\fBHINT:\fP
+.INDENT 0.0
+.INDENT 3.5
+To access the benchmarks if you are running this project with Docker you can mount the benchmark directory
+inside the Docker container using \fB\-v /nfs/students/sebastian\-walter/masters_thesis/benchmarks:/benchmarks\fP\&.
+The Docker container also provides additional commands for evaluating benchmarks that are basically
+wrappers around the \fI\%evaluation script\fP mentioned above.
+.UNINDENT
+.UNINDENT
+.sp
+To retrain the models of this project see the \fBtrain_slurm_<task>.sh\fP scripts in this \fI\%directory\fP which were used for training all models.
 These scripts do nothing more than setting some environment variables and calling the \fBtrain.sh\fP script mentioned above.
 .sp
 \fBNOTE:\fP
 .INDENT 0.0
 .INDENT 3.5
-Using the \fBtrain_slurm_<task>.sh\fP scripts to reproduce results is only possible on a SLURM cluster
+Using the \fBtrain_slurm_<task>.sh\fP scripts for training is only possible on a SLURM cluster
 since they call the \fBtrain.sh\fP script using SLURMs sbatch command.
 .UNINDENT
 .UNINDENT
-.sp
-Once you finished training you can evaluate the models on the projects’ benchmarks that are available under
-\fB/nfs/students/sebastian\-walter/masters_thesis/benchmarks\fP\&.
 .INDENT 0.0
 .TP
 .B class  nsc.BeamSearch
@@ -890,7 +966,7 @@ Returns: NSC instance
 .UNINDENT
 .INDENT 7.0
 .TP
-.B static  from_pretrained(task=\(aqsec\(aq, model=\(aqtransformer_words_nmt\(aq, device=\(aqcuda\(aq, cache_dir=None, force_download=False)
+.B static  from_pretrained(task=\(aqsec\(aq, model=\(aqtransformer_words_nmt\(aq, device=\(aqcuda\(aq, download_dir=None, cache_dir=None, force_download=False)
 Create a new NSC instance using a pretrained model.
 .INDENT 7.0
 .TP
@@ -903,7 +979,9 @@ Create a new NSC instance using a pretrained model.
 .IP \(bu 2
 \fBdevice\fP (\fIUnion\fP\fI[\fP\fIstr\fP\fI, \fP\fIint\fP\fI]\fP) – device to load the model to (e.g. “cuda”, “cpu” or integer denoting GPU device index)
 .IP \(bu 2
-\fBcache_dir\fP (\fIOptional\fP\fI[\fP\fIstr\fP\fI]\fP) – local cache directory to store the pretrained model
+\fBdownload_dir\fP (\fIOptional\fP\fI[\fP\fIstr\fP\fI]\fP) – directory where the compressed model will be downloaded to
+.IP \(bu 2
+\fBcache_dir\fP (\fIOptional\fP\fI[\fP\fIstr\fP\fI]\fP) – directory where the downloaded, compressed model will be extracted to
 .IP \(bu 2
 \fBforce_download\fP (\fIbool\fP) – force download the pretrained model again even if it already exists in the cache_dir
 .UNINDENT
@@ -1096,7 +1174,7 @@ Returns: NSC instance
 .UNINDENT
 .INDENT 7.0
 .TP
-.B static  from_pretrained(task=\(aqsed_words\(aq, model=\(aqgnn_default\(aq, device=\(aqcuda\(aq, cache_dir=None, force_download=False)
+.B static  from_pretrained(task=\(aqsed_words\(aq, model=\(aqgnn_default\(aq, device=\(aqcuda\(aq, download_dir=None, cache_dir=None, force_download=False)
 Create a new NSC instance using a pretrained model.
 .INDENT 7.0
 .TP
@@ -1109,7 +1187,9 @@ Create a new NSC instance using a pretrained model.
 .IP \(bu 2
 \fBdevice\fP (\fIUnion\fP\fI[\fP\fIstr\fP\fI, \fP\fIint\fP\fI]\fP) – device to load the model to (e.g. “cuda”, “cpu” or integer denoting GPU device index)
 .IP \(bu 2
-\fBcache_dir\fP (\fIOptional\fP\fI[\fP\fIstr\fP\fI]\fP) – local cache directory to store the pretrained model
+\fBdownload_dir\fP (\fIOptional\fP\fI[\fP\fIstr\fP\fI]\fP) – directory where the compressed model will be downloaded to
+.IP \(bu 2
+\fBcache_dir\fP (\fIOptional\fP\fI[\fP\fIstr\fP\fI]\fP) – directory where the downloaded, compressed model will be extracted to
 .IP \(bu 2
 \fBforce_download\fP (\fIbool\fP) – force download the pretrained model again even if it already exists in the cache_dir
 .UNINDENT
@@ -1223,7 +1303,7 @@ Returns: NSC instance
 .UNINDENT
 .INDENT 7.0
 .TP
-.B static  from_pretrained(task=\(aqtokenization_repair\(aq, model=\(aqtransformer_eo_large\(aq, device=\(aqcuda\(aq, cache_dir=None, force_download=False)
+.B static  from_pretrained(task=\(aqtokenization_repair\(aq, model=\(aqtransformer_eo_large\(aq, device=\(aqcuda\(aq, download_dir=None, cache_dir=None, force_download=False)
 Create a new NSC instance using a pretrained model.
 .INDENT 7.0
 .TP
@@ -1236,7 +1316,9 @@ Create a new NSC instance using a pretrained model.
 .IP \(bu 2
 \fBdevice\fP (\fIUnion\fP\fI[\fP\fIstr\fP\fI, \fP\fIint\fP\fI]\fP) – device to load the model to (e.g. “cuda”, “cpu” or integer denoting GPU device index)
 .IP \(bu 2
-\fBcache_dir\fP (\fIOptional\fP\fI[\fP\fIstr\fP\fI]\fP) – local cache directory to store the pretrained model
+\fBdownload_dir\fP (\fIOptional\fP\fI[\fP\fIstr\fP\fI]\fP) – directory where the compressed model will be downloaded to
+.IP \(bu 2
+\fBcache_dir\fP (\fIOptional\fP\fI[\fP\fIstr\fP\fI]\fP) – directory where the downloaded, compressed model will be extracted to
 .IP \(bu 2
 \fBforce_download\fP (\fIbool\fP) – force download the pretrained model again even if it already exists in the cache_dir
 .UNINDENT

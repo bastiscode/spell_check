@@ -300,7 +300,7 @@ def get_sed_models_and_metrics(is_neuspell: bool, is_sed_words: bool) \
             ("transformer", "transformer_no_feat"),
             ("gnn", "gnn_no_feat"),
             (r"transformer\textsuperscript{+}", "transformer"),
-            (r"gnn\textsuperscript{+}", "gnn_cliques_wfc"),
+            (r"gnn\textsuperscript{+}", "gnn_cliques_wfc")
         ]
     }
     metric_names = {"binary_f1"}
@@ -311,6 +311,12 @@ def get_sed_models_and_metrics(is_neuspell: bool, is_sed_words: bool) \
 
     if is_neuspell:
         b_fn = lambda s: "/".join(s.split("/")[-2:]) in {"neuspell/bea60k", "neuspell/jfleg"}
+        models[2, "default"].extend([
+            ("gnn untuned", "gnn_no_feat_untuned"),
+            ("gnn finetuned 8", "gnn_no_feat_finetuned_8"),
+            (r"gnn\textsuperscript{+} untuned", "gnn_cliques_wfc_untuned"),
+            (r"gnn\textsuperscript{+} finetuned 8", "gnn_cliques_wfc_finetuned_8")
+        ])
     else:
         b_fn = _regular_benchmark
         models[(3, "advanced")] = [
@@ -353,6 +359,12 @@ def get_sec_models_and_metrics(
 
     if is_neuspell:
         b_fn = lambda s: s.split("/")[-2] == "neuspell"
+        models[2, "default"].extend([
+            ("transformer untuned", "transformer_sec_nmt_untuned"),
+            ("transformer finetuned 4", "transformer_sec_nmt_finetuned_4"),
+            ("transformer word untuned", "transformer_sec_words_nmt_untuned"),
+            ("transformer word finetuned 4", "transformer_sec_words_nmt_finetuned_4"),
+        ])
     else:
         b_fn = _regular_benchmark
         models[(4, "tr+")] = [

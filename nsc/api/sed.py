@@ -170,6 +170,7 @@ class SpellingErrorDetector(_APIBase):
             task: str = "sed_words",
             model: str = "gnn_default",
             device: Union[str, int] = "cuda",
+            download_dir: Optional[str] = None,
             cache_dir: Optional[str] = None,
             force_download: bool = False
     ) -> "SpellingErrorDetector":
@@ -177,7 +178,13 @@ class SpellingErrorDetector(_APIBase):
             f"task {task} and model {model} do not match any of the available models:\n" \
             f"{pprint.pformat(get_available_spelling_error_detection_models())}"
 
-        model_dir, data_dir, config_dir = SpellingErrorDetector._download(task, model, cache_dir, force_download)
+        model_dir, data_dir, config_dir = SpellingErrorDetector._download(
+            task,
+            model,
+            download_dir,
+            cache_dir,
+            force_download
+        )
 
         return SpellingErrorDetector(
             model_dir,

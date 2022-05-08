@@ -241,6 +241,7 @@ class SpellingErrorCorrector(_APIBase):
             task: str = "sec",
             model: str = "transformer_words_nmt",
             device: Union[str, int] = "cuda",
+            download_dir: Optional[str] = None,
             cache_dir: Optional[str] = None,
             force_download: bool = False
     ) -> "SpellingErrorCorrector":
@@ -248,7 +249,13 @@ class SpellingErrorCorrector(_APIBase):
             f"model {model} does not match any of the available models:\n" \
             f"{pprint.pformat(get_available_spelling_error_correction_models())}"
 
-        model_dir, data_dir, config_dir = SpellingErrorCorrector._download("sec", model, cache_dir, force_download)
+        model_dir, data_dir, config_dir = SpellingErrorCorrector._download(
+            "sec",
+            model,
+            download_dir,
+            cache_dir,
+            force_download
+        )
 
         return SpellingErrorCorrector(
             model_dir,

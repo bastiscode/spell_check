@@ -212,10 +212,13 @@ You can also evaluate model predictions on benchmarks.</p>
 <p>To start a Docker container</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># run the docker container with GPU support</span>
 make run_docker_gpu
-<span class="c1"># or with CPU support</span>
+<span class="c1"># or with CPU support only</span>
 make run_docker_cpu
 </pre></div>
 </div>
+<p>You can also pass additional Docker arguments to the make commands by specifying <code class="docutils literal notranslate"><span class="pre">DOCKER_ARGS</span></code>. For example,
+to mount an additional directory inside the container you can execute
+<code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">DOCKER_ARGS=&quot;-v</span> <span class="pre">/path/to/outside/directory:/path/to/container/directory&quot;</span> <span class="pre">run_docker_gpu</span></code>.</p>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
 <p>The Docker setup is only intended to be used for using the command line tools/Python API with pretrained or
@@ -438,15 +441,60 @@ training on <a class="reference external" href="https://slurm.schedmd.com/docume
 </section>
 <section id="reproduce">
 <h2>Reproduce<a class="headerlink" href="#reproduce" title="Permalink to this headline"></a></h2>
-<p>To reproduce the results of this project see the <code class="docutils literal notranslate"><span class="pre">train_slurm_&lt;task&gt;.sh</span></code> scripts in this <a class="reference external" href="https://github.com/bastiscode/spell_check/tree/main/spell_checking/scripts">directory</a> which were used for training all models.
+<p>We make all models that are needed to reproduce the results on the project benchmarks available as pretrained models.
+All pretrained models can be accessed either through the command line interface (<code class="docutils literal notranslate"><span class="pre">nsec</span></code>, <code class="docutils literal notranslate"><span class="pre">nsed</span></code>, <code class="docutils literal notranslate"><span class="pre">ntr</span></code>)
+or the Python API.</p>
+<p>The project benchmarks and can be found here: <code class="docutils literal notranslate"><span class="pre">/nfs/students/sebastian-walter/masters_thesis/benchmarks</span></code>.
+Every benchmark follows the same directory structure:</p>
+<ul class="simple">
+<li><p>&lt;task&gt;/&lt;benchmark_group&gt;/&lt;benchmark_split&gt;/corrupt.txt</p></li>
+<li><p>&lt;task&gt;/&lt;benchmark_group&gt;/&lt;benchmark_split&gt;/correct.txt</p></li>
+</ul>
+<p>Here corrupt.txt is the input containing misspelled text and correct.txt is the groundtruth output. We
+provide a <a class="reference external" href="https://github.com/bastiscode/spell_check/blob/main/spell_checking/benchmarks/scripts/evaluate.py">evaluation script</a> that can be used to evaluate model predictions on a given benchmark.</p>
+<p>As an example, lets look at the steps that are necessary to evaluate our gnn+ model for word level spelling error detection on
+the wikidump realistic benchmark using the command line interface:</p>
+<ol class="arabic simple">
+<li><p>Run model on benchmark:</p></li>
+</ol>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>nsed -m gnn+ <span class="se">\</span>
+-f /nfs/students/sebastian-walter/masters_thesis/benchmarks/sed_words/wikidump/realistic/corrupt.txt <span class="se">\</span>
+-o gnn_plus_predictions.txt
+</pre></div>
+</div>
+<ol class="arabic simple" start="2">
+<li><p>Evaluate model predictions:</p></li>
+</ol>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python spell_checking/benchmarks/scripts/evaluate.py <span class="se">\</span>
+sed_words <span class="se">\ </span> <span class="c1"># benchmark type</span>
+/nfs/students/sebastian-walter/masters_thesis/benchmarks/sed_words/wikidump/realistic/corrupt.txt <span class="se">\ </span> <span class="c1"># input file</span>
+/nfs/students/sebastian-walter/masters_thesis/benchmarks/sed_words/wikidump/realistic/correct.txt <span class="se">\ </span> <span class="c1"># groundtruth file</span>
+gnn_plus_predictions.txt  <span class="c1"># predicted file</span>
+</pre></div>
+</div>
+<div class="admonition hint">
+<p class="admonition-title">Hint</p>
+<p>By default a pretrained model is downloaded as a zip file and then extracted when you first use it. Since some models
+are quite large this can take some time. To cut this time all pretrained models can also be found as zip files in the directory
+<code class="docutils literal notranslate"><span class="pre">/nfs/students/sebastian-walter/masters_thesis/zipped</span></code>. If you set the env variable
+<code class="docutils literal notranslate"><span class="pre">NSC_DOWNLOAD_DIR</span></code> to this directory, the models are loaded from this directory and must not be downloaded.
+If you are running this project using Docker you can mount the directory to the containers download directory
+by passing the additional volume flag <code class="docutils literal notranslate"><span class="pre">-v</span> <span class="pre">/nfs/students/sebastian-walter/masters_thesis/zipped:/nsc_download</span></code>.</p>
+</div>
+<div class="admonition hint">
+<p class="admonition-title">Hint</p>
+<p>To access the benchmarks if you are running this project with Docker you can mount the benchmark directory
+inside the Docker container using <code class="docutils literal notranslate"><span class="pre">-v</span> <span class="pre">/nfs/students/sebastian-walter/masters_thesis/benchmarks:/benchmarks</span></code>.
+The Docker container also provides additional commands for evaluating benchmarks that are basically
+wrappers around the <a class="reference external" href="https://github.com/bastiscode/spell_check/blob/main/spell_checking/benchmarks/scripts/evaluate.py">evaluation script</a> mentioned above.</p>
+</div>
+<p>To retrain the models of this project see the <code class="docutils literal notranslate"><span class="pre">train_slurm_&lt;task&gt;.sh</span></code> scripts in this <a class="reference external" href="https://github.com/bastiscode/spell_check/tree/main/spell_checking/scripts">directory</a> which were used for training all models.
 These scripts do nothing more than setting some environment variables and calling the <code class="docutils literal notranslate"><span class="pre">train.sh</span></code> script mentioned above.</p>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
-<p>Using the <code class="docutils literal notranslate"><span class="pre">train_slurm_&lt;task&gt;.sh</span></code> scripts to reproduce results is only possible on a SLURM cluster
+<p>Using the <code class="docutils literal notranslate"><span class="pre">train_slurm_&lt;task&gt;.sh</span></code> scripts for training is only possible on a SLURM cluster
 since they call the <code class="docutils literal notranslate"><span class="pre">train.sh</span></code> script using SLURMs sbatch command.</p>
 </div>
-<p>Once you finished training you can evaluate the models on the projects’ benchmarks that are available under
-<code class="docutils literal notranslate"><span class="pre">/nfs/students/sebastian-walter/masters_thesis/benchmarks</span></code>.</p>
 </section>
 </section>
 <span id="document-nsc"></span><section id="module-nsc">
@@ -696,7 +744,7 @@ and batch_max_length_factor is 4 then one batch will contain as many input seque
 
 <dl class="py method">
 <dt class="sig sig-object py" id="nsc.SpellingErrorCorrector.from_pretrained">
-<em class="property"><span class="pre">static</span><span class="w">  </span></em><span class="sig-name descname"><span class="pre">from_pretrained</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">task</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'sec'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'transformer_words_nmt'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'cuda'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cache_dir</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">force_download</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#nsc.SpellingErrorCorrector.from_pretrained" title="Permalink to this definition"></a></dt>
+<em class="property"><span class="pre">static</span><span class="w">  </span></em><span class="sig-name descname"><span class="pre">from_pretrained</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">task</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'sec'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'transformer_words_nmt'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'cuda'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">download_dir</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cache_dir</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">force_download</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#nsc.SpellingErrorCorrector.from_pretrained" title="Permalink to this definition"></a></dt>
 <dd><p>Create a new NSC instance using a pretrained model.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -704,7 +752,8 @@ and batch_max_length_factor is 4 then one batch will contain as many input seque
 <li><p><strong>task</strong> (<em>str</em>) – name of the task</p></li>
 <li><p><strong>model</strong> (<em>str</em>) – name of the pretrained model</p></li>
 <li><p><strong>device</strong> (<em>Union</em><em>[</em><em>str</em><em>, </em><em>int</em><em>]</em>) – device to load the model to (e.g. “cuda”, “cpu” or integer denoting GPU device index)</p></li>
-<li><p><strong>cache_dir</strong> (<em>Optional</em><em>[</em><em>str</em><em>]</em>) – local cache directory to store the pretrained model</p></li>
+<li><p><strong>download_dir</strong> (<em>Optional</em><em>[</em><em>str</em><em>]</em>) – directory where the compressed model will be downloaded to</p></li>
+<li><p><strong>cache_dir</strong> (<em>Optional</em><em>[</em><em>str</em><em>]</em>) – directory where the downloaded, compressed model will be extracted to</p></li>
 <li><p><strong>force_download</strong> (<em>bool</em>) – force download the pretrained model again even if it already exists in the cache_dir</p></li>
 </ul>
 </dd>
@@ -876,7 +925,7 @@ and batch_max_length_factor is 4 then one batch will contain as many input seque
 
 <dl class="py method">
 <dt class="sig sig-object py" id="nsc.SpellingErrorDetector.from_pretrained">
-<em class="property"><span class="pre">static</span><span class="w">  </span></em><span class="sig-name descname"><span class="pre">from_pretrained</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">task</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'sed_words'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'gnn_default'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'cuda'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cache_dir</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">force_download</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#nsc.SpellingErrorDetector.from_pretrained" title="Permalink to this definition"></a></dt>
+<em class="property"><span class="pre">static</span><span class="w">  </span></em><span class="sig-name descname"><span class="pre">from_pretrained</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">task</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'sed_words'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'gnn_default'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'cuda'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">download_dir</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cache_dir</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">force_download</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#nsc.SpellingErrorDetector.from_pretrained" title="Permalink to this definition"></a></dt>
 <dd><p>Create a new NSC instance using a pretrained model.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -884,7 +933,8 @@ and batch_max_length_factor is 4 then one batch will contain as many input seque
 <li><p><strong>task</strong> (<em>str</em>) – name of the task</p></li>
 <li><p><strong>model</strong> (<em>str</em>) – name of the pretrained model</p></li>
 <li><p><strong>device</strong> (<em>Union</em><em>[</em><em>str</em><em>, </em><em>int</em><em>]</em>) – device to load the model to (e.g. “cuda”, “cpu” or integer denoting GPU device index)</p></li>
-<li><p><strong>cache_dir</strong> (<em>Optional</em><em>[</em><em>str</em><em>]</em>) – local cache directory to store the pretrained model</p></li>
+<li><p><strong>download_dir</strong> (<em>Optional</em><em>[</em><em>str</em><em>]</em>) – directory where the compressed model will be downloaded to</p></li>
+<li><p><strong>cache_dir</strong> (<em>Optional</em><em>[</em><em>str</em><em>]</em>) – directory where the downloaded, compressed model will be extracted to</p></li>
 <li><p><strong>force_download</strong> (<em>bool</em>) – force download the pretrained model again even if it already exists in the cache_dir</p></li>
 </ul>
 </dd>
@@ -993,7 +1043,7 @@ When running on CPU fp16 will be overwritten with bfp16 since only bfp16 is supp
 
 <dl class="py method">
 <dt class="sig sig-object py" id="nsc.TokenizationRepairer.from_pretrained">
-<em class="property"><span class="pre">static</span><span class="w">  </span></em><span class="sig-name descname"><span class="pre">from_pretrained</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">task</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'tokenization_repair'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'transformer_eo_large'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'cuda'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cache_dir</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">force_download</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#nsc.TokenizationRepairer.from_pretrained" title="Permalink to this definition"></a></dt>
+<em class="property"><span class="pre">static</span><span class="w">  </span></em><span class="sig-name descname"><span class="pre">from_pretrained</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">task</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'tokenization_repair'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'transformer_eo_large'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'cuda'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">download_dir</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cache_dir</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">force_download</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#nsc.TokenizationRepairer.from_pretrained" title="Permalink to this definition"></a></dt>
 <dd><p>Create a new NSC instance using a pretrained model.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -1001,7 +1051,8 @@ When running on CPU fp16 will be overwritten with bfp16 since only bfp16 is supp
 <li><p><strong>task</strong> (<em>str</em>) – name of the task</p></li>
 <li><p><strong>model</strong> (<em>str</em>) – name of the pretrained model</p></li>
 <li><p><strong>device</strong> (<em>Union</em><em>[</em><em>str</em><em>, </em><em>int</em><em>]</em>) – device to load the model to (e.g. “cuda”, “cpu” or integer denoting GPU device index)</p></li>
-<li><p><strong>cache_dir</strong> (<em>Optional</em><em>[</em><em>str</em><em>]</em>) – local cache directory to store the pretrained model</p></li>
+<li><p><strong>download_dir</strong> (<em>Optional</em><em>[</em><em>str</em><em>]</em>) – directory where the compressed model will be downloaded to</p></li>
+<li><p><strong>cache_dir</strong> (<em>Optional</em><em>[</em><em>str</em><em>]</em>) – directory where the downloaded, compressed model will be extracted to</p></li>
 <li><p><strong>force_download</strong> (<em>bool</em>) – force download the pretrained model again even if it already exists in the cache_dir</p></li>
 </ul>
 </dd>

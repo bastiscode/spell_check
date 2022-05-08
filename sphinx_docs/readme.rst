@@ -182,8 +182,12 @@ To start a Docker container
 
     # run the docker container with GPU support
     make run_docker_gpu
-    # or with CPU support
+    # or with CPU support only
     make run_docker_cpu
+
+You can also pass additional Docker arguments to the make commands by specifying ``DOCKER_ARGS``. For example,
+to mount an additional directory inside the container you can execute
+``make DOCKER_ARGS="-v /path/to/outside/directory:/path/to/container/directory" run_docker_gpu``.
 
 .. note::
     The Docker setup is only intended to be used for using the command line tools/Python API with pretrained or

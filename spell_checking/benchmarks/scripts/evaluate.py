@@ -14,11 +14,13 @@ def parse_args():
             "sed_words",
             "sec",
             "tokenization_repair"
-        ]
+        ],
+        help="The benchmark type determines the metrics that will be used to evaluate the given files."
     )
-    parser.add_argument("in_file", type=str)
-    parser.add_argument("gt_file", type=str)
-    parser.add_argument("pred_file", type=str)
+    parser.add_argument("in_file", type=str, help="Path to the input file containing misspelled text.")
+    parser.add_argument("gt_file", type=str, help="Path to the groundtruth file containing the target outputs.")
+    parser.add_argument("pred_file", type=str,
+                        help="Path to the predicted file as outputted by a spell checking model.")
     return parser.parse_args()
 
 

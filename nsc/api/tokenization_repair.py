@@ -93,6 +93,7 @@ class TokenizationRepairer(_APIBase):
             task: str = "tokenization_repair",
             model: str = "transformer_eo_large",
             device: Union[str, int] = "cuda",
+            download_dir: Optional[str] = None,
             cache_dir: Optional[str] = None,
             force_download: bool = False
     ) -> "TokenizationRepairer":
@@ -101,7 +102,11 @@ class TokenizationRepairer(_APIBase):
             f"{pprint.pformat(get_available_tokenization_repair_models())}"
 
         model_dir, data_dir, config_dir = TokenizationRepairer._download(
-            "tokenization_repair", model, cache_dir, force_download
+            "tokenization_repair",
+            model,
+            download_dir,
+            cache_dir,
+            force_download
         )
 
         return TokenizationRepairer(
