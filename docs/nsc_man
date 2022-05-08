@@ -467,7 +467,8 @@ T}
 _
 .TE
 .sp
-You can skip the following training section
+You can skip the following training section if you only want to use pretrained models and not
+train your own models.
 .SH TRAINING
 .sp
 Before starting training you need the get the training data. Everything you need

@@ -1,7 +1,8 @@
 Training and reproducing results
 ================================
 
-You can skip the following training section
+You can skip the following training section if you only want to use pretrained models and not
+train your own models.
 
 Training
 --------
