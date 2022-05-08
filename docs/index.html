@@ -203,7 +203,8 @@ code examples on how to use the API.</p>
 <section id="docker">
 <h2>Docker<a class="headerlink" href="#docker" title="Permalink to this headline"></a></h2>
 <p>This project can also be run using Docker.
-Inside the Docker container both the <a class="reference internal" href="#command-line-interfaces">Command line interfaces</a> and <a class="reference internal" href="#python-api">Python API</a> are available for you to use.</p>
+Inside the Docker container both the <a class="reference internal" href="#command-line-interfaces">Command line interfaces</a> and <a class="reference internal" href="#python-api">Python API</a> are available for you to use.
+You can also evaluate model predictions on benchmarks.</p>
 <p>To build the Docker image</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>make build_docker
 </pre></div>
@@ -217,8 +218,8 @@ make run_docker_cpu
 </div>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
-<p>The Docker setup is only intended to be used for trying out the command line tools or the Python API and
-not for training or reproducing the results.</p>
+<p>The Docker setup is only intended to be used for using the command line tools/Python API with pretrained or
+your own models and evaluating them on benchmarks, but not for training.</p>
 </div>
 <div class="admonition note">
 <p class="admonition-title">Note</p>

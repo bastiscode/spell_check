@@ -13,7 +13,7 @@ from nsc.utils import Batch
 
 
 def _match_input_output(input_string: str, output_string: str) -> str:
-    pattern = re.compile(f"^{re.escape(input_string)}(\s?\S+\s?).*")
+    pattern = re.compile(f"^{re.escape(input_string)}(\\s?\\S+\\s?).*")
     match = pattern.fullmatch(output_string)
     if match is None:
         return ""

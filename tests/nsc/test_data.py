@@ -8,7 +8,7 @@ from nsc.data import utils
 from nsc.data import preprocessing
 
 
-class TestNLP:
+class TestData:
     @staticmethod
     def randomly_insert_whitespaces(s: str, p: float, seed: int) -> str:
         rand = np.random.RandomState(seed)
@@ -39,8 +39,8 @@ class TestNLP:
     @pytest.mark.parametrize("execution", list(range(100)))
     @pytest.mark.parametrize("seed", list(range(20)))
     def test_clean_sequence(self, execution: int, seed: int) -> None:
-        cleaned_sequence = TestNLP.randomly_insert_whitespaces(string.ascii_letters, p=0.2, seed=seed).strip()
-        uncleaned_sequence = TestNLP.add_noise(cleaned_sequence, p=0.2, seed=seed)
+        cleaned_sequence = TestData.randomly_insert_whitespaces(string.ascii_letters, p=0.2, seed=seed).strip()
+        uncleaned_sequence = TestData.add_noise(cleaned_sequence, p=0.2, seed=seed)
 
         assert utils.clean_sequence(uncleaned_sequence) == cleaned_sequence
 

@@ -30,13 +30,14 @@ docs:
 	@make -C sphinx_docs man
 	@mkdir -p docs
 	@cp -a sphinx_docs/_build/singlehtml/. docs
+	@cp -a sphinx_docs/_build/man/nsc.1 docs/nsc_man
 
 .PHONY: checkstyle
 checkstyle:
-	@echo "Running pep8 (pycodestyle)\n--------------------------"
+	@echo "Running pep8 (pycodestyle)"
 	@pycodestyle --exclude="data,spell_checking,third_party" --max-line-length=120 .
 
 .PHONY: tests
 tests:
-	@echo "Running pytest\n--------------"
+	@echo "Running pytest"
 	@pytest -s tests -n auto --disable-pytest-warnings

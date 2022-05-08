@@ -168,7 +168,7 @@ Docker
 
 This project can also be run using Docker.
 Inside the Docker container both the `Command line interfaces`_ and `Python API`_ are available for you to use.
-
+You can also evaluate model predictions on benchmarks.
 
 To build the Docker image
 
@@ -186,8 +186,8 @@ To start a Docker container
     make run_docker_cpu
 
 .. note::
-    The Docker setup is only intended to be used for trying out the command line tools or the Python API and
-    not for training or reproducing the results.
+    The Docker setup is only intended to be used for using the command line tools/Python API with pretrained or
+    your own models and evaluating them on benchmarks, but not for training.
 
 .. note::
     Running the Docker container with GPU support assumes that you have the `NVIDIA Container Toolkit`_ installed.

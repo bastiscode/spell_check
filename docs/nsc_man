@@ -1,0 +1,1407 @@
+.\" Man page generated from reStructuredText.
+.
+.
+.nr rst2man-indent-level 0
+.
+.de1 rstReportMargin
+\\$1 \\n[an-margin]
+level \\n[rst2man-indent-level]
+level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
+-
+\\n[rst2man-indent0]
+\\n[rst2man-indent1]
+\\n[rst2man-indent2]
+..
+.de1 INDENT
+.\" .rstReportMargin pre:
+. RS \\$1
+. nr rst2man-indent\\n[rst2man-indent-level] \\n[an-margin]
+. nr rst2man-indent-level +1
+.\" .rstReportMargin post:
+..
+.de UNINDENT
+. RE
+.\" indent \\n[an-margin]
+.\" old: \\n[rst2man-indent\\n[rst2man-indent-level]]
+.nr rst2man-indent-level -1
+.\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
+.in \\n[rst2man-indent\\n[rst2man-indent-level]]u
+..
+.TH "TABLE" "1" "May 08, 2022" "" "nsc"
+.SH NAME
+Table \- nsc 0.1.0
+.sp
+This project is about detecting and correcting spelling errors using Transformers and
+Graph Neural Networks. Visit the \fI\%documentation\fP (which also includes this README)
+for information on how to reproduce results and train your own models
+as well as a more detailed description of the \fBnsc\fP \fI\%Python API\fP\&.
+.SH INSTALLATION
+.sp
+Clone the repository
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+git clone git@github.com:bastiscode/spell_check.git
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+Install from source (alternatively you can use \fI\%Docker\fP)
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+make install
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.SH USAGE
+.sp
+There are two main ways to use this project.
+Either via the command line or by directly using the Python API.
+.SS Command line interfaces
+.sp
+After installation there will be three commands available in your environment:
+.INDENT 0.0
+.IP 1. 3
+\fBnsec\fP for neural spelling error correction
+.IP 2. 3
+\fBnsed\fP for neural spelling error detection
+.IP 3. 3
+\fBntr\fP for neural tokenization repair
+.UNINDENT
+.sp
+By default all three commands take input from \fIstdin\fP, run their respective task on the
+input line by line and print their output line by line to \fIstdout\fP\&.
+.sp
+\fBSpelling error correction using\fP \fBnsec\fP
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+# correct text by piping into nsec,
+echo "This is an incorect sentense!" | nsec
+cat path/to/file.txt | nsec
+
+# by using the \-c flag
+nsec \-c "This is an incorect sentense!"
+
+# or by passing a file
+nsec \-f path/to/file.txt
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+\fBSpelling error detection using\fP \fBnsed\fP
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+# detect errors by piping into nsed,
+echo "This is an incorect sentense!" | nsed
+cat path/to/file.txt | nsed
+
+# by using the \-d flag
+nsed \-d "This is an incorect sentense!"
+
+# or by passing a file
+nsed \-f path/to/file.txt
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+\fBTokenization repair using\fP \fBntr\fP
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+# repair text by piping into ntr,
+echo "Thisis an inc orect sentens e!" | ntr
+cat path/to/file.txt | ntr
+
+# by using the \-r flag
+ntr \-r "Thisis an inc orect sentens e!"
+
+# or by passing a file
+ntr \-f path/to/file.txt
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+You can also combine the \fBntr\fP, \fBnsed\fP, and \fBnsec\fP commands in a variety of ways.
+Some examples are shown below.
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+# repair and detect
+echo "Repi arand detec erors in tihssen tence!" | ntr | nsed
+
+# repair and correct
+echo "Repi arand core ct tihssen tens!" | ntr | nsec
+
+# repair, detect and correct
+# (this pipeline uses the spelling error detection output
+# to guide the spelling error correction model to correct only the misspelled words)
+echo "Repi arand core ct tihssen tens!" | ntr | nsed \-\-sec\-out | nsec \-\-sed\-in
+
+# repair and correct a file and save the output
+ntr \-f path/to/file.txt | nsec \-\-progress \-o path/to/output_file.txt
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+There are a few other command line options available for the \fBnsec\fP, \fBnsed\fP and \fBntr\fP commands. Inspect
+them by passing the \fB\-h / \-\-help\fP flag to the commands.
+.SS Python API
+.sp
+We also provide a Python API for you to use spell checking models directly in code. Below are basic
+code examples on how to use the API.
+.sp
+\fBSpelling error correction\fP
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+from nsc import SpellingErrorCorrector, get_available_spelling_error_correction_models
+
+# show all spelling error correction models
+print(get_available_spelling_error_correction_models())
+
+# use a pretrained model
+sec = SpellingErrorCorrector.from_pretrained()
+# correct errors in text
+correction = sec.correct_text("Tihs text has erors!")
+print(correction)
+# correct errors in file
+corrections = sec.correct_file("path/to/file.txt")
+print(correction)
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+\fBSpelling error detection\fP
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+from nsc import SpellingErrorDetector, get_available_spelling_error_detection_models
+
+# show all spelling error detection models
+print(get_available_spelling_error_detection_models())
+
+# use a pretrained model
+sed = SpellingErrorDetector.from_pretrained()
+# detect errors in text
+detection = sed.detect_text("Tihs text has erors!")
+print(detection)
+# detect errors in file
+detections = sed.detect_file("path/to/file.txt")
+print(detections)
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+\fBTokenization repair\fP
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+from nsc import TokenizationRepairer, get_available_tokenization_repair_models
+
+# show all tokenization repair models
+print(get_available_tokenization_repair_models())
+
+# use a pretrained model
+tr = TokenizationRepairer.from_pretrained()
+# repair tokenization in text
+repaired_text = tr.repair_text("Ti hstext h aserors!")
+print(repaired_text)
+# repair tokenization in file
+repaired_file = tr.repair_file("path/to/file.txt")
+print(repaired_file)
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.SH DOCKER
+.sp
+This project can also be run using Docker.
+Inside the Docker container both the \fI\%Command line interfaces\fP and \fI\%Python API\fP are available for you to use.
+You can also evaluate model predictions on benchmarks.
+.sp
+To build the Docker image
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+make build_docker
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+To start a Docker container
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+# run the docker container with GPU support
+make run_docker_gpu
+# or with CPU support
+make run_docker_cpu
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+\fBNOTE:\fP
+.INDENT 0.0
+.INDENT 3.5
+The Docker setup is only intended to be used for using the command line tools/Python API with pretrained or
+your own models and evaluating them on benchmarks, but not for training.
+.UNINDENT
+.UNINDENT
+.sp
+\fBNOTE:\fP
+.INDENT 0.0
+.INDENT 3.5
+Running the Docker container with GPU support assumes that you have the \fI\%NVIDIA Container Toolkit\fP installed.
+.UNINDENT
+.UNINDENT
+.sp
+The following table shows all pretrained models available for the CLI tools and Python API:
+.TS
+center;
+|l|l|l|l|.
+_
+T{
+Task (CLI tool/Python class)
+T}	T{
+Model
+T}	T{
+Description
+T}	T{
+Default
+T}
+_
+T{
+tokenization_repair (\fBntr\fP/\fBTokenizationRepairer\fP)
+T}	T{
+transformer_eo
+T}	T{
+Transformer model that repairs sequences by predicting repair tokens for each character.
+T}	T{
+X
+T}
+_
+T{
+tokenization_repair (\fBntr\fP/\fBTokenizationRepairer\fP)
+T}	T{
+tokenization_repair+
+T}	T{
+Transformer model that repairs sequences by predicting repair tokens for each character. Different from transformer_eo because this model also was trained to detect spelling errors.
+T}	T{
+T}
+_
+T{
+tokenization_repair (\fBntr\fP/\fBTokenizationRepairer\fP)
+T}	T{
+tokenization_repair++
+T}	T{
+Transformer model that repairs sequences by predicting repair tokens for each character. Different from transformer_eo because this model also was trained to detect and correct spelling errors.
+T}	T{
+T}
+_
+T{
+sed_sequence (\fBnsed\fP/\fBSpellingErrorDetector\fP)
+T}	T{
+transformer
+T}	T{
+Regular transformer processing a sequence of sub\-word tokens. Predicts spelling errors on sequence level using the aggregated representations of all sub\-word tokens.
+T}	T{
+X
+T}
+_
+T{
+sed_sequence (\fBnsed\fP/\fBSpellingErrorDetector\fP)
+T}	T{
+transformer+
+T}	T{
+Regular transformer processing a sequence of sub\-word tokens. Before predicting spelling errors, sub\-word representations within a word are aggregated and enriched with word features to obtain word representations. Predicts spelling errors on sequence level using the aggregation of those word representations.
+T}	T{
+T}
+_
+T{
+sed_sequence (\fBnsed\fP/\fBSpellingErrorDetector\fP)
+T}	T{
+gnn
+T}	T{
+Attentional Graph Neural Network which processes language graphs with fully connected word nodes and fully connected sub\-word cliques. Predicts spelling errors on sequence level using the aggregated representations of all word nodes.
+T}	T{
+T}
+_
+T{
+sed_sequence (\fBnsed\fP/\fBSpellingErrorDetector\fP)
+T}	T{
+gnn+
+T}	T{
+Attentional Graph Neural Network which processes language graphs with fully connected word nodes, word features and fully connected sub\-word cliques. Predicts spelling errors on sequence level using the aggregated representations of all word nodes.
+T}	T{
+T}
+_
+T{
+sed_words (\fBnsed\fP/\fBSpellingErrorDetector\fP)
+T}	T{
+transformer
+T}	T{
+Regular transformer processing a sequence of sub\-word tokens. Predicts spelling errors on word level using the aggregated sub\-word representations per word.
+T}	T{
+T}
+_
+T{
+sed_words (\fBnsed\fP/\fBSpellingErrorDetector\fP)
+T}	T{
+transformer+
+T}	T{
+Regular transformer processing a sequence of sub\-word tokens. Before predicting spelling errors, sub\-word representations within a word are aggregated and enriched with word features to obtain word representations. Predicts spelling errors on word level using those word representations.
+T}	T{
+T}
+_
+T{
+sed_words (\fBnsed\fP/\fBSpellingErrorDetector\fP)
+T}	T{
+gnn
+T}	T{
+Attentional Graph Neural Network which processes language graphs with fully connected word nodes and fully connected sub\-word cliques. Predicts spelling errors on word level using the word node representations.
+T}	T{
+T}
+_
+T{
+sed_words (\fBnsed\fP/\fBSpellingErrorDetector\fP)
+T}	T{
+gnn+
+T}	T{
+Attentional Graph Neural Network which processes language graphs with fully connected word nodes, word features and fully connected sub\-word cliques. Predicts spelling errors on word level using the word node representations.
+T}	T{
+T}
+_
+T{
+sed_words (\fBnsed\fP/\fBSpellingErrorDetector\fP)
+T}	T{
+tokenization_repair+
+T}	T{
+Transformer based model that detects errors in sequences by first correcting the tokenizationand then detecting spelling errors for each word in the repaired text.
+T}	T{
+T}
+_
+T{
+sed_words (\fBnsed\fP/\fBSpellingErrorDetector\fP)
+T}	T{
+tokenization_repair++
+T}	T{
+Transformer based model that detects errors in sequences by first correcting the tokenizationand then detecting spelling errors for each word in the repaired text. Different from tokenization_repair+ because this model was trained additionally to also correct spelling errors (it is also available in nsec).
+T}	T{
+T}
+_
+T{
+sec (\fBnsec\fP/\fBSpellingErrorCorrector\fP)
+T}	T{
+transformer_words_nmt
+T}	T{
+Transformer model that corrects sequences by translating each word individually from misspelled to correct.
+T}	T{
+X
+T}
+_
+T{
+sec (\fBnsec\fP/\fBSpellingErrorCorrector\fP)
+T}	T{
+tokenization_repair++
+T}	T{
+Transformer based model that corrects sequences by first correcting the tokenization, then detecting spelling errors for each word in the repaired text and then translating every detected misspelled word to its corrected version.
+T}	T{
+T}
+_
+T{
+sec (\fBnsec\fP/\fBSpellingErrorCorrector\fP)
+T}	T{
+transformer_nmt
+T}	T{
+Transformer model that translates a sequence with spelling errors into a sequence without spelling errors.
+T}	T{
+T}
+_
+T{
+sec (\fBnsec\fP/\fBSpellingErrorCorrector\fP)
+T}	T{
+transformer_with_tokenization_repair_nmt
+T}	T{
+Transformer model that translates a sequence with spelling and tokenization errors into a sequence without spelling errors and tokenization errors. Different from transformer_nmt because this model tokenizes into characters and was trained on text with spelling and tokenization errors, whereas transformer_nmt tokenizes into sub\-words and was trained only on text with spelling errors.
+T}	T{
+T}
+_
+.TE
+.SH TRAINING
+.sp
+Before starting training you need the get the training data. Everything you need
+(preprocessed samples, tokenizer, dictionaries, etc.) can be found under \fB/nfs/students/sebastian\-walter/masters_thesis/data\fP\&.
+.sp
+You also need to set the following two special environment variables:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+# set the data directory
+export NSC_DATA_DIR=/nfs/students/sebastian\-walter/masters_thesis/data
+
+# set the config directory (necessary to be able to compose
+# the final training config from sub\-configs)
+export NSC_CONFIG_DIR=spell_checking/configs
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+\fBNOTE:\fP
+.INDENT 0.0
+.INDENT 3.5
+Of course you can also copy the training data folder to every other
+place you like and adjust \fBNSC_DATA_DIR\fP accordingly. But keep in mind that this
+folder is very large (> 1TB).
+.UNINDENT
+.UNINDENT
+.sp
+After that you can train your own models using a training config.
+All of the training configs this project used to train models can be found \fI\%here\fP\&.
+.sp
+You might have to further configure a training config by setting additional environment variables. Let’s
+look at an example where we want to train a spelling error detection Graph Neural Network. The \fI\%config
+for this task\fP looks like the following:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+variant: ${from_file:variant/sed_words.yaml}
+model: ${from_file:model/model_for_sed_words.yaml}
+optimizer: ${from_file:optimizer/adamw.yaml}
+lr_scheduler: ${from_file:lr_scheduler/step_with_0.05_warmup.yaml}
+
+experiment_dir: ${oc.env:NSC_EXPERIMENT_DIR}
+data_dir: ${oc.env:NSC_DATA_DIR}
+datasets:
+  \- ${oc.env:NSC_DATA_DIR}/processed/wikidump_paragraphs_sed_words_and_sec
+  \- ${oc.env:NSC_DATA_DIR}/processed/bookcorpus_paragraphs_sed_words_and_sec
+dataset_limits:
+  \- ${oc.env:NSC_DATA_LIMIT}
+  \- ${oc.env:NSC_DATA_LIMIT}
+val_splits:
+  \- 2500
+  \- 2500
+
+experiment_name: ${oc.env:NSC_EXPERIMENT_NAME,dummy}
+epochs: ${oc.env:NSC_EPOCHS,1}
+batch_max_length: ${oc.env:NSC_BATCH_MAX_LENGTH,4096}
+bucket_span: ${oc.env:NSC_BUCKET_SPAN,4}
+log_per_epoch: ${oc.env:NSC_LOG_PER_EPOCH,100}
+eval_per_epoch: ${oc.env:NSC_EVAL_PER_EPOCH,4}
+seed: 22
+mixed_precision: ${oc.env:NSC_MIXED_PRECISION,true}
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+Values looking like \fB${from_file:<file_path>}\fP refer to other config files relative to the \fBNSC_CONFIG_DIR\fP\&. When the training
+config is composed, the contents of the referred config files will replace these values.
+.sp
+Values looking like \fB${oc.env:<env_var_name>,<default>}\fP refer to environment variables and an optional default that will be set
+if the environment variable is not found. If there is no default you will be required to set the environment variable, otherwise
+you receive an error message.
+.sp
+In our example we need to set values for the environment variables \fBNSC_DATA_LIMIT\fP (can be used to limit the number of samples per training dataset)
+and \fBNSC_EXPERIMENT_DIR\fP (directory path where the logs and checkpoints will be saved). Once we have set these variables we
+can start the training. Since the training script is written to support distributed training we need to use \fI\%torchrun\fP
+to launch the script:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+# set the environment variables
+export NSC_DATA_LIMIT=100000 # set data limit to 100,000 samples per dataset
+export NSC_EXPERIMENT_DIR=experiments # directory path where the experiment will be saved
+
+# to train locally / on a single node
+torchrun \-\-nnodes=1 nsc/train.py \-\-config spell_checking/configs/sed_words.yaml
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+You can also resume training for an existing experiment if you had to abort training for some reason:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+# resume training from latest checkpoint of an experiment
+torchrun \-\-nnodes=1 nsc/train.py \-\-resume <path_to_experiment_directory>
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+As an alternative you can set one of the \fBNSC_CONFIG\fP or \fBNSC_RESUME\fP environment variables
+and use the \fI\%train.sh\fP script to start training. This script additionally provides functionality to start distributed
+training on \fI\%SLURM\fP clusters. Training using this script would look something like this:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+# set the environment variables
+export NSC_DATA_LIMIT=100000 # set data limit to 100,000 samples per dataset
+export NSC_EXPERIMENT_DIR=experiments # directory path where the experiment will be saved
+
+## LOCAL training
+# start new training run using a config
+NSC_CONFIG=spell_checking/configs/sed_words.yaml spell_checking/scripts/train.sh
+
+# resume training from latest checkpoint of an experiment
+NSC_RESUME=<path_to_experiment_directory> spell_checking/scripts/train.sh
+
+## SLURM training
+# starting distributed training on a SLURM cluster using sbatch
+# requires you to set the NSC_WORLD_SIZE environment variable (total number of GPUs used for training)
+# if you e.g. want to train on 4 nodes with 2 GPUs each set NSC_WORLD_SIZE=8
+NSC_CONFIG=spell_checking/configs/sed_words.yaml NSC_WORLD_SIZE=8 sbatch \-\-nodes=4 \-\-ntasks\-per\-node=2 \-\-gres=gpu:2 spell_checking/scripts/train.sh
+
+# if you are in an interactive SLURM session (started e.g. with srun)
+# you probably want to train as if you are running locally, set NSC_FORCE_LOCAL=true and
+# start training without sbatch
+NSC_FORCE_LOCAL=true NSC_CONFIG=spell_checking/configs/sed_words.yaml spell_checking/scripts/train.sh
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.SH REPRODUCE
+.sp
+To reproduce the results of this project see the \fBtrain_slurm_<task>.sh\fP scripts in this \fI\%directory\fP which were used for training all models.
+These scripts do nothing more than setting some environment variables and calling the \fBtrain.sh\fP script mentioned above.
+.sp
+\fBNOTE:\fP
+.INDENT 0.0
+.INDENT 3.5
+Using the \fBtrain_slurm_<task>.sh\fP scripts to reproduce results is only possible on a SLURM cluster
+since they call the \fBtrain.sh\fP script using SLURMs sbatch command.
+.UNINDENT
+.UNINDENT
+.sp
+Once you finished training you can evaluate the models on the projects’ benchmarks that are available under
+\fB/nfs/students/sebastian\-walter/masters_thesis/benchmarks\fP\&.
+.INDENT 0.0
+.TP
+.B class  nsc.BeamSearch
+Bases: \fBnsc.api.sec.Search\fP
+.sp
+Beam search: Keep the best beam_width paths during search.
+.INDENT 7.0
+.TP
+.B __init__(beam_width=5)
+.INDENT 7.0
+.TP
+.B Parameters
+\fBbeam_width\fP (\fIint\fP) – 
+.TP
+.B Return type
+None
+.UNINDENT
+.UNINDENT
+.INDENT 7.0
+.TP
+.B beam_width:  int  =  5
+.UNINDENT
+.UNINDENT
+.INDENT 0.0
+.TP
+.B class  nsc.BestFirstSearch
+Bases: \fBnsc.api.sec.Search\fP
+.sp
+Best first search: Choose the highest scoring path out of all paths encountered so far.
+.INDENT 7.0
+.TP
+.B __init__()
+.INDENT 7.0
+.TP
+.B Return type
+None
+.UNINDENT
+.UNINDENT
+.UNINDENT
+.INDENT 0.0
+.TP
+.B class  nsc.GreedySearch
+Bases: \fBnsc.api.sec.Search\fP
+.sp
+Greedy search: Always take the path with the highest score.
+.INDENT 7.0
+.TP
+.B __init__()
+.INDENT 7.0
+.TP
+.B Return type
+None
+.UNINDENT
+.UNINDENT
+.UNINDENT
+.INDENT 0.0
+.TP
+.B class  nsc.SampleSearch
+Bases: \fBnsc.api.sec.Search\fP
+.sp
+Sample search: Choose a random path from the top_k highest scoring paths.
+.INDENT 7.0
+.TP
+.B __init__(top_k=5)
+.INDENT 7.0
+.TP
+.B Parameters
+\fBtop_k\fP (\fIint\fP) – 
+.TP
+.B Return type
+None
+.UNINDENT
+.UNINDENT
+.INDENT 7.0
+.TP
+.B top_k:  int  =  5
+.UNINDENT
+.UNINDENT
+.INDENT 0.0
+.TP
+.B class  nsc.SpellingCorrectionScore
+Bases: \fBobject\fP
+.sp
+Determines how paths during decoding are scored.
+.sp
+The default mode \fIlog_likelihood\fP is to score path using the
+token sequence log likelihood given as the sum of all token log probabilities one got during
+decoding a particular path normalized by the token sequence length (so shorter paths are not preferred):
+.INDENT 7.0
+.INDENT 3.5
+score = sum(log_probabilities) / (len(log_probabilities) ** alpha)
+.UNINDENT
+.UNINDENT
+.sp
+Alpha here can be used to steer the decoding towards shorter or longer sequences, if alpha > 1 longer sequences are
+preferred, if alpha < 1 shorter sequences are preferred.
+.sp
+Other supported modes are \fIdictionary\fP, \fIdictionary_or_eq_input\fP and \fIdictionary_or_in_input\fP\&. They only allow
+paths that either contain dictionary words only, contain dictionary words or are equal to the input text or contain
+dictionary words or words from the input text.
+Note that for all these modes prefix_index must be specified, since we use a prefix index to determine if
+a word is in a dictionary or is a prefix of a word in a dictionary.
+.INDENT 7.0
+.TP
+.B __init__(normalize_by_length=True, alpha=1.0, mode=\(aqlog_likelihood\(aq, prefix_index=None)
+.INDENT 7.0
+.TP
+.B Parameters
+.INDENT 7.0
+.IP \(bu 2
+\fBnormalize_by_length\fP (\fIbool\fP) – 
+.IP \(bu 2
+\fBalpha\fP (\fIfloat\fP) – 
+.IP \(bu 2
+\fBmode\fP (\fIstr\fP) – 
+.IP \(bu 2
+\fBprefix_index\fP (\fIOptional\fP\fI[\fP\fInsc.data.index.PrefixIndex\fP\fI]\fP) – 
+.UNINDENT
+.TP
+.B Return type
+None
+.UNINDENT
+.UNINDENT
+.INDENT 7.0
+.TP
+.B alpha:  float  =  1.0
+.UNINDENT
+.INDENT 7.0
+.TP
+.B mode:  str  =  \(aqlog_likelihood\(aq
+.UNINDENT
+.INDENT 7.0
+.TP
+.B normalize_by_length:  bool  =  True
+.UNINDENT
+.INDENT 7.0
+.TP
+.B prefix_index:  Optional[nsc.data.index.PrefixIndex]  =  None
+.UNINDENT
+.UNINDENT
+.INDENT 0.0
+.TP
+.B class  nsc.SpellingErrorCorrector
+Bases: \fBnsc.api.utils._APIBase\fP
+.sp
+Spelling error correction
+.sp
+Class to run spelling error correction models.
+.INDENT 7.0
+.TP
+.B __init__(model_dir, device, **kwargs)
+.INDENT 7.0
+.TP
+.B Parameters
+.INDENT 7.0
+.IP \(bu 2
+\fBmodel_dir\fP (\fIstr\fP) – 
+.IP \(bu 2
+\fBdevice\fP (\fIUnion\fP\fI[\fP\fIstr\fP\fI, \fP\fIint\fP\fI]\fP) – 
+.IP \(bu 2
+\fBkwargs\fP (\fIDict\fP\fI[\fP\fIstr\fP\fI, \fP\fIAny\fP\fI]\fP) – 
+.UNINDENT
+.TP
+.B Return type
+None
+.UNINDENT
+.UNINDENT
+.INDENT 7.0
+.TP
+.B correct_file(input_file_path, output_file_path=None, detections=None, search=GreedySearch(), score=SpellingCorrectionScore(normalize_by_length=True, alpha=1.0, mode=\(aqlog_likelihood\(aq, prefix_index=None), batch_size=16, batch_max_length_factor=None, sort_by_length=True, show_progress=True, **kwargs)
+Correct spelling errors in a file.
+.INDENT 7.0
+.TP
+.B Parameters
+.INDENT 7.0
+.IP \(bu 2
+\fBinput_file_path\fP (\fIstr\fP) – path to an input file, which will be corrected line by line
+.IP \(bu 2
+\fBoutput_file_path\fP (\fIOptional\fP\fI[\fP\fIstr\fP\fI]\fP) – path to an output file, where corrected text will be saved line by line
+.IP \(bu 2
+\fBdetections\fP (\fIOptional\fP\fI[\fP\fIUnion\fP\fI[\fP\fIstr\fP\fI, \fP\fIList\fP\fI[\fP\fIList\fP\fI[\fP\fIint\fP\fI]\fP\fI]\fP\fI]\fP\fI]\fP) – spelling error detections (from a SpellingErrorDetector) to guide the correction, can either
+be a path to a file containing detections or a list of lists of integers
+.IP \(bu 2
+\fBsearch\fP (\fInsc.api.sec.Search\fP) – instance of a Search object to determine the search method to use for decoding
+.IP \(bu 2
+\fBscore\fP (\fI\%nsc.api.sec.SpellingCorrectionScore\fP) – instance of a SpellingCorrectionScore object to determine how to score search paths during decoding
+.IP \(bu 2
+\fBbatch_size\fP (\fIint\fP) – how many sequences to process at once
+.IP \(bu 2
+\fBbatch_max_length_factor\fP (\fIOptional\fP\fI[\fP\fIfloat\fP\fI]\fP) – sets the maximum total length of a batch to be
+batch_max_length_factor * model_max_input_length, if a model e.g. has a max input length of 512 tokens
+and batch_max_length_factor is 4 then one batch will contain as many input sequences as fit within
+512 * 4 = 2048 tokens (takes precedence over batch_size if specified)
+.IP \(bu 2
+\fBsort_by_length\fP (\fIbool\fP) – sort the inputs by length before processing them
+.IP \(bu 2
+\fBshow_progress\fP (\fIbool\fP) – display progress bar
+.IP \(bu 2
+\fBkwargs\fP (\fIAny\fP) – 
+.UNINDENT
+.TP
+.B Return type
+\fIOptional\fP[\fIList\fP[str]]
+.UNINDENT
+.sp
+Returns: corrected file as list of strings if output_file_path is not specified else None
+.UNINDENT
+.INDENT 7.0
+.TP
+.B correct_text(inputs, detections=None, search=GreedySearch(), score=SpellingCorrectionScore(normalize_by_length=True, alpha=1.0, mode=\(aqlog_likelihood\(aq, prefix_index=None), batch_size=16, batch_max_length_factor=None, sort_by_length=True, show_progress=False, **kwargs)
+Correct spelling errors in text.
+.INDENT 7.0
+.TP
+.B Parameters
+.INDENT 7.0
+.IP \(bu 2
+\fBinputs\fP (\fIUnion\fP\fI[\fP\fIstr\fP\fI, \fP\fIList\fP\fI[\fP\fIstr\fP\fI]\fP\fI]\fP) – text to correct given as a single string or a list of strings
+.IP \(bu 2
+\fBdetections\fP (\fIOptional\fP\fI[\fP\fIUnion\fP\fI[\fP\fIList\fP\fI[\fP\fIint\fP\fI]\fP\fI, \fP\fIList\fP\fI[\fP\fIList\fP\fI[\fP\fIint\fP\fI]\fP\fI]\fP\fI]\fP\fI]\fP) – spelling error detections (from a SpellingErrorDetector) to guide the correction, if
+inputs is a single str, detections must be a list of integers, otherwise if inputs is a list of strings,
+detections should be a list of lists of integers
+.IP \(bu 2
+\fBsearch\fP (\fInsc.api.sec.Search\fP) – Search instance to determine the search method to use for decoding
+.IP \(bu 2
+\fBscore\fP (\fI\%nsc.api.sec.SpellingCorrectionScore\fP) – SpellingCorrectionScore instance to determine how to score search paths during decoding
+.IP \(bu 2
+\fBbatch_size\fP (\fIint\fP) – how many sequences to process at once
+.IP \(bu 2
+\fBbatch_max_length_factor\fP (\fIOptional\fP\fI[\fP\fIfloat\fP\fI]\fP) – sets the maximum total length of a batch to be
+batch_max_length_factor * model_max_input_length, if a model e.g. has a max input length of 512 tokens
+and batch_max_length_factor is 4 then one batch will contain as many input sequences as fit within
+512 * 4 = 2048 tokens (takes precedence over batch_size if specified)
+.IP \(bu 2
+\fBsort_by_length\fP (\fIbool\fP) – sort the inputs by length before processing them
+.IP \(bu 2
+\fBshow_progress\fP (\fIbool\fP) – display progress bar
+.IP \(bu 2
+\fBkwargs\fP (\fIAny\fP) – 
+.UNINDENT
+.TP
+.B Return type
+\fIUnion\fP[str, \fIList\fP[str]]
+.UNINDENT
+.sp
+Returns: corrected text as string or list of strings
+.UNINDENT
+.INDENT 7.0
+.TP
+.B static  from_experiment(experiment_dir, device=\(aqcuda\(aq)
+Create a new NSC instance using your own experiment.
+.INDENT 7.0
+.TP
+.B Parameters
+.INDENT 7.0
+.IP \(bu 2
+\fBexperiment_dir\fP (\fIstr\fP) – path to the experiment directory
+.IP \(bu 2
+\fBdevice\fP (\fIUnion\fP\fI[\fP\fIstr\fP\fI, \fP\fIint\fP\fI]\fP) – device to load the model to (e.g. “cuda”, “cpu” or integer denoting GPU device index)
+.UNINDENT
+.TP
+.B Return type
+\fI\%nsc.api.sec.SpellingErrorCorrector\fP
+.UNINDENT
+.sp
+Returns: NSC instance
+.UNINDENT
+.INDENT 7.0
+.TP
+.B static  from_pretrained(task=\(aqsec\(aq, model=\(aqtransformer_words_nmt\(aq, device=\(aqcuda\(aq, cache_dir=None, force_download=False)
+Create a new NSC instance using a pretrained model.
+.INDENT 7.0
+.TP
+.B Parameters
+.INDENT 7.0
+.IP \(bu 2
+\fBtask\fP (\fIstr\fP) – name of the task
+.IP \(bu 2
+\fBmodel\fP (\fIstr\fP) – name of the pretrained model
+.IP \(bu 2
+\fBdevice\fP (\fIUnion\fP\fI[\fP\fIstr\fP\fI, \fP\fIint\fP\fI]\fP) – device to load the model to (e.g. “cuda”, “cpu” or integer denoting GPU device index)
+.IP \(bu 2
+\fBcache_dir\fP (\fIOptional\fP\fI[\fP\fIstr\fP\fI]\fP) – local cache directory to store the pretrained model
+.IP \(bu 2
+\fBforce_download\fP (\fIbool\fP) – force download the pretrained model again even if it already exists in the cache_dir
+.UNINDENT
+.TP
+.B Return type
+\fI\%nsc.api.sec.SpellingErrorCorrector\fP
+.UNINDENT
+.sp
+Returns: NSC instance
+.UNINDENT
+.INDENT 7.0
+.TP
+.B property  mixed_precision_enabled:  bool
+Check if mixed precision is enabled (precision is set to something else than fp32).
+.sp
+Returns: bool whether mixed precision is enabled
+.UNINDENT
+.INDENT 7.0
+.TP
+.B property  model_name:  str
+Gives the name of the NSC model in use.
+.sp
+Returns: name of the model
+.UNINDENT
+.INDENT 7.0
+.TP
+.B set_precision(precision)
+Set the inference precision to use. Default is standard 32bit full precision.
+Using 16bit floats or 16bit brain floats should only be used when you have a supported NVIDIA GPU.
+When running on CPU fp16 will be overwritten with bfp16 since only bfp16 is supported on CPU for now.
+.INDENT 7.0
+.TP
+.B Parameters
+\fBprecision\fP (\fIstr\fP) – precision identifier (one of {fp32, fp16, bfp16})
+.TP
+.B Return type
+None
+.UNINDENT
+.sp
+Returns: None
+.UNINDENT
+.INDENT 7.0
+.TP
+.B property  task_name:  str
+Check which NSC task is run.
+.sp
+Returns: name of the task
+.UNINDENT
+.INDENT 7.0
+.TP
+.B to(device)
+Move the model to a different device.
+.INDENT 7.0
+.TP
+.B Parameters
+\fBdevice\fP (\fIUnion\fP\fI[\fP\fIstr\fP\fI, \fP\fIint\fP\fI]\fP) – device specifier (e.g. “cuda”, “cpu” or integer denoting GPU device index)
+.TP
+.B Return type
+nsc.api.utils._APIBase
+.UNINDENT
+.sp
+Returns: self
+.UNINDENT
+.UNINDENT
+.INDENT 0.0
+.TP
+.B class  nsc.SpellingErrorDetector
+Bases: \fBnsc.api.utils._APIBase\fP
+.sp
+Spelling error detection
+.sp
+Class to run spelling error detection models.
+.INDENT 7.0
+.TP
+.B __init__(model_dir, device, **kwargs)
+Spelling error detection constructor.
+.sp
+Do not use this explicitly.
+Use the static SpellingErrorDetector.from_pretrained() and SpellingErrorDetector.from_experiment() methods
+instead.
+.INDENT 7.0
+.TP
+.B Parameters
+.INDENT 7.0
+.IP \(bu 2
+\fBmodel_dir\fP (\fIstr\fP) – directory of the model to load
+.IP \(bu 2
+\fBdevice\fP (\fIUnion\fP\fI[\fP\fIstr\fP\fI, \fP\fIint\fP\fI]\fP) – device to load the model in
+.IP \(bu 2
+\fBkwargs\fP (\fIDict\fP\fI[\fP\fIstr\fP\fI, \fP\fIAny\fP\fI]\fP) – 
+.UNINDENT
+.TP
+.B Return type
+None
+.UNINDENT
+.UNINDENT
+.INDENT 7.0
+.TP
+.B detect_file(input_file_path, output_file_path=None, threshold=0.5, batch_size=16, batch_max_length_factor=None, sort_by_length=True, show_progress=True, **kwargs)
+Detect spelling errors in a file.
+.INDENT 7.0
+.TP
+.B Parameters
+.INDENT 7.0
+.IP \(bu 2
+\fBinput_file_path\fP (\fIstr\fP) – path to an input file, which will be checked for spelling errors line by line
+.IP \(bu 2
+\fBoutput_file_path\fP (\fIOptional\fP\fI[\fP\fIstr\fP\fI]\fP) – path to an output file, where the detections will be saved line by line
+.IP \(bu 2
+\fBthreshold\fP (\fIfloat\fP) – set detection threshold (0 < threshold < 1)
+.IP \(bu 2
+\fBbatch_size\fP (\fIint\fP) – how many sequences to process at once
+.IP \(bu 2
+\fBbatch_max_length_factor\fP (\fIOptional\fP\fI[\fP\fIfloat\fP\fI]\fP) – sets the maximum total length of a batch to be
+batch_max_length_factor * model_max_input_length, if a model e.g. has a max input length of 512 tokens
+and batch_max_length_factor is 4 then one batch will contain as many input sequences as fit within
+512 * 4 = 2048 tokens (takes precedence over batch_size if specified)
+.IP \(bu 2
+\fBsort_by_length\fP (\fIbool\fP) – sort the inputs by length before processing them
+.IP \(bu 2
+\fBshow_progress\fP (\fIbool\fP) – display progress bar
+.IP \(bu 2
+\fBkwargs\fP (\fIAny\fP) – 
+.UNINDENT
+.TP
+.B Return type
+\fIOptional\fP[\fITuple\fP[\fIList\fP[\fIList\fP[int]], \fIList\fP[str]]]
+.UNINDENT
+.INDENT 7.0
+.TP
+.B Returns: tuple of detections as list of lists of integers and output strings as list of strings
+if output_file_path is not specified else None
+.UNINDENT
+.UNINDENT
+.INDENT 7.0
+.TP
+.B detect_text(inputs, threshold=0.5, batch_size=16, batch_max_length_factor=None, sort_by_length=True, show_progress=False, **kwargs)
+Detect spelling errors in text.
+.INDENT 7.0
+.TP
+.B Parameters
+.INDENT 7.0
+.IP \(bu 2
+\fBinputs\fP (\fIUnion\fP\fI[\fP\fIstr\fP\fI, \fP\fIList\fP\fI[\fP\fIstr\fP\fI]\fP\fI]\fP) – text to check for errors given as a single string or a list of strings
+.IP \(bu 2
+\fBthreshold\fP (\fIfloat\fP) – set detection threshold (0 < threshold < 1)
+.IP \(bu 2
+\fBbatch_size\fP (\fIint\fP) – how many sequences to process at once
+.IP \(bu 2
+\fBbatch_max_length_factor\fP (\fIOptional\fP\fI[\fP\fIfloat\fP\fI]\fP) – sets the maximum total length of a batch to be
+batch_max_length_factor * model_max_input_length, if a model e.g. has a max input length of 512 tokens
+and batch_max_length_factor is 4 then one batch will contain as many input sequences as fit within
+512 * 4 = 2048 tokens (takes precedence over batch_size if specified)
+.IP \(bu 2
+\fBsort_by_length\fP (\fIbool\fP) – sort the inputs by length before processing them
+.IP \(bu 2
+\fBshow_progress\fP (\fIbool\fP) – display progress bar
+.IP \(bu 2
+\fBkwargs\fP (\fIAny\fP) – 
+.UNINDENT
+.TP
+.B Return type
+\fITuple\fP[\fIUnion\fP[\fIList\fP[int], \fIList\fP[\fIList\fP[int]]], \fIUnion\fP[str, \fIList\fP[str]]]
+.UNINDENT
+.INDENT 7.0
+.TP
+.B Returns: tuple of detections as list of integers or list of lists of integers and output strings as
+str or list of strings
+.UNINDENT
+.UNINDENT
+.INDENT 7.0
+.TP
+.B static  from_experiment(experiment_dir, device=\(aqcuda\(aq)
+Create a new NSC instance using your own experiment.
+.INDENT 7.0
+.TP
+.B Parameters
+.INDENT 7.0
+.IP \(bu 2
+\fBexperiment_dir\fP (\fIstr\fP) – path to the experiment directory
+.IP \(bu 2
+\fBdevice\fP (\fIUnion\fP\fI[\fP\fIstr\fP\fI, \fP\fIint\fP\fI]\fP) – device to load the model to (e.g. “cuda”, “cpu” or integer denoting GPU device index)
+.UNINDENT
+.TP
+.B Return type
+\fI\%nsc.api.sed.SpellingErrorDetector\fP
+.UNINDENT
+.sp
+Returns: NSC instance
+.UNINDENT
+.INDENT 7.0
+.TP
+.B static  from_pretrained(task=\(aqsed_words\(aq, model=\(aqgnn_default\(aq, device=\(aqcuda\(aq, cache_dir=None, force_download=False)
+Create a new NSC instance using a pretrained model.
+.INDENT 7.0
+.TP
+.B Parameters
+.INDENT 7.0
+.IP \(bu 2
+\fBtask\fP (\fIstr\fP) – name of the task
+.IP \(bu 2
+\fBmodel\fP (\fIstr\fP) – name of the pretrained model
+.IP \(bu 2
+\fBdevice\fP (\fIUnion\fP\fI[\fP\fIstr\fP\fI, \fP\fIint\fP\fI]\fP) – device to load the model to (e.g. “cuda”, “cpu” or integer denoting GPU device index)
+.IP \(bu 2
+\fBcache_dir\fP (\fIOptional\fP\fI[\fP\fIstr\fP\fI]\fP) – local cache directory to store the pretrained model
+.IP \(bu 2
+\fBforce_download\fP (\fIbool\fP) – force download the pretrained model again even if it already exists in the cache_dir
+.UNINDENT
+.TP
+.B Return type
+\fI\%nsc.api.sed.SpellingErrorDetector\fP
+.UNINDENT
+.sp
+Returns: NSC instance
+.UNINDENT
+.INDENT 7.0
+.TP
+.B property  mixed_precision_enabled:  bool
+Check if mixed precision is enabled (precision is set to something else than fp32).
+.sp
+Returns: bool whether mixed precision is enabled
+.UNINDENT
+.INDENT 7.0
+.TP
+.B property  model_name:  str
+Gives the name of the NSC model in use.
+.sp
+Returns: name of the model
+.UNINDENT
+.INDENT 7.0
+.TP
+.B set_precision(precision)
+Set the inference precision to use. Default is standard 32bit full precision.
+Using 16bit floats or 16bit brain floats should only be used when you have a supported NVIDIA GPU.
+When running on CPU fp16 will be overwritten with bfp16 since only bfp16 is supported on CPU for now.
+.INDENT 7.0
+.TP
+.B Parameters
+\fBprecision\fP (\fIstr\fP) – precision identifier (one of {fp32, fp16, bfp16})
+.TP
+.B Return type
+None
+.UNINDENT
+.sp
+Returns: None
+.UNINDENT
+.INDENT 7.0
+.TP
+.B property  task_name:  str
+Check which NSC task is run.
+.sp
+Returns: name of the task
+.UNINDENT
+.INDENT 7.0
+.TP
+.B to(device)
+Move the model to a different device.
+.INDENT 7.0
+.TP
+.B Parameters
+\fBdevice\fP (\fIUnion\fP\fI[\fP\fIstr\fP\fI, \fP\fIint\fP\fI]\fP) – device specifier (e.g. “cuda”, “cpu” or integer denoting GPU device index)
+.TP
+.B Return type
+nsc.api.utils._APIBase
+.UNINDENT
+.sp
+Returns: self
+.UNINDENT
+.UNINDENT
+.INDENT 0.0
+.TP
+.B class  nsc.TokenizationRepairer
+Bases: \fBnsc.api.utils._APIBase\fP
+.sp
+Tokenization repair
+.sp
+Class to run tokenization repair models.
+.INDENT 7.0
+.TP
+.B __init__(model_dir, device, **kwargs)
+.INDENT 7.0
+.TP
+.B Parameters
+.INDENT 7.0
+.IP \(bu 2
+\fBmodel_dir\fP (\fIstr\fP) – 
+.IP \(bu 2
+\fBdevice\fP (\fIUnion\fP\fI[\fP\fIstr\fP\fI, \fP\fIint\fP\fI]\fP) – 
+.IP \(bu 2
+\fBkwargs\fP (\fIDict\fP\fI[\fP\fIstr\fP\fI, \fP\fIAny\fP\fI]\fP) – 
+.UNINDENT
+.TP
+.B Return type
+None
+.UNINDENT
+.UNINDENT
+.INDENT 7.0
+.TP
+.B static  from_experiment(experiment_dir, device=\(aqcuda\(aq)
+Create a new NSC instance using your own experiment.
+.INDENT 7.0
+.TP
+.B Parameters
+.INDENT 7.0
+.IP \(bu 2
+\fBexperiment_dir\fP (\fIstr\fP) – path to the experiment directory
+.IP \(bu 2
+\fBdevice\fP (\fIUnion\fP\fI[\fP\fIstr\fP\fI, \fP\fIint\fP\fI]\fP) – device to load the model to (e.g. “cuda”, “cpu” or integer denoting GPU device index)
+.UNINDENT
+.TP
+.B Return type
+\fI\%nsc.api.tokenization_repair.TokenizationRepairer\fP
+.UNINDENT
+.sp
+Returns: NSC instance
+.UNINDENT
+.INDENT 7.0
+.TP
+.B static  from_pretrained(task=\(aqtokenization_repair\(aq, model=\(aqtransformer_eo_large\(aq, device=\(aqcuda\(aq, cache_dir=None, force_download=False)
+Create a new NSC instance using a pretrained model.
+.INDENT 7.0
+.TP
+.B Parameters
+.INDENT 7.0
+.IP \(bu 2
+\fBtask\fP (\fIstr\fP) – name of the task
+.IP \(bu 2
+\fBmodel\fP (\fIstr\fP) – name of the pretrained model
+.IP \(bu 2
+\fBdevice\fP (\fIUnion\fP\fI[\fP\fIstr\fP\fI, \fP\fIint\fP\fI]\fP) – device to load the model to (e.g. “cuda”, “cpu” or integer denoting GPU device index)
+.IP \(bu 2
+\fBcache_dir\fP (\fIOptional\fP\fI[\fP\fIstr\fP\fI]\fP) – local cache directory to store the pretrained model
+.IP \(bu 2
+\fBforce_download\fP (\fIbool\fP) – force download the pretrained model again even if it already exists in the cache_dir
+.UNINDENT
+.TP
+.B Return type
+\fI\%nsc.api.tokenization_repair.TokenizationRepairer\fP
+.UNINDENT
+.sp
+Returns: NSC instance
+.UNINDENT
+.INDENT 7.0
+.TP
+.B property  mixed_precision_enabled:  bool
+Check if mixed precision is enabled (precision is set to something else than fp32).
+.sp
+Returns: bool whether mixed precision is enabled
+.UNINDENT
+.INDENT 7.0
+.TP
+.B property  model_name:  str
+Gives the name of the NSC model in use.
+.sp
+Returns: name of the model
+.UNINDENT
+.INDENT 7.0
+.TP
+.B repair_file(input_file_path, output_file_path=None, batch_size=16, batch_max_length_factor=None, sort_by_length=True, show_progress=True)
+Repair whitespaces in a file.
+.INDENT 7.0
+.TP
+.B Parameters
+.INDENT 7.0
+.IP \(bu 2
+\fBinput_file_path\fP (\fIstr\fP) – path to an input file, which will be repaired line by line
+.IP \(bu 2
+\fBoutput_file_path\fP (\fIOptional\fP\fI[\fP\fIstr\fP\fI]\fP) – path to an output file, where repaired text will be saved line by line
+.IP \(bu 2
+\fBbatch_size\fP (\fIint\fP) – how many sequences to process at once
+.IP \(bu 2
+\fBbatch_max_length_factor\fP (\fIOptional\fP\fI[\fP\fIfloat\fP\fI]\fP) – sets the maximum total length of a batch to be
+batch_max_length_factor * model_max_input_length, if a model e.g. has a max input length of 512 tokens
+and batch_max_length_factor is 4 then one batch will contain as many input sequences as fit within
+512 * 4 = 2048 tokens (takes precedence over batch_size if specified)
+.IP \(bu 2
+\fBsort_by_length\fP (\fIbool\fP) – sort the inputs by length before processing them
+.IP \(bu 2
+\fBshow_progress\fP (\fIbool\fP) – display progress bar
+.UNINDENT
+.TP
+.B Return type
+\fIOptional\fP[\fIUnion\fP[\fIList\fP[int], \fIList\fP[\fIList\fP[int]]]]
+.UNINDENT
+.sp
+Returns: repaired file as list of strings if output_file_path is not specified else None
+.UNINDENT
+.INDENT 7.0
+.TP
+.B repair_text(inputs, batch_size=16, batch_max_length_factor=None, sort_by_length=True, show_progress=False)
+Repair whitespaces in text.
+.INDENT 7.0
+.TP
+.B Parameters
+.INDENT 7.0
+.IP \(bu 2
+\fBinputs\fP (\fIUnion\fP\fI[\fP\fIstr\fP\fI, \fP\fIList\fP\fI[\fP\fIstr\fP\fI]\fP\fI]\fP) – text to repair given as a single string or a list of strings
+.IP \(bu 2
+\fBbatch_size\fP (\fIint\fP) – how many sequences to process at once
+.IP \(bu 2
+\fBbatch_max_length_factor\fP (\fIOptional\fP\fI[\fP\fIfloat\fP\fI]\fP) – sets the maximum total length of a batch to be
+batch_max_length_factor * model_max_input_length, if a model e.g. has a max input length of 512 tokens
+and batch_max_length_factor is 4 then one batch will contain as many input sequences as fit within
+512 * 4 = 2048 tokens (takes precedence over batch_size if specified)
+.IP \(bu 2
+\fBsort_by_length\fP (\fIbool\fP) – sort the inputs by length before processing them
+.IP \(bu 2
+\fBshow_progress\fP (\fIbool\fP) – display progress bar
+.UNINDENT
+.TP
+.B Return type
+\fIUnion\fP[\fIList\fP[int], \fIList\fP[\fIList\fP[int]]]
+.UNINDENT
+.sp
+Returns: repaired text as string or list of strings
+.UNINDENT
+.INDENT 7.0
+.TP
+.B set_precision(precision)
+Set the inference precision to use. Default is standard 32bit full precision.
+Using 16bit floats or 16bit brain floats should only be used when you have a supported NVIDIA GPU.
+When running on CPU fp16 will be overwritten with bfp16 since only bfp16 is supported on CPU for now.
+.INDENT 7.0
+.TP
+.B Parameters
+\fBprecision\fP (\fIstr\fP) – precision identifier (one of {fp32, fp16, bfp16})
+.TP
+.B Return type
+None
+.UNINDENT
+.sp
+Returns: None
+.UNINDENT
+.INDENT 7.0
+.TP
+.B property  task_name:  str
+Check which NSC task is run.
+.sp
+Returns: name of the task
+.UNINDENT
+.INDENT 7.0
+.TP
+.B to(device)
+Move the model to a different device.
+.INDENT 7.0
+.TP
+.B Parameters
+\fBdevice\fP (\fIUnion\fP\fI[\fP\fIstr\fP\fI, \fP\fIint\fP\fI]\fP) – device specifier (e.g. “cuda”, “cpu” or integer denoting GPU device index)
+.TP
+.B Return type
+nsc.api.utils._APIBase
+.UNINDENT
+.sp
+Returns: self
+.UNINDENT
+.UNINDENT
+.INDENT 0.0
+.TP
+.B nsc.get_available_spelling_error_correction_models()
+Get available spelling error correction models
+.sp
+Returns: list of spelling error correction model infos each containing the task name,
+model name and a short description
+.INDENT 7.0
+.TP
+.B Return type
+\fIList\fP[nsc.api.utils.ModelInfo]
+.UNINDENT
+.UNINDENT
+.INDENT 0.0
+.TP
+.B nsc.get_available_spelling_error_detection_models()
+Get available spelling error detection models
+.sp
+Returns: list of spelling error detection model infos each containing the task name,
+model name and a short description
+.INDENT 7.0
+.TP
+.B Return type
+\fIList\fP[nsc.api.utils.ModelInfo]
+.UNINDENT
+.UNINDENT
+.INDENT 0.0
+.TP
+.B nsc.get_available_tokenization_repair_models()
+Get available tokenization repair models
+.sp
+Returns: list of tokenization repair model infos each containing the task name, model name and a short description
+.INDENT 7.0
+.TP
+.B Return type
+\fIList\fP[nsc.api.utils.ModelInfo]
+.UNINDENT
+.UNINDENT
+.SH AUTHOR
+Sebastian Walter
+.SH COPYRIGHT
+2022, Sebastian Walter
+.\" Generated by docutils manpage writer.
+.
