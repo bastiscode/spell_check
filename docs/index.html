@@ -218,7 +218,14 @@ make run_docker_cpu
 </div>
 <p>You can also pass additional Docker arguments to the make commands by specifying <code class="docutils literal notranslate"><span class="pre">DOCKER_ARGS</span></code>. For example,
 to mount an additional directory inside the container you can execute
-<code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">DOCKER_ARGS=&quot;-v</span> <span class="pre">/path/to/outside/directory:/path/to/container/directory&quot;</span> <span class="pre">run_docker_gpu</span></code>.</p>
+<code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">DOCKER_ARGS=&quot;</span> <span class="pre">-v</span> <span class="pre">/path/to/outside/directory:/path/to/container/directory&quot;</span> <span class="pre">run_docker_gpu</span></code>
+(notice the leading whitespace!).</p>
+<div class="admonition hint">
+<p class="admonition-title">Hint</p>
+<p>If you build the Docker image on an AD Server you probably want to use wharfer instead of
+Docker. To do that call the make commands with the additional argument <code class="docutils literal notranslate"><span class="pre">DOCKER_CMD=wharfer</span></code>,
+e.g. <code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">DOCKER_CMD=wharfer</span> <span class="pre">build_docker</span></code>.</p>
+</div>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
 <p>The Docker setup is only intended to be used for using the command line tools/Python API with pretrained or

@@ -27,7 +27,7 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .in \\n[rst2man-indent\\n[rst2man-indent-level]]u
 ..
-.TH "TABLE" "1" "May 08, 2022" "" "nsc"
+.TH "TABLE" "1" "May 09, 2022" "" "nsc"
 .SH NAME
 Table \- nsc 0.1.0
 .sp
@@ -277,7 +277,17 @@ make run_docker_cpu
 .sp
 You can also pass additional Docker arguments to the make commands by specifying \fBDOCKER_ARGS\fP\&. For example,
 to mount an additional directory inside the container you can execute
-\fBmake DOCKER_ARGS="\-v /path/to/outside/directory:/path/to/container/directory" run_docker_gpu\fP\&.
+\fBmake DOCKER_ARGS=" \-v /path/to/outside/directory:/path/to/container/directory" run_docker_gpu\fP
+(notice the leading whitespace!).
+.sp
+\fBHINT:\fP
+.INDENT 0.0
+.INDENT 3.5
+If you build the Docker image on an AD Server you probably want to use wharfer instead of
+Docker. To do that call the make commands with the additional argument \fBDOCKER_CMD=wharfer\fP,
+e.g. \fBmake DOCKER_CMD=wharfer build_docker\fP\&.
+.UNINDENT
+.UNINDENT
 .sp
 \fBNOTE:\fP
 .INDENT 0.0

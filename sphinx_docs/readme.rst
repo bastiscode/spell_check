@@ -187,7 +187,14 @@ To start a Docker container
 
 You can also pass additional Docker arguments to the make commands by specifying ``DOCKER_ARGS``. For example,
 to mount an additional directory inside the container you can execute
-``make DOCKER_ARGS="-v /path/to/outside/directory:/path/to/container/directory" run_docker_gpu``.
+``make DOCKER_ARGS=" -v /path/to/outside/directory:/path/to/container/directory" run_docker_gpu``
+(notice the leading whitespace!).
+
+.. hint::
+
+    If you build the Docker image on an AD Server you probably want to use wharfer instead of
+    Docker. To do that call the make commands with the additional argument ``DOCKER_CMD=wharfer``,
+    e.g. ``make DOCKER_CMD=wharfer build_docker``.
 
 .. note::
     The Docker setup is only intended to be used for using the command line tools/Python API with pretrained or
