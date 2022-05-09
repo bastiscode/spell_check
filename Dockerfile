@@ -13,6 +13,7 @@ COPY Makefile .
 COPY README.rst .
 COPY sphinx_docs sphinx_docs
 COPY docker docker
+COPY tests tests
 COPY spell_checking/benchmarks/scripts/evaluate.py .
 # setup evaluation commands as aliases of the benchmark evaluation script
 RUN echo "alias evaluate_tr='python /spell_check/evaluate.py tokenization_repair'" >> ~/.bashrc

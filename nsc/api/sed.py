@@ -29,42 +29,19 @@ def get_available_spelling_error_detection_models() -> List[ModelInfo]:
     """
     return [
         ModelInfo(
-            task="sed_sequence",
-            name="transformer",
-            description="Regular transformer processing a sequence of sub-word tokens. "
-                        "Predicts spelling errors on sequence level "
-                        "using the aggregated representations of all sub-word tokens."
-        ),
-        ModelInfo(
-            task="sed_sequence",
-            name="transformer+",
-            description="Regular transformer processing a sequence of sub-word tokens. "
-                        "Before predicting spelling errors, sub-word representations within a word are aggregated "
-                        "and enriched with word features to obtain word representations. Predicts spelling errors on "
-                        "sequence level using the aggregation of those word representations."
-        ),
-        ModelInfo(
-            task="sed_sequence",
-            name="gnn",
-            description="Attentional Graph Neural Network which processes language graphs with "
-                        "fully connected word nodes and fully connected sub-word cliques. "
-                        "Predicts spelling errors on sequence level using the aggregated representations of all word "
-                        "nodes."
-        ),
-        ModelInfo(
-            task="sed_sequence",
-            name="gnn+",
-            description="Attentional Graph Neural Network which processes language graphs with "
-                        "fully connected word nodes, word features and fully connected sub-word cliques. "
-                        "Predicts spelling errors on sequence level using the aggregated representations of all word "
-                        "nodes."
-        ),
-        ModelInfo(
             task="sed_words",
             name="transformer",
             description="Regular transformer processing a sequence of sub-word tokens. "
                         "Predicts spelling errors on word level "
                         "using the aggregated sub-word representations per word."
+        ),
+        ModelInfo(
+            task="sed_words",
+            name="transformer_neuspell",
+            description="Regular transformer processing a sequence of sub-word tokens. "
+                        "Predicts spelling errors on word level "
+                        "using the aggregated sub-word representations per word. "
+                        "(pretrained without Neuspell and BEA misspellings, finetuned on Neuspell training data)"
         ),
         ModelInfo(
             task="sed_words",
@@ -76,6 +53,15 @@ def get_available_spelling_error_detection_models() -> List[ModelInfo]:
         ),
         ModelInfo(
             task="sed_words",
+            name="transformer+_neuspell",
+            description="Regular transformer processing a sequence of sub-word tokens. "
+                        "Before predicting spelling errors, sub-word representations within a word are aggregated "
+                        "and enriched with word features to obtain word representations. Predicts spelling errors on "
+                        "word level using those word representations. "
+                        "(pretrained without Neuspell and BEA misspellings, finetuned on Neuspell training data)"
+        ),
+        ModelInfo(
+            task="sed_words",
             name="gnn",
             description="Attentional Graph Neural Network which processes language graphs with "
                         "fully connected word nodes and fully connected sub-word cliques. "
@@ -83,10 +69,26 @@ def get_available_spelling_error_detection_models() -> List[ModelInfo]:
         ),
         ModelInfo(
             task="sed_words",
+            name="gnn_neuspell",
+            description="Attentional Graph Neural Network which processes language graphs with "
+                        "fully connected word nodes and fully connected sub-word cliques. "
+                        "Predicts spelling errors on word level using the word node representations. "
+                        "(pretrained without Neuspell and BEA misspellings, finetuned on Neuspell training data)"
+        ),
+        ModelInfo(
+            task="sed_words",
             name="gnn+",
             description="Attentional Graph Neural Network which processes language graphs with "
                         "fully connected word nodes, word features and fully connected sub-word cliques. "
                         "Predicts spelling errors on word level using the word node representations."
+        ),
+        ModelInfo(
+            task="sed_words",
+            name="gnn+_neuspell",
+            description="Attentional Graph Neural Network which processes language graphs with "
+                        "fully connected word nodes, word features and fully connected sub-word cliques. "
+                        "Predicts spelling errors on word level using the word node representations. "
+                        "(pretrained without Neuspell and BEA misspellings, finetuned on Neuspell training data)."
         ),
         ModelInfo(
             task="sed_words",

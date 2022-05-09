@@ -217,7 +217,7 @@ class Task:
                 # update stats
                 self._update_stats(unwrapped_model, inputs, labels, output, stats, self.step, log_every)
                 loss_stat.add(loss.item())
-                # this is an approximation, since we only record batch statistics on the main process, but
+                # this is an approximation; since we only record batch statistics on the main process, but
                 # want to log the overall batch size in tensorboard, we multiply by the world size here
                 batch_size = utils.get_batch_size_from_data(batch.data)
                 batch_size_stat.add(batch_size * device.world_size)
@@ -300,14 +300,16 @@ class Task:
                     optimizer.consolidate_state_dict()
 
                 if device.is_main_process:
-                    val_loss, best = self.evaluate(val_loader,
-                                                   (
-                                                       ema.ema_model if ema is not None and ema_start_at >= self.step
-                                                       else model
-                                                   ),
-                                                   writer,
-                                                   device,
-                                                   grad_scaler)
+                    val_loss, best = self.evaluate(
+                        val_loader,
+                        (
+                            ema.ema_model if ema is not None and ema_start_at >= self.step
+                            else model
+                        ),
+                        writer,
+                        device,
+                        grad_scaler
+                    )
 
                     if common.disable_tqdm():
                         self.logger.info(f"[{self.step}|{iteration}/{org_train_loader_length}] "

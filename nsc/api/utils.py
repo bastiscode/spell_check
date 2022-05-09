@@ -1,10 +1,8 @@
 import collections
-import io
 import logging
 import os
 import pickle
 import platform
-import pprint
 import re
 import shutil
 import zipfile
@@ -33,24 +31,24 @@ _TASK_AND_NAME_TO_URL = {
         "tokenization_repair+": f"{_BASE_URL}/tokenization_repair_plus_sed.zip",
         "tokenization_repair++": f"{_BASE_URL}/tokenization_repair_plus_sed_plus_sec.zip",
     },
-    "sed_sequence": {
-        "gnn": f"{_BASE_URL}/sed_sequence_gnn_no_feat.zip",
-        "gnn+": f"{_BASE_URL}/sed_sequence_gnn_cliques_wfc.zip",
-        "transformer": f"{_BASE_URL}/sed_sequence_transformer_no_feat.zip",
-        "transformer+": f"{_BASE_URL}/sed_sequence_transformer.zip"
-    },
     "sed_words": {
         "gnn": f"{_BASE_URL}/sed_words_gnn_no_feat.zip",
+        "gnn_neuspell": f"{_BASE_URL}/sed_words_gnn_no_feat_neuspell.zip",
         "gnn+": f"{_BASE_URL}/sed_words_gnn_cliques_wfc.zip",
+        "gnn+_neuspell": f"{_BASE_URL}/sed_words_gnn_cliques_wfc_neuspell.zip",
         "transformer": f"{_BASE_URL}/sed_words_transformer_no_feat.zip",
+        "transformer_neuspell": f"{_BASE_URL}/sed_words_transformer_no_feat_neuspell.zip",
         "transformer+": f"{_BASE_URL}/sed_words_transformer.zip",
+        "transformer+_neuspell": f"{_BASE_URL}/sed_words_transformer_neuspell.zip",
         "tokenization_repair+": f"{_BASE_URL}/tokenization_repair_plus_sed.zip",
         "tokenization_repair++": f"{_BASE_URL}/tokenization_repair_plus_sed_plus_sec.zip",
     },
     "sec": {
         "transformer_nmt": f"{_BASE_URL}/sec_transformer_nmt.zip",
+        "transformer_nmt_neuspell": f"{_BASE_URL}/sec_transformer_nmt_neuspell.zip",
         "transformer_with_tokenization_repair_nmt": f"{_BASE_URL}/sec_transformer_with_tokenization_repair_nmt.zip",
         "transformer_words_nmt": f"{_BASE_URL}/sec_transformer_words_nmt.zip",
+        "transformer_words_nmt_neuspell": f"{_BASE_URL}/sec_transformer_words_nmt_neuspell.zip",
         "tokenization_repair++": f"{_BASE_URL}/tokenization_repair_plus_sed_plus_sec.zip"
     }
 }
@@ -434,7 +432,7 @@ def download_model(
     url = _TASK_AND_NAME_TO_URL[task][name]
 
     download_dir = download_dir or get_download_dir()
-    zip_file_path = os.path.join(download_dir, "zipped", url.split("/")[-1])
+    zip_file_path = os.path.join(download_dir, url.split("/")[-1])
     model_zip_not_downloaded = not os.path.exists(zip_file_path)
     if model_zip_not_downloaded or force_download:
         logger.info(f"downloading model {name} for task {task} from {url} to directory {download_dir}")
