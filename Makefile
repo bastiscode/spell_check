@@ -5,23 +5,24 @@ install:
 	@pip install .[train,index,docs,test] -f https://data.dgl.ai/wheels/repo.html
 	@python -m spacy download en_core_web_lg
 
+DOCKER_CMD ?= "docker"
+DOCKER_ARGS ?= ""
+
 .PHONY: build_docker
 build_docker:
 	@echo "Building Docker image"
-	@docker build -t nsc .
-
-DOCKER_ARGS ?= ""
+	@$(DOCKER_CMD) build -t nsc .
 
 .PHONY: run_docker_gpu
 run_docker_gpu:
 	@echo "Running nsc image with GPU support"
-	@docker run -e NSC_CACHE_DIR=/nsc_cache -e NSC_DOWNLOAD_DIR=/nsc_download \
+	@$(DOCKER_CMD) run -e NSC_CACHE_DIR=/nsc_cache -e NSC_DOWNLOAD_DIR=/nsc_download \
 	--rm -it --gpus all --name nsc_gpu$(DOCKER_ARGS) nsc
 
 .PHONY: run_docker_cpu
 run_docker_cpu:
 	@echo "Running nsc image on CPU"
-	@docker run -e NSC_CACHE_DIR=/nsc_cache -e NSC_DOWNLOAD_DIR=/nsc_download \
+	@$(DOCKER_CMD) run -e NSC_CACHE_DIR=/nsc_cache -e NSC_DOWNLOAD_DIR=/nsc_download \
 	--rm -it --name nsc_cpu$(DOCKER_ARGS) nsc
 
 .PHONY: docs
