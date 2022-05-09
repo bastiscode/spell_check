@@ -348,48 +348,21 @@ T}	T{
 T}
 _
 T{
-sed_sequence (\fBnsed\fP/\fBSpellingErrorDetector\fP)
-T}	T{
-transformer
-T}	T{
-Regular transformer processing a sequence of sub\-word tokens. Predicts spelling errors on sequence level using the aggregated representations of all sub\-word tokens.
-T}	T{
-X
-T}
-_
-T{
-sed_sequence (\fBnsed\fP/\fBSpellingErrorDetector\fP)
-T}	T{
-transformer+
-T}	T{
-Regular transformer processing a sequence of sub\-word tokens. Before predicting spelling errors, sub\-word representations within a word are aggregated and enriched with word features to obtain word representations. Predicts spelling errors on sequence level using the aggregation of those word representations.
-T}	T{
-T}
-_
-T{
-sed_sequence (\fBnsed\fP/\fBSpellingErrorDetector\fP)
-T}	T{
-gnn
-T}	T{
-Attentional Graph Neural Network which processes language graphs with fully connected word nodes and fully connected sub\-word cliques. Predicts spelling errors on sequence level using the aggregated representations of all word nodes.
-T}	T{
-T}
-_
-T{
-sed_sequence (\fBnsed\fP/\fBSpellingErrorDetector\fP)
-T}	T{
-gnn+
-T}	T{
-Attentional Graph Neural Network which processes language graphs with fully connected word nodes, word features and fully connected sub\-word cliques. Predicts spelling errors on sequence level using the aggregated representations of all word nodes.
-T}	T{
-T}
-_
-T{
 sed_words (\fBnsed\fP/\fBSpellingErrorDetector\fP)
 T}	T{
 transformer
 T}	T{
 Regular transformer processing a sequence of sub\-word tokens. Predicts spelling errors on word level using the aggregated sub\-word representations per word.
+T}	T{
+X
+T}
+_
+T{
+sed_words (\fBnsed\fP/\fBSpellingErrorDetector\fP)
+T}	T{
+transformer_neuspell
+T}	T{
+Regular transformer processing a sequence of sub\-word tokens. Predicts spelling errors on word level using the aggregated sub\-word representations per word. (pretrained without Neuspell and BEA misspellings, finetuned on Neuspell training data)
 T}	T{
 T}
 _
@@ -405,6 +378,15 @@ _
 T{
 sed_words (\fBnsed\fP/\fBSpellingErrorDetector\fP)
 T}	T{
+transformer+_neuspell
+T}	T{
+Regular transformer processing a sequence of sub\-word tokens. Before predicting spelling errors, sub\-word representations within a word are aggregated and enriched with word features to obtain word representations. Predicts spelling errors on word level using those word representations. (pretrained without Neuspell and BEA misspellings, finetuned on Neuspell training data)
+T}	T{
+T}
+_
+T{
+sed_words (\fBnsed\fP/\fBSpellingErrorDetector\fP)
+T}	T{
 gnn
 T}	T{
 Attentional Graph Neural Network which processes language graphs with fully connected word nodes and fully connected sub\-word cliques. Predicts spelling errors on word level using the word node representations.
@@ -414,9 +396,27 @@ _
 T{
 sed_words (\fBnsed\fP/\fBSpellingErrorDetector\fP)
 T}	T{
+gnn_neuspell
+T}	T{
+Attentional Graph Neural Network which processes language graphs with fully connected word nodes and fully connected sub\-word cliques. Predicts spelling errors on word level using the word node representations. (pretrained without Neuspell and BEA misspellings, finetuned on Neuspell training data)
+T}	T{
+T}
+_
+T{
+sed_words (\fBnsed\fP/\fBSpellingErrorDetector\fP)
+T}	T{
 gnn+
 T}	T{
 Attentional Graph Neural Network which processes language graphs with fully connected word nodes, word features and fully connected sub\-word cliques. Predicts spelling errors on word level using the word node representations.
+T}	T{
+T}
+_
+T{
+sed_words (\fBnsed\fP/\fBSpellingErrorDetector\fP)
+T}	T{
+gnn+_neuspell
+T}	T{
+Attentional Graph Neural Network which processes language graphs with fully connected word nodes, word features and fully connected sub\-word cliques. Predicts spelling errors on word level using the word node representations. (pretrained without Neuspell and BEA misspellings, finetuned on Neuspell training data).
 T}	T{
 T}
 _
@@ -451,6 +451,15 @@ _
 T{
 sec (\fBnsec\fP/\fBSpellingErrorCorrector\fP)
 T}	T{
+transformer_words_nmt_neuspell
+T}	T{
+Transformer model that corrects sequences by translating each word individually from misspelled to correct. (pretrained without Neuspell and BEA misspellings, finetuned on Neuspell training data)
+T}	T{
+T}
+_
+T{
+sec (\fBnsec\fP/\fBSpellingErrorCorrector\fP)
+T}	T{
 tokenization_repair++
 T}	T{
 Transformer based model that corrects sequences by first correcting the tokenization, then detecting spelling errors for each word in the repaired text and then translating every detected misspelled word to its corrected version.
@@ -463,6 +472,15 @@ T}	T{
 transformer_nmt
 T}	T{
 Transformer model that translates a sequence with spelling errors into a sequence without spelling errors.
+T}	T{
+T}
+_
+T{
+sec (\fBnsec\fP/\fBSpellingErrorCorrector\fP)
+T}	T{
+transformer_nmt_neuspell
+T}	T{
+Transformer model that translates a sequence with spelling errors into a sequence without spelling errors. (pretrained without Neuspell and BEA misspellings, finetuned on Neuspell training data)
 T}	T{
 T}
 _

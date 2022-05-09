@@ -271,34 +271,24 @@ your own models and evaluating them on benchmarks, but not for training.</p>
 <td><p>Transformer model that repairs sequences by predicting repair tokens for each character. Different from transformer_eo because this model also was trained to detect and correct spelling errors.</p></td>
 <td></td>
 </tr>
-<tr class="row-odd"><td><p>sed_sequence (<code class="docutils literal notranslate"><span class="pre">nsed</span></code>/<code class="docutils literal notranslate"><span class="pre">SpellingErrorDetector</span></code>)</p></td>
-<td><p>transformer</p></td>
-<td><p>Regular transformer processing a sequence of sub-word tokens. Predicts spelling errors on sequence level using the aggregated representations of all sub-word tokens.</p></td>
-<td><p>X</p></td>
-</tr>
-<tr class="row-even"><td><p>sed_sequence (<code class="docutils literal notranslate"><span class="pre">nsed</span></code>/<code class="docutils literal notranslate"><span class="pre">SpellingErrorDetector</span></code>)</p></td>
-<td><p>transformer+</p></td>
-<td><p>Regular transformer processing a sequence of sub-word tokens. Before predicting spelling errors, sub-word representations within a word are aggregated and enriched with word features to obtain word representations. Predicts spelling errors on sequence level using the aggregation of those word representations.</p></td>
-<td></td>
-</tr>
-<tr class="row-odd"><td><p>sed_sequence (<code class="docutils literal notranslate"><span class="pre">nsed</span></code>/<code class="docutils literal notranslate"><span class="pre">SpellingErrorDetector</span></code>)</p></td>
-<td><p>gnn</p></td>
-<td><p>Attentional Graph Neural Network which processes language graphs with fully connected word nodes and fully connected sub-word cliques. Predicts spelling errors on sequence level using the aggregated representations of all word nodes.</p></td>
-<td></td>
-</tr>
-<tr class="row-even"><td><p>sed_sequence (<code class="docutils literal notranslate"><span class="pre">nsed</span></code>/<code class="docutils literal notranslate"><span class="pre">SpellingErrorDetector</span></code>)</p></td>
-<td><p>gnn+</p></td>
-<td><p>Attentional Graph Neural Network which processes language graphs with fully connected word nodes, word features and fully connected sub-word cliques. Predicts spelling errors on sequence level using the aggregated representations of all word nodes.</p></td>
-<td></td>
-</tr>
 <tr class="row-odd"><td><p>sed_words (<code class="docutils literal notranslate"><span class="pre">nsed</span></code>/<code class="docutils literal notranslate"><span class="pre">SpellingErrorDetector</span></code>)</p></td>
 <td><p>transformer</p></td>
 <td><p>Regular transformer processing a sequence of sub-word tokens. Predicts spelling errors on word level using the aggregated sub-word representations per word.</p></td>
+<td><p>X</p></td>
+</tr>
+<tr class="row-even"><td><p>sed_words (<code class="docutils literal notranslate"><span class="pre">nsed</span></code>/<code class="docutils literal notranslate"><span class="pre">SpellingErrorDetector</span></code>)</p></td>
+<td><p>transformer_neuspell</p></td>
+<td><p>Regular transformer processing a sequence of sub-word tokens. Predicts spelling errors on word level using the aggregated sub-word representations per word. (pretrained without Neuspell and BEA misspellings, finetuned on Neuspell training data)</p></td>
+<td></td>
+</tr>
+<tr class="row-odd"><td><p>sed_words (<code class="docutils literal notranslate"><span class="pre">nsed</span></code>/<code class="docutils literal notranslate"><span class="pre">SpellingErrorDetector</span></code>)</p></td>
+<td><p>transformer+</p></td>
+<td><p>Regular transformer processing a sequence of sub-word tokens. Before predicting spelling errors, sub-word representations within a word are aggregated and enriched with word features to obtain word representations. Predicts spelling errors on word level using those word representations.</p></td>
 <td></td>
 </tr>
 <tr class="row-even"><td><p>sed_words (<code class="docutils literal notranslate"><span class="pre">nsed</span></code>/<code class="docutils literal notranslate"><span class="pre">SpellingErrorDetector</span></code>)</p></td>
-<td><p>transformer+</p></td>
-<td><p>Regular transformer processing a sequence of sub-word tokens. Before predicting spelling errors, sub-word representations within a word are aggregated and enriched with word features to obtain word representations. Predicts spelling errors on word level using those word representations.</p></td>
+<td><p>transformer+_neuspell</p></td>
+<td><p>Regular transformer processing a sequence of sub-word tokens. Before predicting spelling errors, sub-word representations within a word are aggregated and enriched with word features to obtain word representations. Predicts spelling errors on word level using those word representations. (pretrained without Neuspell and BEA misspellings, finetuned on Neuspell training data)</p></td>
 <td></td>
 </tr>
 <tr class="row-odd"><td><p>sed_words (<code class="docutils literal notranslate"><span class="pre">nsed</span></code>/<code class="docutils literal notranslate"><span class="pre">SpellingErrorDetector</span></code>)</p></td>
@@ -307,8 +297,18 @@ your own models and evaluating them on benchmarks, but not for training.</p>
 <td></td>
 </tr>
 <tr class="row-even"><td><p>sed_words (<code class="docutils literal notranslate"><span class="pre">nsed</span></code>/<code class="docutils literal notranslate"><span class="pre">SpellingErrorDetector</span></code>)</p></td>
+<td><p>gnn_neuspell</p></td>
+<td><p>Attentional Graph Neural Network which processes language graphs with fully connected word nodes and fully connected sub-word cliques. Predicts spelling errors on word level using the word node representations. (pretrained without Neuspell and BEA misspellings, finetuned on Neuspell training data)</p></td>
+<td></td>
+</tr>
+<tr class="row-odd"><td><p>sed_words (<code class="docutils literal notranslate"><span class="pre">nsed</span></code>/<code class="docutils literal notranslate"><span class="pre">SpellingErrorDetector</span></code>)</p></td>
 <td><p>gnn+</p></td>
 <td><p>Attentional Graph Neural Network which processes language graphs with fully connected word nodes, word features and fully connected sub-word cliques. Predicts spelling errors on word level using the word node representations.</p></td>
+<td></td>
+</tr>
+<tr class="row-even"><td><p>sed_words (<code class="docutils literal notranslate"><span class="pre">nsed</span></code>/<code class="docutils literal notranslate"><span class="pre">SpellingErrorDetector</span></code>)</p></td>
+<td><p>gnn+_neuspell</p></td>
+<td><p>Attentional Graph Neural Network which processes language graphs with fully connected word nodes, word features and fully connected sub-word cliques. Predicts spelling errors on word level using the word node representations. (pretrained without Neuspell and BEA misspellings, finetuned on Neuspell training data).</p></td>
 <td></td>
 </tr>
 <tr class="row-odd"><td><p>sed_words (<code class="docutils literal notranslate"><span class="pre">nsed</span></code>/<code class="docutils literal notranslate"><span class="pre">SpellingErrorDetector</span></code>)</p></td>
@@ -327,13 +327,23 @@ your own models and evaluating them on benchmarks, but not for training.</p>
 <td><p>X</p></td>
 </tr>
 <tr class="row-even"><td><p>sec (<code class="docutils literal notranslate"><span class="pre">nsec</span></code>/<code class="docutils literal notranslate"><span class="pre">SpellingErrorCorrector</span></code>)</p></td>
+<td><p>transformer_words_nmt_neuspell</p></td>
+<td><p>Transformer model that corrects sequences by translating each word individually from misspelled to correct. (pretrained without Neuspell and BEA misspellings, finetuned on Neuspell training data)</p></td>
+<td></td>
+</tr>
+<tr class="row-odd"><td><p>sec (<code class="docutils literal notranslate"><span class="pre">nsec</span></code>/<code class="docutils literal notranslate"><span class="pre">SpellingErrorCorrector</span></code>)</p></td>
 <td><p>tokenization_repair++</p></td>
 <td><p>Transformer based model that corrects sequences by first correcting the tokenization, then detecting spelling errors for each word in the repaired text and then translating every detected misspelled word to its corrected version.</p></td>
 <td></td>
 </tr>
-<tr class="row-odd"><td><p>sec (<code class="docutils literal notranslate"><span class="pre">nsec</span></code>/<code class="docutils literal notranslate"><span class="pre">SpellingErrorCorrector</span></code>)</p></td>
+<tr class="row-even"><td><p>sec (<code class="docutils literal notranslate"><span class="pre">nsec</span></code>/<code class="docutils literal notranslate"><span class="pre">SpellingErrorCorrector</span></code>)</p></td>
 <td><p>transformer_nmt</p></td>
 <td><p>Transformer model that translates a sequence with spelling errors into a sequence without spelling errors.</p></td>
+<td></td>
+</tr>
+<tr class="row-odd"><td><p>sec (<code class="docutils literal notranslate"><span class="pre">nsec</span></code>/<code class="docutils literal notranslate"><span class="pre">SpellingErrorCorrector</span></code>)</p></td>
+<td><p>transformer_nmt_neuspell</p></td>
+<td><p>Transformer model that translates a sequence with spelling errors into a sequence without spelling errors. (pretrained without Neuspell and BEA misspellings, finetuned on Neuspell training data)</p></td>
 <td></td>
 </tr>
 <tr class="row-even"><td><p>sec (<code class="docutils literal notranslate"><span class="pre">nsec</span></code>/<code class="docutils literal notranslate"><span class="pre">SpellingErrorCorrector</span></code>)</p></td>
