@@ -18,7 +18,7 @@ from tqdm import tqdm
 from nsc import models
 from nsc.data import variants, utils as data_utils
 from nsc.data.variants import get_variant_from_config, DatasetVariants
-from nsc.models import Model
+from nsc.models import Model, TensorModel
 from nsc.tasks import utils
 from nsc.utils import io, common, data_containers, Batch
 from nsc.utils.distributed import DistributedDevice, unwrap_ddp
@@ -44,7 +44,6 @@ class Task:
         self.best_val_loss = float("inf")
         self.checkpoint_dir = checkpoint_dir
 
-        self.variant_cfg = variant_cfg
         self.seed = seed
         self.variant = get_variant_from_config(variant_cfg, seed)
 
@@ -389,22 +388,26 @@ class Task:
 
         return loss_stat.value, best
 
-    def get_model(self,
-                  sample_inputs: Batch,
-                  cfg: omegaconf.DictConfig,
-                  device: torch.device) -> Model:
+    def get_model(
+            self,
+            sample_inputs: Batch,
+            cfg: omegaconf.DictConfig,
+            device: torch.device
+    ) -> Model:
         model = models.get_model_from_config(cfg, sample_inputs, device).to(device)
         self._check_model(model)
         return model
 
-    def save_checkpoint(self,
-                        model: Model,
-                        device: DistributedDevice,
-                        val_loss: float,
-                        best: bool = False,
-                        optimizer: Optional[optim.Optimizer] = None,
-                        lr_scheduler: Optional[optim.lr_scheduler.LambdaLR] = None,
-                        keep_last_n_checkpoints: Optional[int] = None) -> None:
+    def save_checkpoint(
+            self,
+            model: Model,
+            device: DistributedDevice,
+            val_loss: float,
+            best: bool = False,
+            optimizer: Optional[optim.Optimizer] = None,
+            lr_scheduler: Optional[optim.lr_scheduler.LambdaLR] = None,
+            keep_last_n_checkpoints: Optional[int] = None
+    ) -> None:
         if not device.is_main_process:
             return
 
@@ -519,6 +522,9 @@ class Task:
                     ))
         return all_samples, all_infos
 
+    def get_max_input_length(self, model: Model) -> int:
+        return model.cfg.max_length
+
     def _batch_sequences_for_inference(
             self,
             sequences: List[Union[str, data_utils.Sample]]
@@ -593,7 +599,7 @@ def get_task(
     from nsc.tasks.graph_sed_words import GraphSEDWords
     from nsc.tasks.sed_words import SEDWords
 
-    variant_type = DatasetVariants[variant_cfg.type]
+    variant_type = DatasetVariants[variant_cfg.type] if isinstance(variant_cfg.type, str) else variant_cfg.type
     if variant_type == DatasetVariants.SED_SEQUENCE:
         if variant_cfg.data_scheme == "tensor":
             return SEDSequence(variant_cfg, checkpoint_dir, seed)

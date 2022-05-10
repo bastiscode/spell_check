@@ -170,13 +170,13 @@ This project can also be run using Docker.
 Inside the Docker container both the `Command line interfaces`_ and `Python API`_ are available for you to use.
 You can also evaluate model predictions on benchmarks.
 
-To build the Docker image
+Build the Docker image:
 
 .. code-block:: bash
 
     make build_docker
 
-To start a Docker container
+Start a Docker container:
 
 .. code-block:: bash
 
@@ -186,7 +186,7 @@ To start a Docker container
     make run_docker_cpu
 
 You can also pass additional Docker arguments to the make commands by specifying ``DOCKER_ARGS``. For example,
-to mount an additional directory inside the container you can execute
+to mount an additional directory inside the container use
 ``make DOCKER_ARGS=" -v /path/to/outside/directory:/path/to/container/directory" run_docker_gpu``
 (notice the leading whitespace!).
 
@@ -197,8 +197,8 @@ to mount an additional directory inside the container you can execute
     e.g. ``make DOCKER_CMD=wharfer build_docker``.
 
 .. note::
-    The Docker setup is only intended to be used for using the command line tools/Python API with pretrained or
-    your own models and evaluating them on benchmarks, but not for training.
+    The Docker setup is only intended to be used for running the command line tools/Python API with pretrained or
+    your own models and evaluating benchmarks, but not for training.
 
 .. note::
     Running the Docker container with GPU support assumes that you have the `NVIDIA Container Toolkit`_ installed.

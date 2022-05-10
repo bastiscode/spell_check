@@ -143,16 +143,16 @@ class TensorGroupHead(nn.Module):
             hidden_dim: int,
             num_classes: int,
             num_additional_features: Optional[Dict[str, int]] = None,
-            aggregation: Optional[Dict[str, str]] = None
+            aggregation: Optional[Dict[str, str]] = None,
+            num_layers: int = 2
     ) -> None:
         super().__init__()
-        self.clf = nn.Sequential(
-            nn.Linear(in_features=hidden_dim,
-                      out_features=hidden_dim),
-            nn.GELU(),
-            nn.Linear(in_features=hidden_dim,
-                      out_features=num_classes)
-        )
+        clf_layers = []
+        for i in range(num_layers):
+            clf_layers.append(nn.Linear(hidden_dim, num_classes if i == num_layers - 1 else hidden_dim))
+            if i < num_layers - 1:
+                clf_layers.append(nn.GELU())
+        self.clf = nn.Sequential(*clf_layers)
 
         self.additional_features = nn.ModuleDict(
             {

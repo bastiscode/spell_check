@@ -132,6 +132,10 @@ def evaluate(
                 predictions
             ),)
 
+        elif name == "tok_rep_f1":
+            f1_prec_rec, avg_f1_prec_rec = metrics.tok_rep_f1_prec_rec(corrupted, predictions, groundtruths)
+            results[name] = (*f1_prec_rec, *avg_f1_prec_rec)
+
         else:
             raise RuntimeError(f"unknown metric {name}")
 
@@ -144,6 +148,7 @@ _METRIC_TO_HIGHER_BETTER = {
     "word_accuracy": True,
     "mean_normalized_edit_distance": False,
     "correction_f1": True,
+    "tok_rep_f1": True,
     "bleu": True
 }
 
@@ -153,6 +158,7 @@ _METRIC_TO_NUM_COLS = {
     "word_accuracy": 3,
     "mean_normalized_edit_distance": 2,
     "correction_f1": 3,
+    "tok_rep_f1": 3,
     "bleu": 1
 }
 
@@ -228,6 +234,28 @@ def get_metric_fmt_fn(metric_name: str, **metric_kwargs: Any) -> Callable[[Any],
 
         return _fmt_bleu
 
+    elif metric_name == "tok_rep_f1":
+        def _fmt_tok_rep_f1(
+                f1: float,
+                prec: float,
+                rec: float,
+                f1_avg: float,
+                prec_avg: float,
+                rec_avg: float,
+                mark_bea: str = "",
+                **fmt_kwargs: Any
+        ) -> List[str]:
+            return [
+                f"{100 * f1_avg:.2f}{mark_bea}",
+                f"\\footnotesize {100 * prec_avg:.2f}{mark_bea}",
+                f"\\footnotesize {100 * rec_avg:.2f}{mark_bea}",
+                # f"{100 * f1_avg:.2f}{mark_bea}",
+                # f"\\footnotesize {100 * prec_avg:.2f}{mark_bea}",
+                # f"\\footnotesize {100 * rec_avg:.2f}{mark_bea}"
+            ]
+
+        return _fmt_tok_rep_f1
+
     else:
         raise RuntimeError("should not happen")
 
@@ -239,16 +267,21 @@ def get_tokenization_repair_models_and_metrics() \
             ("do nothing", "baseline_dummy")
         ],
         (1, "tok_rep"): [
-            ("tokenization repair", "tokenization_repair")
+            ("trt eo_small_arxiv_with_errors", "eo_small_arxiv_with_errors"),
+            ("ntr eo_small_arxiv_with_errors", "eo_small_arxiv_with_errors_ported"),
+            ("trt eo_medium_arxiv_with_errors", "eo_medium_arxiv_with_errors"),
+            ("ntr eo_medium_arxiv_with_errors", "eo_medium_arxiv_with_errors_ported"),
+            ("trt eo_large_arxiv_with_errors", "eo_large_arxiv_with_errors"),
+            ("ntr eo_large_arxiv_with_errors", "eo_large_arxiv_with_errors_ported"),
         ],
-        (2, "tok_rep_advanced"): [
-            (r"tokenization repair\textsuperscript{+}", "tokenization_repair_plus_sed"),
-            (r"tokenization repair\textsuperscript{+}\textsubscript{\tiny fixed}", "tokenization_repair_plus_fixed"),
-            (r"tokenization repair\textsuperscript{++}", "tokenization_repair_plus_sec"),
-        ]
+        # (2, "tok_rep_advanced"): [
+        #     (r"tokenization repair\textsuperscript{+}", "tokenization_repair_plus_sed"),
+        #     (r"tokenization repair\textsuperscript{+}\textsubscript{\tiny fixed}", "tokenization_repair_plus_fixed"),
+        #     (r"tokenization repair\textsuperscript{++}", "tokenization_repair_plus_sec"),
+        # ]
     }
     metric_names = {"sequence_accuracy", "tok_rep_f1"}
-    return lambda _: True, dictionary, metric_names
+    return lambda s: s.split("/")[-1] == "test", dictionary, metric_names
 
 
 def _regular_benchmark(s: str) -> bool:
@@ -259,26 +292,6 @@ def _regular_benchmark(s: str) -> bool:
         "bookcorpus/artificial"
     }
     return "/".join(s.split("/")[-2:]) in benchmarks
-
-
-def get_sec_whitespace_models_and_metrics() \
-        -> Tuple[Callable[[str], bool], Dict[Tuple[int, str], List[Tuple[str, str]]], Set[str]]:
-    return lambda s: s.split("/")[-2] == "whitespace", {
-        (0, "baselines"): [
-            ("do nothing", "baseline_dummy")
-        ],
-        (1, "models"): [
-            ("transformer with tokenization repair", "transformer_with_tokenization_repair_sec_nmt"),
-            (r"tokenization repair\textsuperscript{++}", "tokenization_repair_plus_sec")
-        ],
-        (2, "models_advanced"): [
-            (r"tokenization repair $\rightarrow$ gnn\textsuperscript{+} $\rightarrow$ transformer word",
-             "tr_plus_gnn_plus_words_nmt"),
-            (r"tokenization repair\textsuperscript{+} $\rightarrow$ transformer word", "tr_plus_plus_words_nmt"),
-            (r"tokenization repair\rlap{\textsuperscript{+}}\textsubscript{\tiny fixed} $\rightarrow$ transformer word",
-             "tr_plus_fixed_plus_words_nmt")
-        ]
-    }, {"mean_normalized_edit_distance", "correction_f1"}  # , "bleu"}
 
 
 def get_sed_models_and_metrics(is_neuspell: bool, is_sed_words: bool) \
@@ -361,9 +374,13 @@ def get_sec_models_and_metrics(
         b_fn = lambda s: s.split("/")[-2] == "neuspell"
         models[2, "default"].extend([
             ("transformer untuned", "transformer_sec_nmt_untuned"),
-            ("transformer finetuned 4", "transformer_sec_nmt_finetuned_4"),
+            ("transformer finetuned 8", "transformer_sec_nmt_finetuned_8"),
             ("transformer word untuned", "transformer_sec_words_nmt_untuned"),
-            ("transformer word finetuned 4", "transformer_sec_words_nmt_finetuned_4"),
+            ("transformer word finetuned 8", "transformer_sec_words_nmt_finetuned_8"),
+        ])
+        models[3, "advanced"].extend([
+            ("gnn+ --> transformer finetuned 8", "gnn_cliques_wfc_plus_transformer_sec_nmt_finetuned_8"),
+            ("gnn+ --> transformer word finetuned 8", "gnn_cliques_wfc_plus_transformer_sec_words_nmt_finetuned_8"),
         ])
     else:
         b_fn = _regular_benchmark
@@ -398,6 +415,32 @@ def get_sec_spelling_correction_models_and_metrics(
         models,
         {"mean_normalized_edit_distance", "correction_f1"}  # , "bleu"}
     )
+
+
+def get_sec_whitespace_models_and_metrics() \
+        -> Tuple[Callable[[str], bool], Dict[Tuple[int, str], List[Tuple[str, str]]], Set[str]]:
+    return lambda s: s.split("/")[-2] == "whitespace", {
+        (0, "baselines"): [
+            ("do nothing", "baseline_dummy")
+        ],
+        (1, "models"): [
+            ("transformer with tokenization repair", "transformer_sec_with_tokenization_repair_nmt"),
+            (r"tokenization repair\textsuperscript{++}", "tokenization_repair_plus_sec")
+        ],
+        (2, "models_advanced"): [
+            (r"tokenization repair $\rightarrow$ gnn\textsuperscript{+} $\rightarrow$ transformer word",
+             "tr_plus_gnn_plus_words_nmt"),
+            (r"trt $\rightarrow$ gnn\textsuperscript{+} $\rightarrow$ transformer word",
+             "trt_plus_gnn_plus_words_nmt"),
+            (r"trt $\rightarrow$ gnn\textsuperscript{+} $\rightarrow$ transformer",
+             "trt_plus_gnn_plus_nmt"),
+            (r"tokenization repair $\rightarrow$ gnn\textsuperscript{+} $\rightarrow$ transformer",
+             "tr_plus_gnn_plus_nmt"),
+            (r"tokenization repair\textsuperscript{+} $\rightarrow$ transformer word", "tr_plus_plus_words_nmt"),
+            (r"tokenization repair\rlap{\textsuperscript{+}}\textsubscript{\tiny fixed} $\rightarrow$ transformer word",
+             "tr_plus_fixed_plus_words_nmt")
+        ]
+    }, {"mean_normalized_edit_distance", "correction_f1"}  # , "bleu"}
 
 
 if __name__ == "__main__":

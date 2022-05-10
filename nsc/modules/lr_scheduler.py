@@ -1,6 +1,6 @@
 import math
 from dataclasses import dataclass
-from typing import List
+from typing import List, Union
 
 import omegaconf
 from omegaconf import MISSING
@@ -43,10 +43,14 @@ class ConstantWithWarmupConfig(LRSchedulerConfig):
 
 
 def get_lr_scheduler_from_config(
-        cfg: omegaconf.DictConfig,
+        cfg: Union[LRSchedulerConfig, omegaconf.DictConfig],
         optimizer: optim.Optimizer,
-        num_training_steps: int) -> optim.lr_scheduler.LambdaLR:
-    lr_type = LRSchedulers[cfg.type]
+        num_training_steps: int
+) -> optim.lr_scheduler.LambdaLR:
+    # explicitly convert ot dict config first, this way we support both dictconfigs
+    # and structured configs as input
+    cfg: omegaconf.DictConfig = omegaconf.DictConfig(cfg)
+    lr_type = LRSchedulers[cfg.type] if isinstance(cfg.type, str) else cfg.type
     if lr_type == LRSchedulers.LINEAR_WITH_WARMUP:
         cfg = omegaconf.OmegaConf.structured(LinearWithWarmupConfig(**cfg))
         if cfg.warmup_steps <= 1.0:

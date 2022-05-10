@@ -74,6 +74,7 @@ class _APIBase:
         self.task = task
         self.device = device
         self.logger = logger
+        self.max_length = task.get_max_input_length(self.model)
 
         self._mixed_precision_dtype = torch.float32
 
@@ -126,16 +127,17 @@ class _APIBase:
             self,
             inputs: Union[str, List[str]],
             batch_size: int,
-            max_length: int,
             batch_max_length_factor: Optional[float] = None,
             sort_by_length: bool = True,
             show_progress: bool = False,
+            fix_unicode_errors: bool = False,
+            fix_all_uppercase: bool = False,
             **inference_kwargs: Any
     ) -> List[Any]:
         if isinstance(inputs, str):
             inputs = load_text_file(inputs)
 
-        inputs = [clean_sequence(ipt, fix_all_uppercase=True) for ipt in inputs]
+        inputs = [clean_sequence(ipt, fix_unicode_errors, fix_all_uppercase) for ipt in inputs]
         num_inputs = len(inputs)
         invalid_inputs = set(i for i in range(num_inputs) if inputs[i] == "")
         inputs = [ipt for i, ipt in enumerate(inputs) if i not in invalid_inputs]
@@ -144,7 +146,7 @@ class _APIBase:
         dataset, loader = get_inference_dataset_and_loader(
             sequences=inputs,
             task=self.task,
-            max_length=max_length,
+            max_length=self.max_length,
             sort_by_length=sort_by_length,
             batch_size=batch_size,
             batch_max_length_factor=batch_max_length_factor,
@@ -503,7 +505,6 @@ def load_experiment_config(
         env_vars.update(override_env_vars)
 
     config.set_nsc_env_vars(env_vars, keep_existing_env_vars)
-
     OmegaConf.resolve(cfg)
     schema = OmegaConf.structured(config.TrainConfig)
     cfg = OmegaConf.merge(schema, cfg)

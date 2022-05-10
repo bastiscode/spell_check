@@ -70,9 +70,10 @@ class Tokenizer:
 
 
 def get_tokenizer_from_config(cfg: Union[TokenizerConfig, omegaconf.DictConfig]) -> Tokenizer:
-    cfg = omegaconf.OmegaConf.structured(
-        cfg if isinstance(cfg, TokenizerConfig) else TokenizerConfig(**cfg)
-    )
+    # explicitly convert to dict config first, this way we support both dictconfigs
+    # and structured configs as input
+    cfg: omegaconf.DictConfig = omegaconf.DictConfig(cfg)
+    cfg: TokenizerConfig = omegaconf.OmegaConf.structured(TokenizerConfig(**cfg))
     if cfg.type == Tokenizers.CHAR:
         return CharTokenizer()
     elif cfg.type == Tokenizers.WORD:

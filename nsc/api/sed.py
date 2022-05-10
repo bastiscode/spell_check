@@ -30,6 +30,21 @@ def get_available_spelling_error_detection_models() -> List[ModelInfo]:
     return [
         ModelInfo(
             task="sed_words",
+            name="gnn+",
+            description="Attentional Graph Neural Network which processes language graphs with "
+                        "fully connected word nodes, word features and fully connected sub-word cliques. "
+                        "Predicts spelling errors on word level using the word node representations."
+        ),
+        ModelInfo(
+            task="sed_words",
+            name="gnn+_neuspell",
+            description="Attentional Graph Neural Network which processes language graphs with "
+                        "fully connected word nodes, word features and fully connected sub-word cliques. "
+                        "Predicts spelling errors on word level using the word node representations. "
+                        "(pretrained without Neuspell and BEA misspellings, finetuned on Neuspell training data)"
+        ),
+        ModelInfo(
+            task="sed_words",
             name="transformer",
             description="Regular transformer processing a sequence of sub-word tokens. "
                         "Predicts spelling errors on word level "
@@ -74,21 +89,6 @@ def get_available_spelling_error_detection_models() -> List[ModelInfo]:
                         "fully connected word nodes and fully connected sub-word cliques. "
                         "Predicts spelling errors on word level using the word node representations. "
                         "(pretrained without Neuspell and BEA misspellings, finetuned on Neuspell training data)"
-        ),
-        ModelInfo(
-            task="sed_words",
-            name="gnn+",
-            description="Attentional Graph Neural Network which processes language graphs with "
-                        "fully connected word nodes, word features and fully connected sub-word cliques. "
-                        "Predicts spelling errors on word level using the word node representations."
-        ),
-        ModelInfo(
-            task="sed_words",
-            name="gnn+_neuspell",
-            description="Attentional Graph Neural Network which processes language graphs with "
-                        "fully connected word nodes, word features and fully connected sub-word cliques. "
-                        "Predicts spelling errors on word level using the word node representations. "
-                        "(pretrained without Neuspell and BEA misspellings, finetuned on Neuspell training data)."
         ),
         ModelInfo(
             task="sed_words",
@@ -155,8 +155,6 @@ class SpellingErrorDetector(_APIBase):
         ), \
             f"expected experiment to be of type SEDWords, GraphSEDWords, " \
             f"SEDSequence, GraphSEDSequence or TokenizationRepairPlus, but got {task.__class__.__name__}"
-
-        self.max_length = model.cfg.max_length
 
         super().__init__(model, cfg, task, device, logger)
 
@@ -235,10 +233,10 @@ class SpellingErrorDetector(_APIBase):
         all_outputs = super()._run_raw(
             inputs=inputs,
             batch_size=batch_size,
-            max_length=self.max_length,
             batch_max_length_factor=batch_max_length_factor,
             sort_by_length=sort_by_length,
             show_progress=show_progress,
+            fix_all_uppercase=True,
             **inference_kwargs
         )
 

@@ -6,13 +6,14 @@ split=${SPLIT:-test}
 benchmark_dir=$(realpath $script_dir/../$split)
 baselines_dir=$(realpath $script_dir/../../baselines)
 
-benchmarks="sed_sequence sed_words sec"
+benchmarks="sed_sequence sed_words sec tokenization_repair"
 sec_baselines="SEC_ASPELL SEC_JAMSPELL SEC_DUMMY SEC_CTD SEC_LANGUAGETOOL SEC_NEUSPELL_BERT SEC_NEUSPELL_ELMO"
 sed_from_sec_baselines="SEC_ASPELL SEC_JAMSPELL SEC_DUMMY SEC_CTD SEC_LANGUAGETOOL SEC_NEUSPELL_BERT SEC_NEUSPELL_ELMO"
 declare -A baselines=(
   ["sec"]=$sec_baselines
   ["sed_sequence"]="SED_SEQUENCE_FROM_SEC SED_SEQUENCE_OOD"
   ["sed_words"]="SED_WORDS_FROM_SEC SED_WORDS_OOD"
+  ["tokenization_repair"]="SEC_DUMMY"
 )
 
 baseline_regex=${BASELINE_REGEX:-"*"}

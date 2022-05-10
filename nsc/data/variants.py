@@ -456,6 +456,7 @@ class TokenizationRepairConfig(DatasetVariantConfig):
     data_scheme: str = "tensor"
 
     tokenization_level: str = "char"  # one of {char, byte}
+    add_bos_eos: bool = False
 
 
 class TokenizationRepair(DatasetVariant):
@@ -469,6 +470,8 @@ class TokenizationRepair(DatasetVariant):
         else:
             raise ValueError(f"unknown tokenization level {cfg.tokenization_level}, must be one of {{char, byte}}")
 
+        self.bos_token_id = self.tokenizer.token_to_id(tokenization.BOS)
+        self.eos_token_id = self.tokenizer.token_to_id(tokenization.EOS)
         unk_token_id = self.tokenizer.token_to_id(tokenization.UNK)
         tok_fn = tokenization.get_tokenization_fn(self.tokenizer)
 
@@ -477,9 +480,10 @@ class TokenizationRepair(DatasetVariant):
     def _construct_input(self, sample: utils.Sample) -> Union[dgl.DGLHeteroGraph, torch.Tensor]:
         self.cfg: TokenizationRepairConfig
         if self.cfg.data_scheme == "tensor":
-            return torch.tensor(
-                utils.flatten(sample.tokens), dtype=torch.long
-            )
+            token_ids = utils.flatten(sample.tokens)
+            if self.cfg.add_bos_eos:
+                token_ids = [self.bos_token_id] + token_ids + [self.eos_token_id]
+            return torch.tensor(token_ids, dtype=torch.long)
         else:
             raise ValueError(f"Unknown data scheme {self.cfg.data_scheme}")
 
@@ -852,10 +856,13 @@ class TokenizationRepairPlus(TokenizationRepair):
 
 
 def get_variant_from_config(
-        cfg: omegaconf.DictConfig,
+        cfg: Union[DatasetVariantConfig, omegaconf.DictConfig],
         seed: int
 ) -> DatasetVariant:
-    variant_type = DatasetVariants[cfg.type]
+    # explicitly convert ot dict config first, this way we support both dictconfigs
+    # and structured configs as input
+    cfg: omegaconf.DictConfig = omegaconf.DictConfig(cfg)
+    variant_type = DatasetVariants[cfg.type] if isinstance(cfg.type, str) else cfg.type
     if variant_type == DatasetVariants.SED_SEQUENCE:
         cfg = OmegaConf.structured(SEDSequenceConfig(**cfg))
         return SEDSequence(cfg, seed)

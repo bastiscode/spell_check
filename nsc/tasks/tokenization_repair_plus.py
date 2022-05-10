@@ -4,9 +4,8 @@ import torch
 from torch.nn import functional as F
 
 from nsc import models, tasks
-from nsc.data import utils, variants
+from nsc.data import utils
 from nsc.data.utils import Sample
-from nsc.data.variants import TokenizationRepairPlusConfig
 from nsc.modules import utils as mod_utils, inference
 from nsc.tasks import utils as task_utils
 from nsc.utils import data_containers, Batch, to, tokenization_repair
@@ -139,7 +138,6 @@ class TokenizationRepairPlus(tasks.Task):
         self._check_model(model)
         model = model.eval()
         model_cfg: models.ModelForTokenizationRepairPlusConfig = model.cfg
-        self.variant_cfg: variants.TokenizationRepairPlusConfig
         assert output_type in {"tokenization_repair", "sed", "sec", "all"}, \
             f"unknown tokenization repair plus output type {output_type}, must be one of " \
             f"{{tokenization_repair, sed, sec, all}}"
@@ -215,7 +213,7 @@ class TokenizationRepairPlus(tasks.Task):
             }])
             word_ws_group_lengths.append(torch.tensor(word_ws_lengths, dtype=torch.long))
 
-            if self.variant_cfg.add_word_features:
+            if self.variant.cfg.add_word_features:
                 word_features.append(
                     utils.get_word_features(repaired_doc, self.variant.dictionary)
                 )
@@ -232,7 +230,7 @@ class TokenizationRepairPlus(tasks.Task):
         ]
 
         # add additional word features to word representations
-        if self.variant_cfg.add_word_features:
+        if self.variant.cfg.add_word_features:
             additional_word_features = to(word_features, model.device)
             word_feat = [
                 torch.cat([w_feat, add_w_feat], dim=1)
@@ -351,10 +349,9 @@ class TokenizationRepairPlus(tasks.Task):
             context_length: int,
             **kwargs: Any
     ) -> List[Tuple[int, int, int, int]]:
-        self.variant_cfg: TokenizationRepairPlusConfig
-        if self.variant_cfg.tokenization_level == "char":
+        if self.variant.cfg.tokenization_level == "char":
             return task_utils.get_character_windows(sample, max_length, context_length)
-        elif self.variant_cfg.tokenization_level == "byte":
+        elif self.variant.cfg.tokenization_level == "byte":
             return task_utils.get_byte_windows(sample, max_length, context_length)
         else:
             raise RuntimeError("should not happen")

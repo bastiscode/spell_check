@@ -14,10 +14,12 @@ from nsc.utils import DataInput
 
 
 class TokenEmbedding(nn.Module):
-    def __init__(self,
-                 embedding_dim: int,
-                 num_embeddings: int,
-                 padding_idx: Optional[int] = None) -> None:
+    def __init__(
+            self,
+            embedding_dim: int,
+            num_embeddings: int,
+            padding_idx: Optional[int] = None
+    ) -> None:
         super().__init__()
         self.padding_idx = padding_idx
         self.emb = nn.Embedding(num_embeddings, embedding_dim, padding_idx=padding_idx)
@@ -67,11 +69,13 @@ class SinusoidalPositionalEmbedding(nn.Module):
         return f"{self.__class__.__name__}(embedding_dim={self.embedding_dim}, max_len={self.max_len})"
 
 
-def embed_nodes_along_edge(g: dgl.DGLHeteroGraph,
-                           src_node_type: str,
-                           along_edge: str,
-                           embedded_node_types: Set[str],
-                           aggregate: str = "mean") -> None:
+def embed_nodes_along_edge(
+        g: dgl.DGLHeteroGraph,
+        src_node_type: str,
+        along_edge: str,
+        embedded_node_types: Set[str],
+        aggregate: str = "mean"
+) -> None:
     assert aggregate in {"mean", "sum"}
 
     edge_types: List[Tuple[str, str, str]] = []
@@ -383,12 +387,14 @@ class TensorEmbeddingConfig:
 
 
 class TensorEmbedding(nn.Module):
-    def __init__(self,
-                 hidden_dim: int,
-                 num_embeddings: int,
-                 max_length: int,
-                 cfg: TensorEmbeddingConfig,
-                 padding_idx: Optional[int] = None) -> None:
+    def __init__(
+            self,
+            hidden_dim: int,
+            num_embeddings: int,
+            max_length: int,
+            cfg: TensorEmbeddingConfig,
+            padding_idx: Optional[int] = None
+    ) -> None:
         super().__init__()
         self.hidden_dim = hidden_dim
         self.num_embeddings = num_embeddings
@@ -425,9 +431,14 @@ class TensorEmbedding(nn.Module):
         return self.drop(self.norm(emb))
 
 
-def get_embedding_from_config(cfg: omegaconf.DictConfig,
-                              sample_inputs: DataInput,
-                              **kwargs: Any) -> Union[GraphEmbedding, TensorEmbedding]:
+def get_embedding_from_config(
+        cfg: Union[TensorEmbeddingConfig, GraphEmbeddingConfig, omegaconf.DictConfig],
+        sample_inputs: DataInput,
+        **kwargs: Any
+) -> Union[GraphEmbedding, TensorEmbedding]:
+    # explicitly convert ot dict config first, this way we support both dictconfigs
+    # and structured configs as input
+    cfg: omegaconf.DictConfig = omegaconf.DictConfig(cfg)
     if isinstance(sample_inputs, dgl.DGLHeteroGraph):
         cfg = omegaconf.OmegaConf.structured(GraphEmbeddingConfig(**cfg))
         return GraphEmbedding(

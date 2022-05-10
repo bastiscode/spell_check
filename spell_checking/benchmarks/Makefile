@@ -108,6 +108,8 @@ evaluate_tokenization_repair:
 
 	@glow -w 150 $(SPLIT)/tokenization_repair_tables/*.md
 
+	cd ../../../latex && pdflatex -synctex=1 -interaction=batchmode thesis_main.tex
+
 .PHONY: evaluate_benchmark_statistics
 evaluate_benchmark_statistics:
 	@python scripts/generate_statistics_thesis.py \

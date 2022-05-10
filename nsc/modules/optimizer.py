@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Union
 
 import omegaconf
 from torch import optim, nn
@@ -34,10 +35,13 @@ class SGDConfig(OptimizerConfig):
 
 
 def get_optimizer_from_config(
-        cfg: omegaconf.DictConfig,
+        cfg: Union[OptimizerConfig, omegaconf.DictConfig],
         model: nn.Module
 ) -> optim.Optimizer:
-    optim_type = Optimizers[cfg.type]
+    # explicitly convert to dict config first, this way we support both dictconfigs
+    # and structured configs as input
+    cfg: omegaconf.DictConfig = omegaconf.DictConfig(cfg)
+    optim_type = Optimizers[cfg.type] if isinstance(cfg.type, str) else cfg.type
     if optim_type == Optimizers.ADAMW:
         cfg: AdamWConfig = omegaconf.OmegaConf.structured(AdamWConfig(**cfg))
         optim_cls = optim.AdamW

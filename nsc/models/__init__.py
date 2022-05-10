@@ -92,7 +92,8 @@ def get_gnn_from_config(
         sample_g: dgl.DGLHeteroGraph,
         node_hidden_dim: int,
         edge_hidden_dim: int,
-        hidden_feature: str) -> GNN:
+        hidden_feature: str
+) -> GNN:
     from nsc.models.attention_gnn import AttentionGNNConfig, AttentionGNN
     from nsc.models.simple_gnn import SimpleGNNConfig, SimpleGNN
     from nsc.models.transformer_gnn import (
@@ -111,7 +112,10 @@ def get_gnn_from_config(
         "sample_g": sample_g
     }
 
-    gnn_type = cfg.type if isinstance(cfg, GNNConfig) else GNNs[cfg.type]
+    # explicitly convert ot dict config first, this way we support both dictconfigs
+    # and structured configs as input
+    cfg: omegaconf.DictConfig = omegaconf.DictConfig(cfg)
+    gnn_type = GNNs[cfg.type] if isinstance(cfg.type, str) else cfg.type
     if gnn_type == GNNs.ATTENTION_GNN:
         kwargs["cfg"] = omegaconf.OmegaConf.structured(AttentionGNNConfig(**cfg))
         return AttentionGNN(**kwargs)
@@ -141,11 +145,15 @@ def get_gnn_from_config(
 class ModelConfig:
     type: Models
 
+    max_length: int = 512
+
 
 class Model(nn.Module):
-    def __init__(self,
-                 cfg: ModelConfig,
-                 device: torch.device) -> None:
+    def __init__(
+            self,
+            cfg: ModelConfig,
+            device: torch.device
+    ) -> None:
         super().__init__()
         self.cfg = cfg
         self.device = device
@@ -160,8 +168,6 @@ class GraphModelConfig(ModelConfig):
     node_hidden_dim: int = MISSING
     edge_hidden_dim: Optional[int] = None
     hidden_feature: str = "h"
-
-    max_length: int = 512
 
     embedding: GraphEmbeddingConfig = MISSING
     gnn: GNNConfig = MISSING
@@ -218,7 +224,6 @@ class GraphModel(Model):
 @dataclass
 class TensorModelConfig(ModelConfig):
     hidden_dim: int = MISSING
-    max_length: int = 512
 
 
 class TensorModel(Model):
@@ -262,10 +267,14 @@ class TensorModel(Model):
 
 
 def get_model_from_config(
-        cfg: omegaconf.DictConfig,
+        cfg: Union[ModelConfig, omegaconf.DictConfig],
         sample_inputs: Batch,
-        device: torch.device) -> Model:
-    model_type = Models[cfg.type]
+        device: torch.device
+) -> Model:
+    # explicitly convert ot dict config first, this way we support both dictconfigs
+    # and structured configs as input
+    cfg: omegaconf.DictConfig = omegaconf.DictConfig(cfg)
+    model_type = Models[cfg.type] if isinstance(cfg.type, str) else cfg.type
     if model_type == Models.MODEL_FOR_GRAPH_CLASSIFICATION:
         cfg = omegaconf.OmegaConf.structured(ModelForGraphClassificationConfig(**cfg))
         return ModelForGraphClassification(sample_inputs, cfg, device)
@@ -690,6 +699,7 @@ class ModelForToken2SeqConfig(TensorModelConfig):
     dropout: float = 0.1
     num_encoder_layers: int = MISSING
     num_decoder_layers: int = MISSING
+    use_sequence_context: bool = False
 
 
 class ModelForToken2Seq(TensorModel, TensorEncoderMixin, DecoderMixin):
@@ -728,8 +738,11 @@ class ModelForToken2Seq(TensorModel, TensorEncoderMixin, DecoderMixin):
 
     def build_head(self, sample_input: Batch) -> heads.TransformerDecoderHead:
         self.cfg: ModelForToken2SeqConfig
+        contexts = ["encoder_outputs"]
+        if self.cfg.use_sequence_context:
+            contexts.append("full_encoder_outputs")
         return heads.TransformerDecoderHead(
-            contexts=["encoder_outputs"],
+            contexts=contexts,
             pad_token_id=self.output_pad_token_id,
             max_length=self.cfg.max_output_length,
             hidden_dim=self.cfg.hidden_dim,
@@ -753,6 +766,7 @@ class ModelForToken2Seq(TensorModel, TensorEncoderMixin, DecoderMixin):
             decoder_group_lengths: Optional[List[torch.Tensor]] = None,
             **kwargs: Any
     ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+        self.cfg: ModelForToken2SeqConfig
         assert decoder_inputs is not None
 
         encoder_inputs, encoder_padding_mask = self.pad_inputs(x)
@@ -796,11 +810,17 @@ class ModelForToken2Seq(TensorModel, TensorEncoderMixin, DecoderMixin):
 
         assert all(len(positions) == length for positions, length in zip(decoder_positions, decoder_lengths))
 
+        encoder_outputs = {"encoder_outputs": enc}
+        encoder_padding_masks = {"encoder_outputs": encoder_padding_mask}
+        if self.cfg.use_sequence_context:
+            encoder_padding_masks["full_encoder_outputs"] = encoder_padding_mask
+            encoder_outputs["full_encoder_outputs"] = enc
+
         dec = self.decode(
             decoder_inputs=decoder_inputs,
             decoder_lengths=decoder_lengths,
-            encoder_outputs={"encoder_outputs": enc},
-            encoder_padding_masks={"encoder_outputs": encoder_padding_mask},
+            encoder_outputs=encoder_outputs,
+            encoder_padding_masks=encoder_padding_masks,
             encoder_masks={"encoder_outputs": torch.stack(encoder_masks)},
             decoder_mask=torch.stack(decoder_masks),
             decoder_positions=to(utils.pad(decoder_positions).long(), self.device)
@@ -1001,12 +1021,20 @@ class ModelForSequenceClassification(TensorModel):
 @dataclass
 class ModelForTokenClassificationConfig(TensorModelConfig):
     type = Models.MODEL_FOR_TOKEN_CLASSIFICATION
+    # embedding
     tokenizer: TokenizerConfig = MISSING
-    num_classes: int = MISSING
+    embedding: Any = MISSING
 
-    embedding: TensorEmbeddingConfig = MISSING
+    # encoder
     dropout: float = 0.1
     num_layers: int = MISSING
+    feed_forward_dim: Optional[int] = None
+    norm: bool = True
+    activation: str = "relu"
+
+    # head
+    num_clf_layers: int = 2
+    num_classes: int = MISSING
 
 
 class ModelForTokenClassification(TensorModel):
@@ -1038,7 +1066,10 @@ class ModelForTokenClassification(TensorModel):
             in_dim=self.cfg.hidden_dim,
             hidden_dim=self.cfg.hidden_dim,
             dropout=self.cfg.dropout,
-            num_layers=self.cfg.num_layers
+            num_layers=self.cfg.num_layers,
+            feed_forward_dim=self.cfg.feed_forward_dim,
+            norm=self.cfg.norm,
+            activation=self.cfg.activation
         )
 
     def build_head(self, sample_input: Batch) -> heads.TensorGroupHead:
@@ -1055,7 +1086,8 @@ class ModelForTokenClassification(TensorModel):
             hidden_dim=self.cfg.hidden_dim,
             num_classes=self.cfg.num_classes,
             num_additional_features=additional_features,
-            aggregation=aggregation
+            aggregation=aggregation,
+            num_layers=self.cfg.num_clf_layers
         )
 
     def forward(
@@ -1092,6 +1124,7 @@ class ModelForTokenizationRepairPlusConfig(TensorModelConfig):
     # tokenization repair backbone args
     start_from_tokenization_repair_checkpoint: Optional[str] = None
     fix_tokenization_repair: bool = False
+    tokenization_repair_layers: Tuple[int] = (-1,)
 
     # special args when output_type is tokenization_repair_plus_sed_plus_sec
     sec_tokenizer: Optional[TokenizerConfig] = None
@@ -1147,6 +1180,8 @@ class ModelForTokenizationRepairPlus(TensorModel, TensorEncoderMixin):
                 param.requires_grad = False
 
         self.word_encoder = self.build_word_encoder(sample_inputs)
+        self.weights = nn.Parameter(torch.zeros(len(cfg.tokenization_repair_layers)))
+        self.encoder.register_forward_hook()
 
     def build_embedding(self, sample_input: DataInput) -> embedding.TensorEmbedding:
         self.cfg: ModelForTokenClassificationConfig
@@ -1161,7 +1196,6 @@ class ModelForTokenizationRepairPlus(TensorModel, TensorEncoderMixin):
 
     def build_encoder(self, sample_input: DataInput) -> nn.Module:
         self.cfg: ModelForTokenizationRepairPlusConfig
-
         return encoders.Transformer(
             in_dim=self.cfg.hidden_dim,
             hidden_dim=self.cfg.hidden_dim,

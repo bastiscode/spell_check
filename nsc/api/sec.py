@@ -242,8 +242,6 @@ class SpellingErrorCorrector(_APIBase):
         ), f"expected experiment to be of type SECNMT, GraphSECNMT, SECWordsNMT, GraphSECWordsNMT or " \
            f"TokenizationRepairPlus, but got {task.__class__.__name__}"
 
-        self.max_length = model.cfg.max_length
-
         super().__init__(model, cfg, task, device, logger)
 
     @property

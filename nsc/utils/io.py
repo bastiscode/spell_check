@@ -40,12 +40,14 @@ def line_count(filepath: str) -> int:
     return i
 
 
-def save_checkpoint(checkpoint_path: str,
-                    model: nn.Module,
-                    step: int,
-                    val_loss: float,
-                    optimizer: Optional[optim.Optimizer] = None,
-                    lr_scheduler: Optional[Any] = None) -> None:
+def save_checkpoint(
+        checkpoint_path: str,
+        model: nn.Module,
+        step: int,
+        val_loss: float,
+        optimizer: Optional[optim.Optimizer] = None,
+        lr_scheduler: Optional[Any] = None
+) -> None:
     """
     Saves a checkpoint to a directory.
     :param checkpoint_path: Filepath to save the checkpoint
@@ -69,7 +71,8 @@ def save_checkpoint(checkpoint_path: str,
 
 def load_checkpoint(
         path: str,
-        device: torch.device = torch.device("cpu")) -> Dict[str, Any]:
+        device: torch.device = torch.device("cpu")
+) -> Dict[str, Any]:
     """
     Loads a checkpoint from disk. Maps checkpoint values to cpu by default.
     :param path: Path to the checkpoint file

@@ -27,7 +27,7 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .in \\n[rst2man-indent\\n[rst2man-indent-level]]u
 ..
-.TH "TABLE" "1" "May 09, 2022" "" "nsc"
+.TH "TABLE" "1" "May 10, 2022" "" "nsc"
 .SH NAME
 Table \- nsc 0.1.0
 .sp
@@ -248,7 +248,7 @@ This project can also be run using Docker.
 Inside the Docker container both the \fI\%Command line interfaces\fP and \fI\%Python API\fP are available for you to use.
 You can also evaluate model predictions on benchmarks.
 .sp
-To build the Docker image
+Build the Docker image:
 .INDENT 0.0
 .INDENT 3.5
 .sp
@@ -260,7 +260,7 @@ make build_docker
 .UNINDENT
 .UNINDENT
 .sp
-To start a Docker container
+Start a Docker container:
 .INDENT 0.0
 .INDENT 3.5
 .sp
@@ -276,7 +276,7 @@ make run_docker_cpu
 .UNINDENT
 .sp
 You can also pass additional Docker arguments to the make commands by specifying \fBDOCKER_ARGS\fP\&. For example,
-to mount an additional directory inside the container you can execute
+to mount an additional directory inside the container use
 \fBmake DOCKER_ARGS=" \-v /path/to/outside/directory:/path/to/container/directory" run_docker_gpu\fP
 (notice the leading whitespace!).
 .sp
@@ -292,8 +292,8 @@ e.g. \fBmake DOCKER_CMD=wharfer build_docker\fP\&.
 \fBNOTE:\fP
 .INDENT 0.0
 .INDENT 3.5
-The Docker setup is only intended to be used for using the command line tools/Python API with pretrained or
-your own models and evaluating them on benchmarks, but not for training.
+The Docker setup is only intended to be used for running the command line tools/Python API with pretrained or
+your own models and evaluating benchmarks, but not for training.
 .UNINDENT
 .UNINDENT
 .sp
@@ -350,11 +350,29 @@ _
 T{
 sed_words (\fBnsed\fP/\fBSpellingErrorDetector\fP)
 T}	T{
+gnn+
+T}	T{
+Attentional Graph Neural Network which processes language graphs with fully connected word nodes, word features and fully connected sub\-word cliques. Predicts spelling errors on word level using the word node representations.
+T}	T{
+X
+T}
+_
+T{
+sed_words (\fBnsed\fP/\fBSpellingErrorDetector\fP)
+T}	T{
+gnn+_neuspell
+T}	T{
+Attentional Graph Neural Network which processes language graphs with fully connected word nodes, word features and fully connected sub\-word cliques. Predicts spelling errors on word level using the word node representations. (pretrained without Neuspell and BEA misspellings, finetuned on Neuspell training data)
+T}	T{
+T}
+_
+T{
+sed_words (\fBnsed\fP/\fBSpellingErrorDetector\fP)
+T}	T{
 transformer
 T}	T{
 Regular transformer processing a sequence of sub\-word tokens. Predicts spelling errors on word level using the aggregated sub\-word representations per word.
 T}	T{
-X
 T}
 _
 T{
@@ -399,24 +417,6 @@ T}	T{
 gnn_neuspell
 T}	T{
 Attentional Graph Neural Network which processes language graphs with fully connected word nodes and fully connected sub\-word cliques. Predicts spelling errors on word level using the word node representations. (pretrained without Neuspell and BEA misspellings, finetuned on Neuspell training data)
-T}	T{
-T}
-_
-T{
-sed_words (\fBnsed\fP/\fBSpellingErrorDetector\fP)
-T}	T{
-gnn+
-T}	T{
-Attentional Graph Neural Network which processes language graphs with fully connected word nodes, word features and fully connected sub\-word cliques. Predicts spelling errors on word level using the word node representations.
-T}	T{
-T}
-_
-T{
-sed_words (\fBnsed\fP/\fBSpellingErrorDetector\fP)
-T}	T{
-gnn+_neuspell
-T}	T{
-Attentional Graph Neural Network which processes language graphs with fully connected word nodes, word features and fully connected sub\-word cliques. Predicts spelling errors on word level using the word node representations. (pretrained without Neuspell and BEA misspellings, finetuned on Neuspell training data).
 T}	T{
 T}
 _

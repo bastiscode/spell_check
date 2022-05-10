@@ -21,6 +21,9 @@ def parse_args():
     parser.add_argument("gt_file", type=str, help="Path to the groundtruth file containing the target outputs.")
     parser.add_argument("pred_file", type=str,
                         help="Path to the predicted file as outputted by a spell checking model.")
+    parser.add_argument("--lowercase", action="store_true",
+                        help="Whether to lowercase the model predictions before evaluation. Useful "
+                             "for sec benchmarks that have lowercased inputs and groundtruths.")
     return parser.parse_args()
 
 
@@ -28,7 +31,8 @@ def evaluate(
         corrupted_file: str,
         groundtruth_file: str,
         predicted_file: str,
-        metric_names: Set[str]
+        metric_names: Set[str],
+        lowercase: bool
 ) -> None:
     groundtruths = []
     predictions = []
@@ -39,14 +43,17 @@ def evaluate(
         for gt, p, c in zip(gtf, pf, cf):
             groundtruths.append(clean_sequence(gt))
             corrupted.append(clean_sequence(c))
-            predictions.append(clean_sequence(p))
+            p = clean_sequence(p)
+            if lowercase:
+                p = p.lower()
+            predictions.append(p)
 
     assert len(predictions) == len(groundtruths) == len(corrupted)
 
     for name in metric_names:
         if name == "binary_f1":
             binary_predictions = [int(p) for prediction in predictions for p in prediction.split()]
-            binary_labels = [int(l) for label in groundtruths for l in label.split()]
+            binary_labels = [int(lab) for label in groundtruths for lab in label.split()]
             f1, prec, rec = metrics.binary_f1_prec_rec(binary_predictions, binary_labels)
             print(f"F1: {100 * f1:.2f} (Precision: {100 * prec:.2f}%, Recall: {100 * rec:.2f}%)")
 
@@ -77,8 +84,7 @@ def evaluate(
             raise RuntimeError(f"unknown metric {name}")
 
 
-if __name__ == "__main__":
-    args = parse_args()
+def run(args: argparse.Namespace) -> None:
     if args.benchmark_type == "sed_sequence":
         message = "Evaluating spelling error detection (sequence level)"
         metric_names = {"binary_f1", "sequence_accuracy"}
@@ -100,9 +106,14 @@ if __name__ == "__main__":
             corrupted_file=args.in_file,
             groundtruth_file=args.gt_file,
             predicted_file=args.pred_file,
-            metric_names=metric_names
+            metric_names=metric_names,
+            lowercase=args.lowercase and args.benchmark_type == "sec"  # lowercase only respected for sec benchmarks
         )
     except Exception as e:
         print(f"An exception was thrown during evaluation: '{e}'.\n"
               f"Please make sure that you passed the input, groundtruth and prediction file in the correct order "
               f"and that they have the correct format for the benchmark type you want to evaluate.")
+
+
+if __name__ == "__main__":
+    run(parse_args())

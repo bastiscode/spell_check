@@ -16,11 +16,13 @@ class Encoders(enum.IntEnum):
 
 
 class Encoder(nn.Module):
-    def __init__(self,
-                 in_dim: int,
-                 hidden_dim: int,
-                 dropout: float,
-                 num_layers: int = 2) -> None:
+    def __init__(
+            self,
+            in_dim: int,
+            hidden_dim: int,
+            dropout: float,
+            num_layers: int = 2
+    ) -> None:
         super().__init__()
         self.in_dim = in_dim
         self.hidden_dim = hidden_dim
@@ -32,12 +34,15 @@ class Encoder(nn.Module):
 
 
 class MLP(Encoder):
-    def __init__(self,
-                 in_dim: int,
-                 hidden_dim: int,
-                 dropout: float,
-                 num_layers: int = 2,
-                 feed_forward_dim: Optional[int] = None) -> None:
+    def __init__(
+            self,
+            in_dim: int,
+            hidden_dim: int,
+            dropout: float,
+            num_layers: int = 2,
+            feed_forward_dim: Optional[int] = None,
+            norm: bool = True
+    ) -> None:
         super().__init__(in_dim, hidden_dim, dropout, num_layers)
         self.layers = nn.ModuleList()
         if feed_forward_dim is None:
@@ -49,21 +54,29 @@ class MLP(Encoder):
                 self.layers.append(nn.GELU())
                 self.layers.append(nn.Dropout(dropout))
                 in_features = feed_forward_dim
-        self.norm = nn.LayerNorm(hidden_dim)
+        if norm:
+            self.norm = nn.LayerNorm(hidden_dim)
+        else:
+            self.norm = None
 
     def forward(self, inputs: torch.Tensor, **kwargs: Any) -> torch.Tensor:
         x = inputs
         for layer in self.layers:
             x = layer(x)
-        return self.norm(x)
+        if self.norm is not None:
+            x = self.norm(x)
+        return x
 
 
 class CNN(nn.Module):
-    def __init__(self,
-                 in_dim: int,
-                 hidden_dim: int,
-                 dropout: float,
-                 num_layers: int = 2) -> None:
+    def __init__(
+            self,
+            in_dim: int,
+            hidden_dim: int,
+            dropout: float,
+            num_layers: int = 2,
+            norm: bool = True
+    ) -> None:
         super().__init__()
         self.layers = nn.ModuleList()
         in_channels = in_dim
@@ -77,7 +90,11 @@ class CNN(nn.Module):
                 self.layers.append(nn.GELU())
                 self.layers.append(nn.Dropout(dropout))
                 in_channels = hidden_dim
-        self.norm = nn.LayerNorm(hidden_dim)
+
+        if norm:
+            self.norm = nn.LayerNorm(hidden_dim)
+        else:
+            self.norm = None
 
     def forward(self, inputs: torch.Tensor, **kwargs: Any) -> torch.Tensor:
         # x: [N, Lmax, H]
@@ -85,15 +102,20 @@ class CNN(nn.Module):
         for layer in self.layers:
             x = layer(x)
         x = einops.rearrange(x, "n h l -> n l h")
-        return self.norm(x)
+        if self.norm is not None:
+            x = self.norm(x)
+        return x
 
 
 class BiGRU(nn.Module):
-    def __init__(self,
-                 in_dim: int,
-                 hidden_dim: int,
-                 dropout: float,
-                 num_layers: int = 1) -> None:
+    def __init__(
+            self,
+            in_dim: int,
+            hidden_dim: int,
+            dropout: float,
+            num_layers: int = 1,
+            norm: bool = True
+    ) -> None:
         super().__init__()
         self.gru = nn.GRU(input_size=in_dim,
                           hidden_size=hidden_dim,
@@ -101,7 +123,10 @@ class BiGRU(nn.Module):
                           bidirectional=True,
                           dropout=dropout,
                           num_layers=num_layers)
-        self.norm = nn.LayerNorm(hidden_dim)
+        if norm:
+            self.norm = nn.LayerNorm(hidden_dim)
+        else:
+            self.norm = None
 
     def forward(self, inputs: torch.Tensor, lengths: Optional[torch.Tensor] = None, **kwargs: Any) -> torch.Tensor:
         # inputs: N * [L, H]
@@ -111,17 +136,23 @@ class BiGRU(nn.Module):
         x, _ = utils.unpack(x)
         # sum the two directions
         x = einops.reduce(x, "n l (d h) -> n l h", d=2, reduction="sum")
-        return self.norm(x)
+        if self.norm is not None:
+            x = self.norm(x)
+        return x
 
 
 class Transformer(nn.Module):
-    def __init__(self,
-                 in_dim: int,
-                 hidden_dim: int,
-                 dropout: float,
-                 num_layers: int = 1,
-                 feed_forward_dim: Optional[int] = None,
-                 num_heads: Optional[int] = None) -> None:
+    def __init__(
+            self,
+            in_dim: int,
+            hidden_dim: int,
+            dropout: float,
+            num_layers: int = 1,
+            feed_forward_dim: Optional[int] = None,
+            num_heads: Optional[int] = None,
+            norm: bool = True,
+            activation: str = "relu"
+    ) -> None:
         super().__init__()
         if in_dim != hidden_dim:
             self.proj = nn.Linear(in_dim, hidden_dim)
@@ -134,15 +165,21 @@ class Transformer(nn.Module):
             dim_feedforward=feed_forward_dim,
             nhead=num_heads,
             dropout=dropout,
-            batch_first=True
+            batch_first=True,
+            activation=activation
         )
         self.encoder = nn.TransformerEncoder(encoder_layer, num_layers)
-        self.norm = nn.LayerNorm(hidden_dim)
+        if norm:
+            self.norm = nn.LayerNorm(hidden_dim)
+        else:
+            self.norm = None
 
     def forward(self, inputs: torch.Tensor, padding_mask: Optional[torch.Tensor] = None, **kwargs: Any) -> torch.Tensor:
         x = self.proj(inputs)
         x = self.encoder(x, src_key_padding_mask=padding_mask)
-        return self.norm(x)
+        if self.norm is not None:
+            x = self.norm(x)
+        return x
 
 
 def get_feature_encoder(

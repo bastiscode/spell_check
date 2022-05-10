@@ -13,8 +13,7 @@ from nsc.utils import data_containers, Batch
 class GraphSEDWords(MultiNodeClassification):
     def _get_additional_stats(self, model: models.ModelForMultiNodeClassification) \
             -> Dict[str, data_containers.DataContainer]:
-        self.variant_cfg: variants.SEDWordsConfig
-        node_type = "word" if self.variant_cfg.data_scheme == "word_graph" else "token"
+        node_type = "word" if self.variant.cfg.data_scheme == "word_graph" else "token"
 
         stats = {
             f"{node_type}_accuracy": data_containers.AverageScalarContainer(name="word_accuracy"),

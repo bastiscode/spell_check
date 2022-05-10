@@ -764,7 +764,10 @@ class NoPreprocessing(Preprocessing):
 
 
 def get_preprocessing_from_config(cfg: Union[PreprocessingConfig, omegaconf.DictConfig], seed: int) -> Preprocessing:
-    preprocessing_type = cfg.type if isinstance(cfg, PreprocessingConfig) else Preprocessings[cfg.type]
+    # explicitly convert to dict config first, this way we support both dictconfigs
+    # and structured configs as input
+    cfg: omegaconf.DictConfig = omegaconf.DictConfig(cfg)
+    preprocessing_type = Preprocessings[cfg.type] if isinstance(cfg.type, str) else cfg.type
     if preprocessing_type == Preprocessings.ARTIFICIAL_NOISE:
         cfg = OmegaConf.structured(ArtificialNoiseConfig(**cfg))
         return ArtificialNoise(cfg, seed)
@@ -796,7 +799,7 @@ def get_preprocessing_from_config(cfg: Union[PreprocessingConfig, omegaconf.Dict
         cfg = OmegaConf.structured(ReplaceConfig(**cfg))
         return Replace(cfg, seed)
     else:
-        raise ValueError(f"Unknown noise {cfg.type.name}")
+        raise ValueError(f"unknown noise {cfg.type.name}")
 
 
 def get_preprocessing_fn(

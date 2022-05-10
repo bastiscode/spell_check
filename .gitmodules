@@ -4,3 +4,6 @@
 [submodule "third_party/gpt3"]
 	path = third_party/gpt3
 	url = https://github.com/bastiscode/openai-quickstart-python.git
+[submodule "third_party/trt"]
+	path = third_party/trt
+	url = https://github.com/ad-freiburg/trt.git

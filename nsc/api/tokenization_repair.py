@@ -80,8 +80,6 @@ class TokenizationRepairer(_APIBase):
         ), f"expected experiment to be of type TokenizationRepair or TokenizationRepairPlus, " \
            f"but got {task.__class__.__name__}"
 
-        self.max_length = model.cfg.max_length
-
         super().__init__(model, cfg, task, device, logger)
 
     @property
@@ -153,7 +151,6 @@ class TokenizationRepairer(_APIBase):
         all_outputs = super()._run_raw(
             inputs=inputs,
             batch_size=batch_size,
-            max_length=self.max_length,
             batch_max_length_factor=batch_max_length_factor,
             sort_by_length=sort_by_length,
             show_progress=show_progress,

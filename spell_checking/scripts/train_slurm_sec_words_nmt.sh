@@ -31,6 +31,19 @@ if [[ $approach == "transformer" ]]; then
   export NSC_WORLD_SIZE=16
   sbatch --nodes=4 spell_checking/scripts/train.sh
 
+elif [[ $approach == "transformer_full_context" ]]; then
+  config="$config_dir/train/sec_words_nmt_transformer.yaml"
+  rel_config=$(realpath "$config" --relative-to "$workspace")
+  echo "Starting approach $approach with config $(realpath "$config" --relative-to "$config_dir")"
+  export NSC_EXPERIMENT_NAME="transformer_sec_words_nmt_full_context"
+  export NSC_MASTER_PORT=$(python -c "import random; print(random.randrange(10000, 60000))")
+  export NSC_NUM_ENCODER_LAYERS=6
+  export NSC_USE_SEQUENCE_CONTEXT=true
+  export NSC_BATCH_MAX_LENGTH=32768
+  export NSC_CONFIG=$rel_config
+  export NSC_WORLD_SIZE=20
+  sbatch --nodes=5 spell_checking/scripts/train.sh
+
 else
   echo "Unknown approach $approach"
 fi
