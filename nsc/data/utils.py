@@ -556,7 +556,7 @@ def get_word_features(doc: Doc, dictionary: Optional[Dict[str, int]]) -> torch.T
 def get_character_groups_from_repaired_doc(
         input_characters: List[str],
         repaired_doc: Doc
-) -> torch.Tensor:
+) -> List[int]:
     assert [c for c in input_characters if c != " "] == flatten([list(word.text) for word in repaired_doc])
     character_groups = [-1] * len(input_characters)
     word_idx = 0
@@ -574,7 +574,7 @@ def get_character_groups_from_repaired_doc(
         else:
             word_char_idx += 1
 
-    return torch.tensor(character_groups, dtype=torch.long)
+    return character_groups
 
 
 def clean_sequence(sequence: str, fix_unicode_errors: bool = False, fix_all_uppercase: bool = False) -> str:

@@ -1,4 +1,4 @@
 type: TOKENIZATION_REPAIR
 
 data_scheme: "tensor"
-tokenization_level: "char"
+input_type: "char"

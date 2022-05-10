@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from typing import Optional, Dict, Tuple, List, Any, Union
 
 import dgl
+import einops
 import omegaconf
 import torch
 from omegaconf import MISSING
@@ -13,7 +14,7 @@ from nsc.data.tokenization import TokenizerConfig, get_tokenizer_from_config, To
 from nsc.modules import heads, embedding, utils, encoders
 from nsc.modules.embedding import GraphEmbeddingConfig, TensorEmbeddingConfig
 from nsc.modules.utils import GraphEncoderMixin, TensorEncoderMixin, DecoderMixin, pad
-from nsc.utils import TensorInput, Batch, DataInput, to, io
+from nsc.utils import TensorInput, Batch, DataInput, to, io, hooks
 
 
 class Models(enum.IntEnum):
@@ -247,7 +248,7 @@ class TensorModel(Model):
             f"expected data input to be a non empty tensor list, but got {type(data)}"
         )
 
-    def build_embedding(self, sample_input: DataInput) -> embedding.TokenEmbedding:
+    def build_embedding(self, sample_input: DataInput) -> embedding.TensorEmbedding:
         # embedding is also sometimes model specific, because of the use of tokenizers, so we override this
         # in the models
         raise NotImplementedError
@@ -1118,15 +1119,24 @@ class ModelForTokenizationRepairPlusConfig(TensorModelConfig):
 
     embedding: TensorEmbeddingConfig = MISSING
     dropout: float = 0.1
-    num_input_layers: int = MISSING
-    num_word_layers: int = MISSING
 
     # tokenization repair backbone args
     start_from_tokenization_repair_checkpoint: Optional[str] = None
     fix_tokenization_repair: bool = False
-    tokenization_repair_layers: Tuple[int] = (-1,)
+    tokenization_repair_feature_layers: Tuple[int] = (-1,)
+    num_tokenization_repair_layers: int = MISSING
+    num_tokenization_repair_clf_layers: int = 1
+    tokenization_repair_feed_forward_dim: Optional[int] = None
+    tokenization_repair_norm: bool = True
+    tokenization_repair_activation: str = "relu"
 
-    # special args when output_type is tokenization_repair_plus_sed_plus_sec
+    # word backbone args
+    num_word_layers: int = MISSING
+
+    # special args for sed head
+    num_sed_clf_layers: int = 2
+
+    # special args for sec head
     sec_tokenizer: Optional[TokenizerConfig] = None
     num_sec_layers: int = MISSING
     sec_max_output_length: int = 512
@@ -1165,9 +1175,15 @@ class ModelForTokenizationRepairPlus(TensorModel, TensorEncoderMixin):
             ckpt_state_dict = checkpoint["model_state_dict"]
             ckpt_encoder_state_dict = io.filter_state_dict(ckpt_state_dict, "encoder.")
             ckpt_head_state_dict = io.filter_state_dict(ckpt_state_dict, "head.")
-            ckpt_embedding_state_dict = io.filter_state_dict(ckpt_state_dict, "embedding.")
+            ckpt_embedding_emb_state_dict = io.filter_state_dict(ckpt_state_dict, "embedding.embedding.")
+            ckpt_embedding_norm_state_dict = io.filter_state_dict(ckpt_state_dict, "embedding.norm.")
 
-            self.embedding.load_state_dict(ckpt_embedding_state_dict)
+            if cfg.embedding.embed_positions and cfg.embedding.learned_position_embedding:
+                ckpt_embedding_pos_emb_state_dict = io.filter_state_dict(ckpt_state_dict, "embedding.pos_emb.")
+                self.embedding.pos_emb.load_state_dict(ckpt_embedding_pos_emb_state_dict)
+
+            self.embedding.norm.load_state_dict(ckpt_embedding_norm_state_dict)
+            self.embedding.embedding.load_state_dict(ckpt_embedding_emb_state_dict)
             self.encoder.load_state_dict(ckpt_encoder_state_dict)
             self.head["tokenization_repair"].load_state_dict(ckpt_head_state_dict)
 
@@ -1180,8 +1196,24 @@ class ModelForTokenizationRepairPlus(TensorModel, TensorEncoderMixin):
                 param.requires_grad = False
 
         self.word_encoder = self.build_word_encoder(sample_inputs)
-        self.weights = nn.Parameter(torch.zeros(len(cfg.tokenization_repair_layers)))
-        self.encoder.register_forward_hook()
+        assert len(cfg.tokenization_repair_feature_layers) > 0 and all(
+            -cfg.num_tokenization_repair_layers <= layer < cfg.num_tokenization_repair_layers
+            for layer in cfg.tokenization_repair_feature_layers
+        ), f"expected all layers for feature extraction to be in [{-cfg.num_tokenization_repair_layers}," \
+           f"{cfg.num_tokenization_repair_layers}), but got {cfg.tokenization_repair_feature_layers}"
+        # initialize weights uniformly and let the model figure during training which layers are important
+        self.encoder_weights = nn.Parameter(torch.zeros(len(cfg.tokenization_repair_feature_layers)))
+        self.encoder_hooks = hooks.ModelHook()
+        self.encoder_layer_indices = sorted(list(
+            set(cfg.num_tokenization_repair_layers + layer if layer < 0 else layer
+                for layer in cfg.tokenization_repair_feature_layers)
+        ))
+        for layer_idx in self.encoder_layer_indices:
+            self.encoder_hooks.attach(
+                name=f"layer_{layer_idx}",
+                module=self.encoder.encoder.layers[layer_idx],
+                hook=hooks.SaveOutputHook()
+            )
 
     def build_embedding(self, sample_input: DataInput) -> embedding.TensorEmbedding:
         self.cfg: ModelForTokenClassificationConfig
@@ -1200,7 +1232,10 @@ class ModelForTokenizationRepairPlus(TensorModel, TensorEncoderMixin):
             in_dim=self.cfg.hidden_dim,
             hidden_dim=self.cfg.hidden_dim,
             dropout=self.cfg.dropout,
-            num_layers=self.cfg.num_input_layers
+            num_layers=self.cfg.num_tokenization_repair_layers,
+            feed_forward_dim=self.cfg.tokenization_repair_feed_forward_dim,
+            norm=self.cfg.tokenization_repair_norm,
+            activation=self.cfg.tokenization_repair_activation
         )
 
     def pad_inputs(self, x: DataInput, pad_val: float = 0) -> Tuple[torch.Tensor, torch.Tensor, List[int]]:
@@ -1210,10 +1245,20 @@ class ModelForTokenizationRepairPlus(TensorModel, TensorEncoderMixin):
         padding_mask = utils.padding_mask(inputs, lengths)
         return inputs, padding_mask, lengths
 
-    def encode(self, x: torch.Tensor, padding_mask: Optional[torch.Tensor] = None, **kwargs: Any) -> torch.Tensor:
+    def encode(self, x: torch.Tensor, padding_mask: Optional[torch.Tensor] = None, **kwargs: Any) \
+            -> Tuple[torch.Tensor, torch.Tensor]:
         assert padding_mask is not None
-        enc = self.embedding(x)
-        return self.encoder(enc, padding_mask=padding_mask)
+        emb = self.embedding(x)
+        enc = self.encoder(emb, padding_mask=padding_mask)
+
+        enc_features = torch.stack(
+            [self.encoder_hooks[f"layer_{layer_idx}"][f"layer_{layer_idx}"]
+             for layer_idx in self.encoder_layer_indices]
+        )
+        enc_features = (
+                enc_features * einops.repeat(torch.softmax(self.encoder_weights, dim=0), "f -> f b l h", b=1, l=1, h=1)
+        ).sum(dim=0)
+        return enc, enc_features
 
     def build_word_encoder(self, sample_input: Batch) -> nn.Module:
         self.cfg: ModelForTokenizationRepairPlusConfig
@@ -1242,12 +1287,14 @@ class ModelForTokenizationRepairPlus(TensorModel, TensorEncoderMixin):
         heads_dict = nn.ModuleDict({
             "tokenization_repair": heads.TensorGroupHead(
                 hidden_dim=self.cfg.hidden_dim,
-                num_classes=3
+                num_classes=3,
+                num_layers=self.cfg.num_tokenization_repair_clf_layers
             ),
             "sed": heads.TensorGroupHead(
                 hidden_dim=self.cfg.hidden_dim,
                 num_classes=2,
-                aggregation=sed_aggregation
+                aggregation=sed_aggregation,
+                num_layers=self.cfg.num_sed_clf_layers
             )
         })
         if self.cfg.output_type == "tokenization_repair_plus_sed_plus_sec":
@@ -1285,7 +1332,8 @@ class ModelForTokenizationRepairPlus(TensorModel, TensorEncoderMixin):
         x, padding_mask, lengths = self.pad_inputs(x, pad_val=self.input_pad_token_id)
 
         # embed tokens and encode input representations
-        x = self.encode(x.long(), padding_mask=padding_mask)
+        x_tr, x = self.encode(x.long(), padding_mask=padding_mask)
+        x_tr = [x_tr[i, :l] for i, l in enumerate(lengths)]
         x = [x[i, :l] for i, l in enumerate(lengths)]
 
         if self.cfg.input_type == "byte":
@@ -1297,7 +1345,7 @@ class ModelForTokenizationRepairPlus(TensorModel, TensorEncoderMixin):
             )
 
         # tokenization repair output
-        outputs["tokenization_repair"] = self.head["tokenization_repair"](x)
+        outputs["tokenization_repair"] = self.head["tokenization_repair"](x_tr)
 
         # group characters by word (leaving out whitespaces)
         x = utils.group_features(

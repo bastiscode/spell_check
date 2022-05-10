@@ -27,21 +27,21 @@ def get_available_tokenization_repair_models() -> List[ModelInfo]:
     return [
         ModelInfo(
             task="tokenization_repair",
-            name="transformer_eo",
-            description="Transformer model that repairs sequences by predicting repair tokens for each character."
+            name="eo_large_arxiv_with_errors",
+            description="Large-sized Transformer model (12 layers) that repairs sequences by predicting repair tokens "
+                        "for each character (ported from https://github.com/ad-freiburg/trt)."
         ),
         ModelInfo(
             task="tokenization_repair",
-            name="tokenization_repair+",
-            description="Transformer model that repairs sequences by predicting repair tokens for each character. "
-                        "Different from transformer_eo because this model also was trained to detect spelling errors."
+            name="eo_medium_arxiv_with_errors",
+            description="Medium-sized Transformer model (6 layers) that repairs sequences by predicting repair tokens "
+                        "for each character (ported from https://github.com/ad-freiburg/trt)."
         ),
         ModelInfo(
             task="tokenization_repair",
-            name="tokenization_repair++",
-            description="Transformer model that repairs sequences by predicting repair tokens for each character. "
-                        "Different from transformer_eo because this model also was trained to detect "
-                        "and correct spelling errors."
+            name="eo_small_arxiv_with_errors",
+            description="Small-sized Transformer model (3 layers) that repairs sequences by predicting repair tokens "
+                        "for each character (ported from https://github.com/ad-freiburg/trt)."
         )
     ]
 

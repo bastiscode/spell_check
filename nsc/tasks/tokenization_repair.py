@@ -74,13 +74,13 @@ class TokenizationRepair(TokenClassification):
             context_length: int,
             **kwargs: Any
     ) -> List[Tuple[int, int, int, int]]:
-        if self.variant.cfg.tokenization_level == "char":
+        if self.variant.cfg.input_type == "char":
             return task_utils.get_character_windows(
                 sample,
                 max_length,
                 context_length
             )
-        elif self.variant.cfg.tokenization_level == "byte":
+        elif self.variant.cfg.input_type == "byte":
             return task_utils.get_byte_windows(
                 sample,
                 max_length,

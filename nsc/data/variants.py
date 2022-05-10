@@ -455,7 +455,7 @@ class TokenizationRepairConfig(DatasetVariantConfig):
 
     data_scheme: str = "tensor"
 
-    tokenization_level: str = "char"  # one of {char, byte}
+    input_type: str = "char"  # one of {char, byte}
     add_bos_eos: bool = False
 
 
@@ -463,12 +463,12 @@ class TokenizationRepair(DatasetVariant):
     def __init__(self, cfg: DatasetVariantConfig, seed: int):
         cfg: TokenizationRepairConfig
 
-        if cfg.tokenization_level == "char":
+        if cfg.input_type == "char":
             self.tokenizer = tokenization.CharTokenizer()
-        elif cfg.tokenization_level == "byte":
+        elif cfg.input_type == "byte":
             self.tokenizer = tokenization.ByteTokenizer()
         else:
-            raise ValueError(f"unknown tokenization level {cfg.tokenization_level}, must be one of {{char, byte}}")
+            raise ValueError(f"unknown input type {cfg.input_type}, must be one of {{char, byte}}")
 
         self.bos_token_id = self.tokenizer.token_to_id(tokenization.BOS)
         self.eos_token_id = self.tokenizer.token_to_id(tokenization.EOS)
@@ -769,6 +769,9 @@ class TokenizationRepairPlus(TokenizationRepair):
         self.cfg: TokenizationRepairPlusConfig
         assert self.cfg.output_type in {"tokenization_repair_plus_sed", "tokenization_repair_plus_sed_plus_sec"}
 
+        if self.cfg.input_type != "char":
+            raise NotImplementedError("only input type char is currently implemented for tokenization repair plus")
+
         if self.cfg.dictionary_file:
             self.dictionary = io.dictionary_from_file(self.cfg.dictionary_file)
         else:
@@ -793,13 +796,16 @@ class TokenizationRepairPlus(TokenizationRepair):
 
         input_sample = self.get_sample(sequence)
 
-        info = {}
+        info = {"add_bos_eos": self.cfg.add_bos_eos}
         if not is_inference:
             if not self.cfg.fix_tokenization_repair:
                 # get the whitespace operations to turn input_sample into target_sequence
                 tokenization_repair_label = tokenization_repair.get_whitespace_operations(
                     str(input_sample), target_sequence
                 )
+                if self.cfg.add_bos_eos:
+                    # -100 is the default ignore index for pytorch cross entropy loss
+                    tokenization_repair_label = [-100] + tokenization_repair_label + [-100]
                 info["tokenization_repair_label"] = torch.tensor(tokenization_repair_label, dtype=torch.long)
 
             org_words = input_sample.info.get("org_sequence", target_sequence).split()
@@ -807,9 +813,14 @@ class TokenizationRepairPlus(TokenizationRepair):
             assert len(target_words) == len(org_words)
 
             repaired_words, repaired_doc = utils.tokenize_words(target_sequence, return_doc=True)
+            word_groups = utils.get_character_groups_from_repaired_doc(list(str(input_sample)), repaired_doc)
+            if self.cfg.add_bos_eos:
+                # count bos to first group and eos to last group
+                word_groups = [word_groups[0]] + word_groups + [word_groups[-1]]
+
             info["word_groups"] = {
                 "stage": "char_to_word",
-                "groups": utils.get_character_groups_from_repaired_doc(list(str(input_sample)), repaired_doc)
+                "groups": torch.tensor(word_groups, dtype=torch.long)
             }
 
             if self.cfg.add_word_features:
@@ -825,6 +836,10 @@ class TokenizationRepairPlus(TokenizationRepair):
                 word_ws_groups.append(word_ws_idx)
                 if word.whitespace_ == " ":
                     word_ws_idx += 1
+            if self.cfg.add_bos_eos:
+                # count bos to first group and eos to last group
+                input_group_lengths[0] += 1
+                input_group_lengths[-1] += 1
 
             info["word_ws_groups"] = [
                 {

@@ -6,6 +6,7 @@ from torch.nn import functional as F
 from nsc import models, tasks
 from nsc.data import utils
 from nsc.data.utils import Sample
+from nsc.models import Model
 from nsc.modules import utils as mod_utils, inference
 from nsc.tasks import utils as task_utils
 from nsc.utils import data_containers, Batch, to, tokenization_repair
@@ -44,7 +45,7 @@ class TokenizationRepairPlus(tasks.Task):
                     word_decoder_labels.extend(word_labels[1:])
                     word_decoder_lengths.append(len(word_labels) - 1)
                 if sum(word_decoder_lengths) > 1024:
-                    # this is kind of a temporary hack to skip too long decoding sequences that cause OOM
+                    # this is kind of a temporary hack to skip too long decoding sequences that cause OOM errors
                     self.logger.warning(f"skipping sample with decoder length {sum(word_decoder_lengths)}")
                     sec_invalid_indices.add(i)
                     continue
@@ -124,6 +125,9 @@ class TokenizationRepairPlus(tasks.Task):
         sequence_length_container = stats["seq_length"]
         sequence_length_container.add([len(t) for t in inputs["x"]])
 
+    def get_max_input_length(self, model: Model) -> int:
+        return model.cfg.max_length - 2 * self.variant.cfg.add_bos_eos
+
     @torch.inference_mode()
     def inference(
             self,
@@ -151,10 +155,12 @@ class TokenizationRepairPlus(tasks.Task):
             batch = self._batch_sequences_for_inference(inputs)
             input_strings = [str(ipt) for ipt in inputs]
 
+        add_bos_eos = batch.info["add_bos_eos"][0]
         x, padding_mask, input_lengths = model.pad_inputs(batch.data, pad_val=model.input_pad_token_id)
 
         # embed tokens and encode input representations
-        x = model.encode(x.long(), padding_mask=padding_mask)
+        x_tr, x = model.encode(x.long(), padding_mask=padding_mask)
+        x_tr = [x_tr[i, :l] for i, l in enumerate(input_lengths)]
         x = [x[i, :l] for i, l in enumerate(input_lengths)]
 
         if model_cfg.input_type == "byte":
@@ -169,12 +175,14 @@ class TokenizationRepairPlus(tasks.Task):
 
         # tokenization repair output
         repaired_strings = []
-        tok_rep_logits = model.head["tokenization_repair"](x)
+        tok_rep_logits = model.head["tokenization_repair"](x_tr)
         for repair_logits, input_string in zip(tok_rep_logits, input_strings):
             if no_repair:
                 repaired_string = input_string
             else:
                 repair_tokens = task_utils.class_predictions(repair_logits).tolist()
+                if self.variant.cfg.add_bos_eos:
+                    repair_tokens = repair_tokens[1:-1]
                 repaired_string = tokenization_repair.repair_whitespace(input_string, repair_tokens)
 
             repaired_strings.append(repaired_string)
@@ -193,9 +201,12 @@ class TokenizationRepairPlus(tasks.Task):
         for i, (input_string, repaired_string) in enumerate(zip(input_strings, repaired_strings)):
             repaired_words, repaired_doc = utils.tokenize_words(repaired_string, return_doc=True)
 
+            char_to_word_groups = utils.get_character_groups_from_repaired_doc(list(input_string), repaired_doc)
+            if self.variant.cfg.add_bos_eos:
+                char_to_word_groups = [-1] + char_to_word_groups + [-1]
             word_groups.append({
                 "stage": "char_to_word",
-                "groups": utils.get_character_groups_from_repaired_doc(list(input_string), repaired_doc)
+                "groups": torch.tensor(char_to_word_groups, dtype=torch.long)
             })
 
             word_ws_lengths = [0] * len(repaired_string.split())
@@ -349,9 +360,9 @@ class TokenizationRepairPlus(tasks.Task):
             context_length: int,
             **kwargs: Any
     ) -> List[Tuple[int, int, int, int]]:
-        if self.variant.cfg.tokenization_level == "char":
+        if self.variant.cfg.input_type == "char":
             return task_utils.get_character_windows(sample, max_length, context_length)
-        elif self.variant.cfg.tokenization_level == "byte":
+        elif self.variant.cfg.input_type == "byte":
             return task_utils.get_byte_windows(sample, max_length, context_length)
         else:
             raise RuntimeError("should not happen")

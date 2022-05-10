@@ -27,9 +27,9 @@ _CONFIGS_URL = f"{_BASE_URL}/configs.zip"
 _DATA_URL = f"{_BASE_URL}/data.zip"
 _TASK_AND_NAME_TO_URL = {
     "tokenization_repair": {
-        "transformer_eo": f"{_BASE_URL}/tokenization_repair_transformer_eo.zip",
-        "tokenization_repair+": f"{_BASE_URL}/tokenization_repair_plus_sed.zip",
-        "tokenization_repair++": f"{_BASE_URL}/tokenization_repair_plus_sed_plus_sec.zip",
+        "eo_small_arxiv_with_errors": f"{_BASE_URL}/tokenization_repair_eo_small_arxiv_with_errors_ported.zip",
+        "eo_medium_arxiv_with_errors": f"{_BASE_URL}/tokenization_repair_eo_medium_arxiv_with_errors_ported.zip",
+        "eo_large_arxiv_with_errors": f"{_BASE_URL}/tokenization_repair_eo_large_arxiv_with_errors_ported.zip",
     },
     "sed_words": {
         "gnn": f"{_BASE_URL}/sed_words_gnn_no_feat.zip",

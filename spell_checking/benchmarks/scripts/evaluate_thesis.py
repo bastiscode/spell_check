@@ -274,6 +274,8 @@ def get_tokenization_repair_models_and_metrics() \
             ("ntr eo_small_arxiv_with_errors", "eo_small_arxiv_with_errors_ported"),
             ("trt eo_medium_arxiv_with_errors", "eo_medium_arxiv_with_errors"),
             ("ntr eo_medium_arxiv_with_errors", "eo_medium_arxiv_with_errors_ported"),
+            ("tr+ eo_medium_arxiv_with_errors", "tr_plus_fixed_ported"),
+            ("tr+ bos eos eo_medium_arxiv_with_errors", "tr_plus_fixed_ported_bos_eos"),
             ("trt eo_large_arxiv_with_errors", "eo_large_arxiv_with_errors"),
             ("ntr eo_large_arxiv_with_errors", "eo_large_arxiv_with_errors_ported"),
         ],

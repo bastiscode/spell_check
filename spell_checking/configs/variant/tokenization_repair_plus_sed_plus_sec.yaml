@@ -1,7 +1,8 @@
 type: TOKENIZATION_REPAIR_PLUS
 
 data_scheme: "tensor"
-tokenization_level: "char"
+input_type: "char"
+add_bos_eos: true
 
 output_type: "tokenization_repair_plus_sed_plus_sec"
 fix_tokenization_repair: ${oc.env:NSC_FIX_TOKENIZATION_REPAIR,false}
