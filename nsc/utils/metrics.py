@@ -265,11 +265,10 @@ def tok_rep_f1_prec_rec(
         # if there are no groundtruth operations (tp == fp == fn == 0) and we also did not predict any operations,
         # we count this as 1
         if len(gt_insertions_and_deletions) == 0 and len(pred_insertions_and_deletions) == 0:
-            scores = (1., 1., 1.)
+            f1, prec, rec = 1., 1., 1.
         else:
-            scores = _tp_fp_fn_to_f1_prec_rec(tp, fp, fn)
+            f1, prec, rec = _tp_fp_fn_to_f1_prec_rec(tp_, fp_, fn_)
 
-        f1, prec, rec = scores
         f1s.append(f1)
         precs.append(prec)
         recs.append(rec)

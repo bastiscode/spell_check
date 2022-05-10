@@ -266,7 +266,10 @@ def get_tokenization_repair_models_and_metrics() \
         (0, "baselines"): [
             ("do nothing", "baseline_dummy")
         ],
-        (1, "tok_rep"): [
+        (1, "ntr"): [
+            ("eo_medium", "eo_medium")
+        ],
+        (2, "trt vs ntr"): [
             ("trt eo_small_arxiv_with_errors", "eo_small_arxiv_with_errors"),
             ("ntr eo_small_arxiv_with_errors", "eo_small_arxiv_with_errors_ported"),
             ("trt eo_medium_arxiv_with_errors", "eo_medium_arxiv_with_errors"),
