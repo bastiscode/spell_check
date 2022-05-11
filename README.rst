@@ -187,8 +187,7 @@ Start a Docker container:
 
 You can also pass additional Docker arguments to the make commands by specifying ``DOCKER_ARGS``. For example,
 to mount an additional directory inside the container use
-``make DOCKER_ARGS=" -v /path/to/outside/directory:/path/to/container/directory" run_docker_gpu``
-(notice the leading whitespace!).
+``make DOCKER_ARGS="-v /path/to/outside/directory:/path/to/container/directory" run_docker_gpu``.
 
 .. hint::
 

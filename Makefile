@@ -16,14 +16,14 @@ build_docker:
 .PHONY: run_docker_gpu
 run_docker_gpu:
 	@echo "Running nsc image with GPU support"
-	@$(DOCKER_CMD) run -e NSC_CACHE_DIR=/nsc_cache -e NSC_DOWNLOAD_DIR=/nsc_download \
-	--rm -it --gpus all --name nsc_gpu$(DOCKER_ARGS) nsc
+	@$(DOCKER_CMD) run $(DOCKER_ARGS) -e NSC_CACHE_DIR=/nsc_cache -e NSC_DOWNLOAD_DIR=/nsc_download \
+	--rm -it --gpus all --name nsc_gpu nsc
 
 .PHONY: run_docker_cpu
 run_docker_cpu:
 	@echo "Running nsc image on CPU"
-	@$(DOCKER_CMD) run -e NSC_CACHE_DIR=/nsc_cache -e NSC_DOWNLOAD_DIR=/nsc_download \
-	--rm -it --name nsc_cpu$(DOCKER_ARGS) nsc
+	@$(DOCKER_CMD) run $(DOCKER_ARGS) -e NSC_CACHE_DIR=/nsc_cache -e NSC_DOWNLOAD_DIR=/nsc_download \
+	--rm -it --name nsc_cpu nsc
 
 .PHONY: docs
 docs:

@@ -30,7 +30,7 @@ def parse_args() -> argparse.Namespace:
         "--model",
         choices=[f"{model.task}:{model.name}" for model in get_available_spelling_error_detection_models()],
         default=f"{default_model.task}:{default_model.name}",
-        help="Name of the model to use for spelling error detection"
+        help="Task and name of the model to use for spelling error detection"
     )
     input_group = parser.add_mutually_exclusive_group()
     input_group.add_argument(

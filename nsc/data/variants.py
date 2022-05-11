@@ -796,7 +796,7 @@ class TokenizationRepairPlus(TokenizationRepair):
 
         input_sample = self.get_sample(sequence)
 
-        info = {"add_bos_eos": self.cfg.add_bos_eos}
+        info = {}
         if not is_inference:
             if not self.cfg.fix_tokenization_repair:
                 # get the whitespace operations to turn input_sample into target_sequence

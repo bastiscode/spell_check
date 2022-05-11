@@ -1202,7 +1202,7 @@ class ModelForTokenizationRepairPlus(TensorModel, TensorEncoderMixin):
         ), f"expected all layers for feature extraction to be in [{-cfg.num_tokenization_repair_layers}," \
            f"{cfg.num_tokenization_repair_layers}), but got {cfg.tokenization_repair_feature_layers}"
         # initialize weights uniformly and let the model figure during training which layers are important
-        self.encoder_weights = nn.Parameter(torch.zeros(len(cfg.tokenization_repair_feature_layers)))
+        self.encoder_layer_weights = nn.Parameter(torch.zeros(len(cfg.tokenization_repair_feature_layers)))
         self.encoder_hooks = hooks.ModelHook()
         self.encoder_layer_indices = sorted(list(
             set(cfg.num_tokenization_repair_layers + layer if layer < 0 else layer
@@ -1251,13 +1251,12 @@ class ModelForTokenizationRepairPlus(TensorModel, TensorEncoderMixin):
         emb = self.embedding(x)
         enc = self.encoder(emb, padding_mask=padding_mask)
 
-        enc_features = torch.stack(
-            [self.encoder_hooks[f"layer_{layer_idx}"][f"layer_{layer_idx}"]
-             for layer_idx in self.encoder_layer_indices]
-        )
-        enc_features = (
-                enc_features * einops.repeat(torch.softmax(self.encoder_weights, dim=0), "f -> f b l h", b=1, l=1, h=1)
-        ).sum(dim=0)
+        enc_features = torch.stack([
+            self.encoder_hooks[f"layer_{layer_idx}"][f"layer_{layer_idx}"]
+            for layer_idx in self.encoder_layer_indices
+        ])
+        layer_weights = torch.softmax(self.encoder_layer_weights, dim=0)
+        enc_features = (enc_features * einops.repeat(layer_weights, "f -> f b l h", b=1, l=1, h=1)).sum(dim=0)
         return enc, enc_features
 
     def build_word_encoder(self, sample_input: Batch) -> nn.Module:
@@ -1333,7 +1332,12 @@ class ModelForTokenizationRepairPlus(TensorModel, TensorEncoderMixin):
 
         # embed tokens and encode input representations
         x_tr, x = self.encode(x.long(), padding_mask=padding_mask)
+
+        # tokenization repair output
         x_tr = [x_tr[i, :l] for i, l in enumerate(lengths)]
+        outputs["tokenization_repair"] = self.head["tokenization_repair"](x_tr)
+
+        # weighted layer features
         x = [x[i, :l] for i, l in enumerate(lengths)]
 
         if self.cfg.input_type == "byte":
@@ -1343,9 +1347,6 @@ class ModelForTokenizationRepairPlus(TensorModel, TensorEncoderMixin):
             x = utils.group_features(
                 x, char_groups, aggregation="mean"
             )
-
-        # tokenization repair output
-        outputs["tokenization_repair"] = self.head["tokenization_repair"](x_tr)
 
         # group characters by word (leaving out whitespaces)
         x = utils.group_features(

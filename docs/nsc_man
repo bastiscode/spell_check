@@ -27,7 +27,7 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .in \\n[rst2man-indent\\n[rst2man-indent-level]]u
 ..
-.TH "TABLE" "1" "May 10, 2022" "" "nsc"
+.TH "TABLE" "1" "May 11, 2022" "" "nsc"
 .SH NAME
 Table \- nsc 0.1.0
 .sp
@@ -277,8 +277,7 @@ make run_docker_cpu
 .sp
 You can also pass additional Docker arguments to the make commands by specifying \fBDOCKER_ARGS\fP\&. For example,
 to mount an additional directory inside the container use
-\fBmake DOCKER_ARGS=" \-v /path/to/outside/directory:/path/to/container/directory" run_docker_gpu\fP
-(notice the leading whitespace!).
+\fBmake DOCKER_ARGS="\-v /path/to/outside/directory:/path/to/container/directory" run_docker_gpu\fP\&.
 .sp
 \fBHINT:\fP
 .INDENT 0.0
@@ -320,35 +319,35 @@ Default
 T}
 _
 T{
-tokenization_repair (\fBntr\fP/\fBTokenizationRepairer\fP)
+tokenization repair (\fBnsed\fP/\fBSpellingErrorDetector\fP)
 T}	T{
-transformer_eo
+eo large arxiv with errors
 T}	T{
-Transformer model that repairs sequences by predicting repair tokens for each character.
+Large\-sized Transformer model (12 layers) that repairs sequences by predicting repair tokens for each character (ported from \fI\%https://github.com/ad\-freiburg/trt\fP).
 T}	T{
 X
 T}
 _
 T{
-tokenization_repair (\fBntr\fP/\fBTokenizationRepairer\fP)
+tokenization repair (\fBnsed\fP/\fBSpellingErrorDetector\fP)
 T}	T{
-tokenization_repair+
+eo medium arxiv with errors
 T}	T{
-Transformer model that repairs sequences by predicting repair tokens for each character. Different from transformer_eo because this model also was trained to detect spelling errors.
-T}	T{
-T}
-_
-T{
-tokenization_repair (\fBntr\fP/\fBTokenizationRepairer\fP)
-T}	T{
-tokenization_repair++
-T}	T{
-Transformer model that repairs sequences by predicting repair tokens for each character. Different from transformer_eo because this model also was trained to detect and correct spelling errors.
+Medium\-sized Transformer model (6 layers) that repairs sequences by predicting repair tokens for each character (ported from \fI\%https://github.com/ad\-freiburg/trt\fP).
 T}	T{
 T}
 _
 T{
-sed_words (\fBnsed\fP/\fBSpellingErrorDetector\fP)
+tokenization repair (\fBnsed\fP/\fBSpellingErrorDetector\fP)
+T}	T{
+eo small arxiv with errors
+T}	T{
+Small\-sized Transformer model (3 layers) that repairs sequences by predicting repair tokens for each character (ported from \fI\%https://github.com/ad\-freiburg/trt\fP).
+T}	T{
+T}
+_
+T{
+sed words (\fBnsed\fP/\fBSpellingErrorDetector\fP)
 T}	T{
 gnn+
 T}	T{
@@ -358,16 +357,16 @@ X
 T}
 _
 T{
-sed_words (\fBnsed\fP/\fBSpellingErrorDetector\fP)
+sed words (\fBnsed\fP/\fBSpellingErrorDetector\fP)
 T}	T{
-gnn+_neuspell
+gnn+ neuspell
 T}	T{
 Attentional Graph Neural Network which processes language graphs with fully connected word nodes, word features and fully connected sub\-word cliques. Predicts spelling errors on word level using the word node representations. (pretrained without Neuspell and BEA misspellings, finetuned on Neuspell training data)
 T}	T{
 T}
 _
 T{
-sed_words (\fBnsed\fP/\fBSpellingErrorDetector\fP)
+sed words (\fBnsed\fP/\fBSpellingErrorDetector\fP)
 T}	T{
 transformer
 T}	T{
@@ -376,16 +375,16 @@ T}	T{
 T}
 _
 T{
-sed_words (\fBnsed\fP/\fBSpellingErrorDetector\fP)
+sed words (\fBnsed\fP/\fBSpellingErrorDetector\fP)
 T}	T{
-transformer_neuspell
+transformer neuspell
 T}	T{
 Regular transformer processing a sequence of sub\-word tokens. Predicts spelling errors on word level using the aggregated sub\-word representations per word. (pretrained without Neuspell and BEA misspellings, finetuned on Neuspell training data)
 T}	T{
 T}
 _
 T{
-sed_words (\fBnsed\fP/\fBSpellingErrorDetector\fP)
+sed words (\fBnsed\fP/\fBSpellingErrorDetector\fP)
 T}	T{
 transformer+
 T}	T{
@@ -394,16 +393,16 @@ T}	T{
 T}
 _
 T{
-sed_words (\fBnsed\fP/\fBSpellingErrorDetector\fP)
+sed words (\fBnsed\fP/\fBSpellingErrorDetector\fP)
 T}	T{
-transformer+_neuspell
+transformer+ neuspell
 T}	T{
 Regular transformer processing a sequence of sub\-word tokens. Before predicting spelling errors, sub\-word representations within a word are aggregated and enriched with word features to obtain word representations. Predicts spelling errors on word level using those word representations. (pretrained without Neuspell and BEA misspellings, finetuned on Neuspell training data)
 T}	T{
 T}
 _
 T{
-sed_words (\fBnsed\fP/\fBSpellingErrorDetector\fP)
+sed words (\fBnsed\fP/\fBSpellingErrorDetector\fP)
 T}	T{
 gnn
 T}	T{
@@ -412,27 +411,27 @@ T}	T{
 T}
 _
 T{
-sed_words (\fBnsed\fP/\fBSpellingErrorDetector\fP)
+sed words (\fBnsed\fP/\fBSpellingErrorDetector\fP)
 T}	T{
-gnn_neuspell
+gnn neuspell
 T}	T{
 Attentional Graph Neural Network which processes language graphs with fully connected word nodes and fully connected sub\-word cliques. Predicts spelling errors on word level using the word node representations. (pretrained without Neuspell and BEA misspellings, finetuned on Neuspell training data)
 T}	T{
 T}
 _
 T{
-sed_words (\fBnsed\fP/\fBSpellingErrorDetector\fP)
+sed words (\fBnsed\fP/\fBSpellingErrorDetector\fP)
 T}	T{
-tokenization_repair+
+tokenization repair+
 T}	T{
 Transformer based model that detects errors in sequences by first correcting the tokenizationand then detecting spelling errors for each word in the repaired text.
 T}	T{
 T}
 _
 T{
-sed_words (\fBnsed\fP/\fBSpellingErrorDetector\fP)
+sed words (\fBnsed\fP/\fBSpellingErrorDetector\fP)
 T}	T{
-tokenization_repair++
+tokenization repair++
 T}	T{
 Transformer based model that detects errors in sequences by first correcting the tokenizationand then detecting spelling errors for each word in the repaired text. Different from tokenization_repair+ because this model was trained additionally to also correct spelling errors (it is also available in nsec).
 T}	T{
@@ -441,7 +440,7 @@ _
 T{
 sec (\fBnsec\fP/\fBSpellingErrorCorrector\fP)
 T}	T{
-transformer_words_nmt
+transformer words nmt
 T}	T{
 Transformer model that corrects sequences by translating each word individually from misspelled to correct.
 T}	T{
@@ -451,7 +450,7 @@ _
 T{
 sec (\fBnsec\fP/\fBSpellingErrorCorrector\fP)
 T}	T{
-transformer_words_nmt_neuspell
+transformer words nmt neuspell
 T}	T{
 Transformer model that corrects sequences by translating each word individually from misspelled to correct. (pretrained without Neuspell and BEA misspellings, finetuned on Neuspell training data)
 T}	T{
@@ -460,7 +459,7 @@ _
 T{
 sec (\fBnsec\fP/\fBSpellingErrorCorrector\fP)
 T}	T{
-tokenization_repair++
+tokenization repair++
 T}	T{
 Transformer based model that corrects sequences by first correcting the tokenization, then detecting spelling errors for each word in the repaired text and then translating every detected misspelled word to its corrected version.
 T}	T{
@@ -469,7 +468,7 @@ _
 T{
 sec (\fBnsec\fP/\fBSpellingErrorCorrector\fP)
 T}	T{
-transformer_nmt
+transformer nmt
 T}	T{
 Transformer model that translates a sequence with spelling errors into a sequence without spelling errors.
 T}	T{
@@ -478,7 +477,7 @@ _
 T{
 sec (\fBnsec\fP/\fBSpellingErrorCorrector\fP)
 T}	T{
-transformer_nmt_neuspell
+transformer nmt neuspell
 T}	T{
 Transformer model that translates a sequence with spelling errors into a sequence without spelling errors. (pretrained without Neuspell and BEA misspellings, finetuned on Neuspell training data)
 T}	T{
@@ -487,7 +486,7 @@ _
 T{
 sec (\fBnsec\fP/\fBSpellingErrorCorrector\fP)
 T}	T{
-transformer_with_tokenization_repair_nmt
+transformer with tokenization repair nmt
 T}	T{
 Transformer model that translates a sequence with spelling and tokenization errors into a sequence without spelling errors and tokenization errors. Different from transformer_nmt because this model tokenizes into characters and was trained on text with spelling and tokenization errors, whereas transformer_nmt tokenizes into sub\-words and was trained only on text with spelling errors.
 T}	T{
@@ -997,7 +996,7 @@ Returns: NSC instance
 .UNINDENT
 .INDENT 7.0
 .TP
-.B static  from_pretrained(task=\(aqsec\(aq, model=\(aqtransformer_words_nmt\(aq, device=\(aqcuda\(aq, download_dir=None, cache_dir=None, force_download=False)
+.B static  from_pretrained(task=\(aqsec\(aq, model=\(aqtransformer words nmt\(aq, device=\(aqcuda\(aq, download_dir=None, cache_dir=None, force_download=False)
 Create a new NSC instance using a pretrained model.
 .INDENT 7.0
 .TP
@@ -1205,7 +1204,7 @@ Returns: NSC instance
 .UNINDENT
 .INDENT 7.0
 .TP
-.B static  from_pretrained(task=\(aqsed_words\(aq, model=\(aqgnn_default\(aq, device=\(aqcuda\(aq, download_dir=None, cache_dir=None, force_download=False)
+.B static  from_pretrained(task=\(aqsed words\(aq, model=\(aqgnn+\(aq, device=\(aqcuda\(aq, download_dir=None, cache_dir=None, force_download=False)
 Create a new NSC instance using a pretrained model.
 .INDENT 7.0
 .TP
@@ -1334,7 +1333,7 @@ Returns: NSC instance
 .UNINDENT
 .INDENT 7.0
 .TP
-.B static  from_pretrained(task=\(aqtokenization_repair\(aq, model=\(aqtransformer_eo_large\(aq, device=\(aqcuda\(aq, download_dir=None, cache_dir=None, force_download=False)
+.B static  from_pretrained(task=\(aqtokenization repair\(aq, model=\(aqeo large arxiv with errors\(aq, device=\(aqcuda\(aq, download_dir=None, cache_dir=None, force_download=False)
 Create a new NSC instance using a pretrained model.
 .INDENT 7.0
 .TP

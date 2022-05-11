@@ -155,12 +155,15 @@ class TokenizationRepairPlus(tasks.Task):
             batch = self._batch_sequences_for_inference(inputs)
             input_strings = [str(ipt) for ipt in inputs]
 
-        add_bos_eos = batch.info["add_bos_eos"][0]
         x, padding_mask, input_lengths = model.pad_inputs(batch.data, pad_val=model.input_pad_token_id)
 
         # embed tokens and encode input representations
         x_tr, x = model.encode(x.long(), padding_mask=padding_mask)
+
+        # tokenization repair output
         x_tr = [x_tr[i, :l] for i, l in enumerate(input_lengths)]
+        tok_rep_logits = model.head["tokenization_repair"](x_tr)
+
         x = [x[i, :l] for i, l in enumerate(input_lengths)]
 
         if model_cfg.input_type == "byte":
@@ -173,9 +176,7 @@ class TokenizationRepairPlus(tasks.Task):
 
         outputs: List[Dict[str, Any]] = []
 
-        # tokenization repair output
         repaired_strings = []
-        tok_rep_logits = model.head["tokenization_repair"](x_tr)
         for repair_logits, input_string in zip(tok_rep_logits, input_strings):
             if no_repair:
                 repaired_string = input_string

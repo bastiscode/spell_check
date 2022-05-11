@@ -26,20 +26,20 @@ def get_available_tokenization_repair_models() -> List[ModelInfo]:
     """
     return [
         ModelInfo(
-            task="tokenization_repair",
-            name="eo_large_arxiv_with_errors",
+            task="tokenization repair",
+            name="eo large arxiv with errors",
             description="Large-sized Transformer model (12 layers) that repairs sequences by predicting repair tokens "
                         "for each character (ported from https://github.com/ad-freiburg/trt)."
         ),
         ModelInfo(
-            task="tokenization_repair",
-            name="eo_medium_arxiv_with_errors",
+            task="tokenization repair",
+            name="eo medium arxiv with errors",
             description="Medium-sized Transformer model (6 layers) that repairs sequences by predicting repair tokens "
                         "for each character (ported from https://github.com/ad-freiburg/trt)."
         ),
         ModelInfo(
-            task="tokenization_repair",
-            name="eo_small_arxiv_with_errors",
+            task="tokenization repair",
+            name="eo small arxiv with errors",
             description="Small-sized Transformer model (3 layers) that repairs sequences by predicting repair tokens "
                         "for each character (ported from https://github.com/ad-freiburg/trt)."
         )
@@ -84,12 +84,12 @@ class TokenizationRepairer(_APIBase):
 
     @property
     def task_name(self) -> str:
-        return "tokenization_repair"
+        return "tokenization repair"
 
     @staticmethod
     def from_pretrained(
-            task: str = "tokenization_repair",
-            model: str = "transformer_eo_large",
+            task: str = "tokenization repair",
+            model: str = "eo large arxiv with errors",
             device: Union[str, int] = "cuda",
             download_dir: Optional[str] = None,
             cache_dir: Optional[str] = None,
@@ -100,7 +100,7 @@ class TokenizationRepairer(_APIBase):
             f"{pprint.pformat(get_available_tokenization_repair_models())}"
 
         model_dir, data_dir, config_dir = TokenizationRepairer._download(
-            "tokenization_repair",
+            "tokenization repair",
             model,
             download_dir,
             cache_dir,

@@ -39,40 +39,40 @@ def get_available_spelling_error_correction_models() -> List[ModelInfo]:
     return [
         ModelInfo(
             task="sec",
-            name="transformer_words_nmt",
+            name="transformer words nmt",
             description="Transformer model that corrects sequences by translating each word individually "
                         "from misspelled to correct."
         ),
         ModelInfo(
             task="sec",
-            name="transformer_words_nmt_neuspell",
+            name="transformer words nmt neuspell",
             description="Transformer model that corrects sequences by translating each word individually "
                         "from misspelled to correct. "
                         "(pretrained without Neuspell and BEA misspellings, finetuned on Neuspell training data)"
         ),
         ModelInfo(
             task="sec",
-            name="tokenization_repair++",
+            name="tokenization repair++",
             description="Transformer based model that corrects sequences by first correcting the tokenization, then "
                         "detecting spelling errors for each word in the repaired text and then translating "
                         "every detected misspelled word to its corrected version."
         ),
         ModelInfo(
             task="sec",
-            name="transformer_nmt",
+            name="transformer nmt",
             description="Transformer model that translates a sequence with spelling errors into a "
                         "sequence without spelling errors."
         ),
         ModelInfo(
             task="sec",
-            name="transformer_nmt_neuspell",
+            name="transformer nmt neuspell",
             description="Transformer model that translates a sequence with spelling errors into a "
                         "sequence without spelling errors. "
                         "(pretrained without Neuspell and BEA misspellings, finetuned on Neuspell training data)"
         ),
         ModelInfo(
             task="sec",
-            name="transformer_with_tokenization_repair_nmt",
+            name="transformer with tokenization repair nmt",
             description="Transformer model that translates a sequence with spelling and tokenization errors "
                         "into a sequence without spelling errors and tokenization errors. Different from "
                         "transformer_nmt because this model tokenizes into characters and "
@@ -251,7 +251,7 @@ class SpellingErrorCorrector(_APIBase):
     @staticmethod
     def from_pretrained(
             task: str = "sec",
-            model: str = "transformer_words_nmt",
+            model: str = "transformer words nmt",
             device: Union[str, int] = "cuda",
             download_dir: Optional[str] = None,
             cache_dir: Optional[str] = None,

@@ -218,8 +218,7 @@ make run_docker_cpu
 </div>
 <p>You can also pass additional Docker arguments to the make commands by specifying <code class="docutils literal notranslate"><span class="pre">DOCKER_ARGS</span></code>. For example,
 to mount an additional directory inside the container use
-<code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">DOCKER_ARGS=&quot;</span> <span class="pre">-v</span> <span class="pre">/path/to/outside/directory:/path/to/container/directory&quot;</span> <span class="pre">run_docker_gpu</span></code>
-(notice the leading whitespace!).</p>
+<code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">DOCKER_ARGS=&quot;-v</span> <span class="pre">/path/to/outside/directory:/path/to/container/directory&quot;</span> <span class="pre">run_docker_gpu</span></code>.</p>
 <div class="admonition hint">
 <p class="admonition-title">Hint</p>
 <p>If you build the Docker image on an AD Server you probably want to use wharfer instead of
@@ -256,98 +255,98 @@ your own models and evaluating benchmarks, but not for training.</p>
 </tr>
 </thead>
 <tbody>
-<tr class="row-even"><td><p>tokenization_repair (<code class="docutils literal notranslate"><span class="pre">ntr</span></code>/<code class="docutils literal notranslate"><span class="pre">TokenizationRepairer</span></code>)</p></td>
-<td><p>transformer_eo</p></td>
-<td><p>Transformer model that repairs sequences by predicting repair tokens for each character.</p></td>
+<tr class="row-even"><td><p>tokenization repair (<code class="docutils literal notranslate"><span class="pre">nsed</span></code>/<code class="docutils literal notranslate"><span class="pre">SpellingErrorDetector</span></code>)</p></td>
+<td><p>eo large arxiv with errors</p></td>
+<td><p>Large-sized Transformer model (12 layers) that repairs sequences by predicting repair tokens for each character (ported from <a class="reference external" href="https://github.com/ad-freiburg/trt">https://github.com/ad-freiburg/trt</a>).</p></td>
 <td><p>X</p></td>
 </tr>
-<tr class="row-odd"><td><p>tokenization_repair (<code class="docutils literal notranslate"><span class="pre">ntr</span></code>/<code class="docutils literal notranslate"><span class="pre">TokenizationRepairer</span></code>)</p></td>
-<td><p>tokenization_repair+</p></td>
-<td><p>Transformer model that repairs sequences by predicting repair tokens for each character. Different from transformer_eo because this model also was trained to detect spelling errors.</p></td>
+<tr class="row-odd"><td><p>tokenization repair (<code class="docutils literal notranslate"><span class="pre">nsed</span></code>/<code class="docutils literal notranslate"><span class="pre">SpellingErrorDetector</span></code>)</p></td>
+<td><p>eo medium arxiv with errors</p></td>
+<td><p>Medium-sized Transformer model (6 layers) that repairs sequences by predicting repair tokens for each character (ported from <a class="reference external" href="https://github.com/ad-freiburg/trt">https://github.com/ad-freiburg/trt</a>).</p></td>
 <td></td>
 </tr>
-<tr class="row-even"><td><p>tokenization_repair (<code class="docutils literal notranslate"><span class="pre">ntr</span></code>/<code class="docutils literal notranslate"><span class="pre">TokenizationRepairer</span></code>)</p></td>
-<td><p>tokenization_repair++</p></td>
-<td><p>Transformer model that repairs sequences by predicting repair tokens for each character. Different from transformer_eo because this model also was trained to detect and correct spelling errors.</p></td>
+<tr class="row-even"><td><p>tokenization repair (<code class="docutils literal notranslate"><span class="pre">nsed</span></code>/<code class="docutils literal notranslate"><span class="pre">SpellingErrorDetector</span></code>)</p></td>
+<td><p>eo small arxiv with errors</p></td>
+<td><p>Small-sized Transformer model (3 layers) that repairs sequences by predicting repair tokens for each character (ported from <a class="reference external" href="https://github.com/ad-freiburg/trt">https://github.com/ad-freiburg/trt</a>).</p></td>
 <td></td>
 </tr>
-<tr class="row-odd"><td><p>sed_words (<code class="docutils literal notranslate"><span class="pre">nsed</span></code>/<code class="docutils literal notranslate"><span class="pre">SpellingErrorDetector</span></code>)</p></td>
+<tr class="row-odd"><td><p>sed words (<code class="docutils literal notranslate"><span class="pre">nsed</span></code>/<code class="docutils literal notranslate"><span class="pre">SpellingErrorDetector</span></code>)</p></td>
 <td><p>gnn+</p></td>
 <td><p>Attentional Graph Neural Network which processes language graphs with fully connected word nodes, word features and fully connected sub-word cliques. Predicts spelling errors on word level using the word node representations.</p></td>
 <td><p>X</p></td>
 </tr>
-<tr class="row-even"><td><p>sed_words (<code class="docutils literal notranslate"><span class="pre">nsed</span></code>/<code class="docutils literal notranslate"><span class="pre">SpellingErrorDetector</span></code>)</p></td>
-<td><p>gnn+_neuspell</p></td>
+<tr class="row-even"><td><p>sed words (<code class="docutils literal notranslate"><span class="pre">nsed</span></code>/<code class="docutils literal notranslate"><span class="pre">SpellingErrorDetector</span></code>)</p></td>
+<td><p>gnn+ neuspell</p></td>
 <td><p>Attentional Graph Neural Network which processes language graphs with fully connected word nodes, word features and fully connected sub-word cliques. Predicts spelling errors on word level using the word node representations. (pretrained without Neuspell and BEA misspellings, finetuned on Neuspell training data)</p></td>
 <td></td>
 </tr>
-<tr class="row-odd"><td><p>sed_words (<code class="docutils literal notranslate"><span class="pre">nsed</span></code>/<code class="docutils literal notranslate"><span class="pre">SpellingErrorDetector</span></code>)</p></td>
+<tr class="row-odd"><td><p>sed words (<code class="docutils literal notranslate"><span class="pre">nsed</span></code>/<code class="docutils literal notranslate"><span class="pre">SpellingErrorDetector</span></code>)</p></td>
 <td><p>transformer</p></td>
 <td><p>Regular transformer processing a sequence of sub-word tokens. Predicts spelling errors on word level using the aggregated sub-word representations per word.</p></td>
 <td></td>
 </tr>
-<tr class="row-even"><td><p>sed_words (<code class="docutils literal notranslate"><span class="pre">nsed</span></code>/<code class="docutils literal notranslate"><span class="pre">SpellingErrorDetector</span></code>)</p></td>
-<td><p>transformer_neuspell</p></td>
+<tr class="row-even"><td><p>sed words (<code class="docutils literal notranslate"><span class="pre">nsed</span></code>/<code class="docutils literal notranslate"><span class="pre">SpellingErrorDetector</span></code>)</p></td>
+<td><p>transformer neuspell</p></td>
 <td><p>Regular transformer processing a sequence of sub-word tokens. Predicts spelling errors on word level using the aggregated sub-word representations per word. (pretrained without Neuspell and BEA misspellings, finetuned on Neuspell training data)</p></td>
 <td></td>
 </tr>
-<tr class="row-odd"><td><p>sed_words (<code class="docutils literal notranslate"><span class="pre">nsed</span></code>/<code class="docutils literal notranslate"><span class="pre">SpellingErrorDetector</span></code>)</p></td>
+<tr class="row-odd"><td><p>sed words (<code class="docutils literal notranslate"><span class="pre">nsed</span></code>/<code class="docutils literal notranslate"><span class="pre">SpellingErrorDetector</span></code>)</p></td>
 <td><p>transformer+</p></td>
 <td><p>Regular transformer processing a sequence of sub-word tokens. Before predicting spelling errors, sub-word representations within a word are aggregated and enriched with word features to obtain word representations. Predicts spelling errors on word level using those word representations.</p></td>
 <td></td>
 </tr>
-<tr class="row-even"><td><p>sed_words (<code class="docutils literal notranslate"><span class="pre">nsed</span></code>/<code class="docutils literal notranslate"><span class="pre">SpellingErrorDetector</span></code>)</p></td>
-<td><p>transformer+_neuspell</p></td>
+<tr class="row-even"><td><p>sed words (<code class="docutils literal notranslate"><span class="pre">nsed</span></code>/<code class="docutils literal notranslate"><span class="pre">SpellingErrorDetector</span></code>)</p></td>
+<td><p>transformer+ neuspell</p></td>
 <td><p>Regular transformer processing a sequence of sub-word tokens. Before predicting spelling errors, sub-word representations within a word are aggregated and enriched with word features to obtain word representations. Predicts spelling errors on word level using those word representations. (pretrained without Neuspell and BEA misspellings, finetuned on Neuspell training data)</p></td>
 <td></td>
 </tr>
-<tr class="row-odd"><td><p>sed_words (<code class="docutils literal notranslate"><span class="pre">nsed</span></code>/<code class="docutils literal notranslate"><span class="pre">SpellingErrorDetector</span></code>)</p></td>
+<tr class="row-odd"><td><p>sed words (<code class="docutils literal notranslate"><span class="pre">nsed</span></code>/<code class="docutils literal notranslate"><span class="pre">SpellingErrorDetector</span></code>)</p></td>
 <td><p>gnn</p></td>
 <td><p>Attentional Graph Neural Network which processes language graphs with fully connected word nodes and fully connected sub-word cliques. Predicts spelling errors on word level using the word node representations.</p></td>
 <td></td>
 </tr>
-<tr class="row-even"><td><p>sed_words (<code class="docutils literal notranslate"><span class="pre">nsed</span></code>/<code class="docutils literal notranslate"><span class="pre">SpellingErrorDetector</span></code>)</p></td>
-<td><p>gnn_neuspell</p></td>
+<tr class="row-even"><td><p>sed words (<code class="docutils literal notranslate"><span class="pre">nsed</span></code>/<code class="docutils literal notranslate"><span class="pre">SpellingErrorDetector</span></code>)</p></td>
+<td><p>gnn neuspell</p></td>
 <td><p>Attentional Graph Neural Network which processes language graphs with fully connected word nodes and fully connected sub-word cliques. Predicts spelling errors on word level using the word node representations. (pretrained without Neuspell and BEA misspellings, finetuned on Neuspell training data)</p></td>
 <td></td>
 </tr>
-<tr class="row-odd"><td><p>sed_words (<code class="docutils literal notranslate"><span class="pre">nsed</span></code>/<code class="docutils literal notranslate"><span class="pre">SpellingErrorDetector</span></code>)</p></td>
-<td><p>tokenization_repair+</p></td>
+<tr class="row-odd"><td><p>sed words (<code class="docutils literal notranslate"><span class="pre">nsed</span></code>/<code class="docutils literal notranslate"><span class="pre">SpellingErrorDetector</span></code>)</p></td>
+<td><p>tokenization repair+</p></td>
 <td><p>Transformer based model that detects errors in sequences by first correcting the tokenizationand then detecting spelling errors for each word in the repaired text.</p></td>
 <td></td>
 </tr>
-<tr class="row-even"><td><p>sed_words (<code class="docutils literal notranslate"><span class="pre">nsed</span></code>/<code class="docutils literal notranslate"><span class="pre">SpellingErrorDetector</span></code>)</p></td>
-<td><p>tokenization_repair++</p></td>
+<tr class="row-even"><td><p>sed words (<code class="docutils literal notranslate"><span class="pre">nsed</span></code>/<code class="docutils literal notranslate"><span class="pre">SpellingErrorDetector</span></code>)</p></td>
+<td><p>tokenization repair++</p></td>
 <td><p>Transformer based model that detects errors in sequences by first correcting the tokenizationand then detecting spelling errors for each word in the repaired text. Different from tokenization_repair+ because this model was trained additionally to also correct spelling errors (it is also available in nsec).</p></td>
 <td></td>
 </tr>
 <tr class="row-odd"><td><p>sec (<code class="docutils literal notranslate"><span class="pre">nsec</span></code>/<code class="docutils literal notranslate"><span class="pre">SpellingErrorCorrector</span></code>)</p></td>
-<td><p>transformer_words_nmt</p></td>
+<td><p>transformer words nmt</p></td>
 <td><p>Transformer model that corrects sequences by translating each word individually from misspelled to correct.</p></td>
 <td><p>X</p></td>
 </tr>
 <tr class="row-even"><td><p>sec (<code class="docutils literal notranslate"><span class="pre">nsec</span></code>/<code class="docutils literal notranslate"><span class="pre">SpellingErrorCorrector</span></code>)</p></td>
-<td><p>transformer_words_nmt_neuspell</p></td>
+<td><p>transformer words nmt neuspell</p></td>
 <td><p>Transformer model that corrects sequences by translating each word individually from misspelled to correct. (pretrained without Neuspell and BEA misspellings, finetuned on Neuspell training data)</p></td>
 <td></td>
 </tr>
 <tr class="row-odd"><td><p>sec (<code class="docutils literal notranslate"><span class="pre">nsec</span></code>/<code class="docutils literal notranslate"><span class="pre">SpellingErrorCorrector</span></code>)</p></td>
-<td><p>tokenization_repair++</p></td>
+<td><p>tokenization repair++</p></td>
 <td><p>Transformer based model that corrects sequences by first correcting the tokenization, then detecting spelling errors for each word in the repaired text and then translating every detected misspelled word to its corrected version.</p></td>
 <td></td>
 </tr>
 <tr class="row-even"><td><p>sec (<code class="docutils literal notranslate"><span class="pre">nsec</span></code>/<code class="docutils literal notranslate"><span class="pre">SpellingErrorCorrector</span></code>)</p></td>
-<td><p>transformer_nmt</p></td>
+<td><p>transformer nmt</p></td>
 <td><p>Transformer model that translates a sequence with spelling errors into a sequence without spelling errors.</p></td>
 <td></td>
 </tr>
 <tr class="row-odd"><td><p>sec (<code class="docutils literal notranslate"><span class="pre">nsec</span></code>/<code class="docutils literal notranslate"><span class="pre">SpellingErrorCorrector</span></code>)</p></td>
-<td><p>transformer_nmt_neuspell</p></td>
+<td><p>transformer nmt neuspell</p></td>
 <td><p>Transformer model that translates a sequence with spelling errors into a sequence without spelling errors. (pretrained without Neuspell and BEA misspellings, finetuned on Neuspell training data)</p></td>
 <td></td>
 </tr>
 <tr class="row-even"><td><p>sec (<code class="docutils literal notranslate"><span class="pre">nsec</span></code>/<code class="docutils literal notranslate"><span class="pre">SpellingErrorCorrector</span></code>)</p></td>
-<td><p>transformer_with_tokenization_repair_nmt</p></td>
+<td><p>transformer with tokenization repair nmt</p></td>
 <td><p>Transformer model that translates a sequence with spelling and tokenization errors into a sequence without spelling errors and tokenization errors. Different from transformer_nmt because this model tokenizes into characters and was trained on text with spelling and tokenization errors, whereas transformer_nmt tokenizes into sub-words and was trained only on text with spelling errors.</p></td>
 <td></td>
 </tr>
@@ -763,7 +762,7 @@ and batch_max_length_factor is 4 then one batch will contain as many input seque
 
 <dl class="py method">
 <dt class="sig sig-object py" id="nsc.SpellingErrorCorrector.from_pretrained">
-<em class="property"><span class="pre">static</span><span class="w">  </span></em><span class="sig-name descname"><span class="pre">from_pretrained</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">task</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'sec'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'transformer_words_nmt'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'cuda'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">download_dir</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cache_dir</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">force_download</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#nsc.SpellingErrorCorrector.from_pretrained" title="Permalink to this definition"></a></dt>
+<em class="property"><span class="pre">static</span><span class="w">  </span></em><span class="sig-name descname"><span class="pre">from_pretrained</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">task</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'sec'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'transformer</span> <span class="pre">words</span> <span class="pre">nmt'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'cuda'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">download_dir</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cache_dir</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">force_download</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#nsc.SpellingErrorCorrector.from_pretrained" title="Permalink to this definition"></a></dt>
 <dd><p>Create a new NSC instance using a pretrained model.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -944,7 +943,7 @@ and batch_max_length_factor is 4 then one batch will contain as many input seque
 
 <dl class="py method">
 <dt class="sig sig-object py" id="nsc.SpellingErrorDetector.from_pretrained">
-<em class="property"><span class="pre">static</span><span class="w">  </span></em><span class="sig-name descname"><span class="pre">from_pretrained</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">task</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'sed_words'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'gnn_default'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'cuda'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">download_dir</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cache_dir</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">force_download</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#nsc.SpellingErrorDetector.from_pretrained" title="Permalink to this definition"></a></dt>
+<em class="property"><span class="pre">static</span><span class="w">  </span></em><span class="sig-name descname"><span class="pre">from_pretrained</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">task</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'sed</span> <span class="pre">words'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'gnn+'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'cuda'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">download_dir</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cache_dir</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">force_download</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#nsc.SpellingErrorDetector.from_pretrained" title="Permalink to this definition"></a></dt>
 <dd><p>Create a new NSC instance using a pretrained model.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -1062,7 +1061,7 @@ When running on CPU fp16 will be overwritten with bfp16 since only bfp16 is supp
 
 <dl class="py method">
 <dt class="sig sig-object py" id="nsc.TokenizationRepairer.from_pretrained">
-<em class="property"><span class="pre">static</span><span class="w">  </span></em><span class="sig-name descname"><span class="pre">from_pretrained</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">task</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'tokenization_repair'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'transformer_eo_large'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'cuda'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">download_dir</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cache_dir</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">force_download</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#nsc.TokenizationRepairer.from_pretrained" title="Permalink to this definition"></a></dt>
+<em class="property"><span class="pre">static</span><span class="w">  </span></em><span class="sig-name descname"><span class="pre">from_pretrained</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">task</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'tokenization</span> <span class="pre">repair'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'eo</span> <span class="pre">large</span> <span class="pre">arxiv</span> <span class="pre">with</span> <span class="pre">errors'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'cuda'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">download_dir</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cache_dir</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">force_download</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#nsc.TokenizationRepairer.from_pretrained" title="Permalink to this definition"></a></dt>
 <dd><p>Create a new NSC instance using a pretrained model.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>

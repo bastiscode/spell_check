@@ -26,30 +26,30 @@ _BASE_URL = "https://tokenization.cs.uni-freiburg.de/transformer/nsc"
 _CONFIGS_URL = f"{_BASE_URL}/configs.zip"
 _DATA_URL = f"{_BASE_URL}/data.zip"
 _TASK_AND_NAME_TO_URL = {
-    "tokenization_repair": {
-        "eo_small_arxiv_with_errors": f"{_BASE_URL}/tokenization_repair_eo_small_arxiv_with_errors_ported.zip",
-        "eo_medium_arxiv_with_errors": f"{_BASE_URL}/tokenization_repair_eo_medium_arxiv_with_errors_ported.zip",
-        "eo_large_arxiv_with_errors": f"{_BASE_URL}/tokenization_repair_eo_large_arxiv_with_errors_ported.zip",
+    "tokenization repair": {
+        "eo small arxiv with errors": f"{_BASE_URL}/tokenization_repair_eo_small_arxiv_with_errors_ported.zip",
+        "eo medium arxiv with errors": f"{_BASE_URL}/tokenization_repair_eo_medium_arxiv_with_errors_ported.zip",
+        "eo large arxiv with errors": f"{_BASE_URL}/tokenization_repair_eo_large_arxiv_with_errors_ported.zip",
     },
-    "sed_words": {
+    "sed words": {
         "gnn": f"{_BASE_URL}/sed_words_gnn_no_feat.zip",
-        "gnn_neuspell": f"{_BASE_URL}/sed_words_gnn_no_feat_neuspell.zip",
+        "gnn neuspell": f"{_BASE_URL}/sed_words_gnn_no_feat_neuspell.zip",
         "gnn+": f"{_BASE_URL}/sed_words_gnn_cliques_wfc.zip",
-        "gnn+_neuspell": f"{_BASE_URL}/sed_words_gnn_cliques_wfc_neuspell.zip",
+        "gnn+ neuspell": f"{_BASE_URL}/sed_words_gnn_cliques_wfc_neuspell.zip",
         "transformer": f"{_BASE_URL}/sed_words_transformer_no_feat.zip",
-        "transformer_neuspell": f"{_BASE_URL}/sed_words_transformer_no_feat_neuspell.zip",
+        "transformer neuspell": f"{_BASE_URL}/sed_words_transformer_no_feat_neuspell.zip",
         "transformer+": f"{_BASE_URL}/sed_words_transformer.zip",
-        "transformer+_neuspell": f"{_BASE_URL}/sed_words_transformer_neuspell.zip",
-        "tokenization_repair+": f"{_BASE_URL}/tokenization_repair_plus_sed.zip",
-        "tokenization_repair++": f"{_BASE_URL}/tokenization_repair_plus_sed_plus_sec.zip",
+        "transformer+ neuspell": f"{_BASE_URL}/sed_words_transformer_neuspell.zip",
+        "tokenization repair+": f"{_BASE_URL}/tokenization_repair_plus_sed.zip",
+        "tokenization repair++": f"{_BASE_URL}/tokenization_repair_plus_sed_plus_sec.zip",
     },
     "sec": {
-        "transformer_nmt": f"{_BASE_URL}/sec_transformer_nmt.zip",
-        "transformer_nmt_neuspell": f"{_BASE_URL}/sec_transformer_nmt_neuspell.zip",
-        "transformer_with_tokenization_repair_nmt": f"{_BASE_URL}/sec_transformer_with_tokenization_repair_nmt.zip",
-        "transformer_words_nmt": f"{_BASE_URL}/sec_transformer_words_nmt.zip",
-        "transformer_words_nmt_neuspell": f"{_BASE_URL}/sec_transformer_words_nmt_neuspell.zip",
-        "tokenization_repair++": f"{_BASE_URL}/tokenization_repair_plus_sed_plus_sec.zip"
+        "transformer nmt": f"{_BASE_URL}/sec_transformer_nmt.zip",
+        "transformer nmt neuspell": f"{_BASE_URL}/sec_transformer_nmt_neuspell.zip",
+        "transformer with tokenization repair nmt": f"{_BASE_URL}/sec_transformer_with_tokenization_repair_nmt.zip",
+        "transformer words nmt": f"{_BASE_URL}/sec_transformer_words_nmt.zip",
+        "transformer words nmt neuspell": f"{_BASE_URL}/sec_transformer_words_nmt_neuspell.zip",
+        "tokenization repair++": f"{_BASE_URL}/tokenization_repair_plus_sed_plus_sec.zip"
     }
 }
 
@@ -518,6 +518,9 @@ def load_experiment(
         keep_existing_env_vars: Optional[Set[str]] = None
 ) -> Tuple[config.TrainConfig, tasks.Task, models.Model]:
     cfg = load_experiment_config(experiment, override_env_vars, keep_existing_env_vars)
+
+    # disable some config options here that are only used for training
+    cfg.start_from_checkpoint = None
 
     task = tasks.get_task(
         checkpoint_dir=os.path.join(experiment, "checkpoints"),
