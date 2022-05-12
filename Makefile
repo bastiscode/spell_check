@@ -6,11 +6,11 @@ install:
 	@python -m spacy download en_core_web_lg
 
 # use this to change the docker cmd to e.g. wharfer
-DOCKER_CMD?=docker
+DOCKER_CMD ?= docker
 # use this to pass additional flags to the docker command
 # we set '-e NSC_DUMMY=dummy' here as a placeholder argument
 # to not get invalid reference format errors from docker
-DOCKER_ARGS?=-e NSC_DUMMY=dummy
+DOCKER_ARGS ?= -e NSC_DUMMY=dummy
 
 .PHONY: build_docker
 build_docker:
