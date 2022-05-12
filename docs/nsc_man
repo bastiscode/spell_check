@@ -27,7 +27,7 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .in \\n[rst2man-indent\\n[rst2man-indent-level]]u
 ..
-.TH "TABLE" "1" "May 11, 2022" "" "nsc"
+.TH "TABLE" "1" "May 12, 2022" "" "nsc"
 .SH NAME
 Table \- nsc 0.1.0
 .sp
@@ -1399,7 +1399,7 @@ and batch_max_length_factor is 4 then one batch will contain as many input seque
 .UNINDENT
 .TP
 .B Return type
-\fIOptional\fP[\fIUnion\fP[\fIList\fP[int], \fIList\fP[\fIList\fP[int]]]]
+\fIOptional\fP[\fIList\fP[str]]
 .UNINDENT
 .sp
 Returns: repaired file as list of strings if output_file_path is not specified else None
@@ -1428,7 +1428,7 @@ and batch_max_length_factor is 4 then one batch will contain as many input seque
 .UNINDENT
 .TP
 .B Return type
-\fIUnion\fP[\fIList\fP[int], \fIList\fP[\fIList\fP[int]]]
+\fIUnion\fP[str, \fIList\fP[str]]
 .UNINDENT
 .sp
 Returns: repaired text as string or list of strings
