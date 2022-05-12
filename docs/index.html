@@ -89,17 +89,25 @@ Either via the command line or by directly using the Python API.</p>
 <li><p><code class="docutils literal notranslate"><span class="pre">ntr</span></code> for neural tokenization repair</p></li>
 </ol>
 <p>By default all three commands take input from <cite>stdin</cite>, run their respective task on the
-input line by line and print their output line by line to <cite>stdout</cite>.</p>
+input line by line and print their output line by line to <cite>stdout</cite>. Let’s look at some
+basic examples on how to use the command line tools.</p>
 <p><strong>Spelling error correction using</strong> <code class="docutils literal notranslate"><span class="pre">nsec</span></code></p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># correct text by piping into nsec,</span>
 <span class="nb">echo</span> <span class="s2">&quot;This is an incorect sentense!&quot;</span> <span class="p">|</span> nsec
 cat path/to/file.txt <span class="p">|</span> nsec
 
-<span class="c1"># by using the -c flag</span>
+<span class="c1"># by using the -c flag,</span>
 nsec -c <span class="s2">&quot;This is an incorect sentense!&quot;</span>
 
-<span class="c1"># or by passing a file</span>
+<span class="c1"># by passing a file,</span>
 nsec -f path/to/file.txt
+
+<span class="c1"># or by starting an interactive session</span>
+nsec -i
+
+<span class="c1"># you can also use spelling correction to detect errors on word and sequence level</span>
+nsec -c <span class="s2">&quot;This is an incorect sentense!&quot;</span> --convert-output word_detections
+nsec -c <span class="s2">&quot;This is an incorect sentense!&quot;</span> --convert-output sequence_detections
 </pre></div>
 </div>
 <p><strong>Spelling error detection using</strong> <code class="docutils literal notranslate"><span class="pre">nsed</span></code></p>
@@ -107,11 +115,17 @@ nsec -f path/to/file.txt
 <span class="nb">echo</span> <span class="s2">&quot;This is an incorect sentense!&quot;</span> <span class="p">|</span> nsed
 cat path/to/file.txt <span class="p">|</span> nsed
 
-<span class="c1"># by using the -d flag</span>
+<span class="c1"># by using the -d flag,</span>
 nsed -d <span class="s2">&quot;This is an incorect sentense!&quot;</span>
 
-<span class="c1"># or by passing a file</span>
+<span class="c1"># by passing a file,</span>
 nsed -f path/to/file.txt
+
+<span class="c1"># or by starting an interactive session</span>
+nsed -i
+
+<span class="c1"># you can also use word level spelling error detections to detect sequence level errors</span>
+nsed -d <span class="s2">&quot;This is an incorect sentense!&quot;</span> --convert-sequence
 </pre></div>
 </div>
 <p><strong>Tokenization repair using</strong> <code class="docutils literal notranslate"><span class="pre">ntr</span></code></p>
@@ -119,28 +133,40 @@ nsed -f path/to/file.txt
 <span class="nb">echo</span> <span class="s2">&quot;Thisis an inc orect sentens e!&quot;</span> <span class="p">|</span> ntr
 cat path/to/file.txt <span class="p">|</span> ntr
 
-<span class="c1"># by using the -r flag</span>
+<span class="c1"># by using the -r flag,</span>
 ntr -r <span class="s2">&quot;Thisis an inc orect sentens e!&quot;</span>
 
-<span class="c1"># or by passing a file</span>
+<span class="c1"># by passing a file,</span>
 ntr -f path/to/file.txt
+
+<span class="c1"># or by starting an interactive session</span>
+ntr -i
 </pre></div>
 </div>
 <p>You can also combine the <code class="docutils literal notranslate"><span class="pre">ntr</span></code>, <code class="docutils literal notranslate"><span class="pre">nsed</span></code>, and <code class="docutils literal notranslate"><span class="pre">nsec</span></code> commands in a variety of ways.
 Some examples are shown below.</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># repair and detect</span>
-<span class="nb">echo</span> <span class="s2">&quot;Repi arand detec erors in tihssen tence!&quot;</span> <span class="p">|</span> ntr <span class="p">|</span> nsed
+<span class="nb">echo</span> <span class="s2">&quot;Repi arand core ct tihs sen tens!&quot;</span> <span class="p">|</span> ntr <span class="p">|</span> nsed
+<span class="c1"># to view both the repaired text and the detections use</span>
+<span class="nb">echo</span> <span class="s2">&quot;Repi arand core ct tihs sen tens!&quot;</span> <span class="p">|</span> ntr <span class="p">|</span> nsed --sec-out
 
 <span class="c1"># repair and correct</span>
-<span class="nb">echo</span> <span class="s2">&quot;Repi arand core ct tihssen tens!&quot;</span> <span class="p">|</span> ntr <span class="p">|</span> nsec
+<span class="nb">echo</span> <span class="s2">&quot;Repi arand core ct tihs sen tens!&quot;</span> <span class="p">|</span> ntr <span class="p">|</span> nsec
+
+<span class="c1"># repair and correct a file and save the output</span>
+ntr -f path/to/file.txt <span class="p">|</span> nsec --progress -o path/to/output_file.txt
 
 <span class="c1"># repair, detect and correct</span>
 <span class="c1"># (this pipeline uses the spelling error detection output</span>
 <span class="c1"># to guide the spelling error correction model to correct only the misspelled words)</span>
-<span class="nb">echo</span> <span class="s2">&quot;Repi arand core ct tihssen tens!&quot;</span> <span class="p">|</span> ntr <span class="p">|</span> nsed --sec-out <span class="p">|</span> nsec --sed-in
+<span class="nb">echo</span> <span class="s2">&quot;Repi arand core ct tihs sen tens!&quot;</span> <span class="p">|</span> ntr <span class="p">|</span> nsed --sec-out <span class="p">|</span> nsec --sed-in
 
-<span class="c1"># repair and correct a file and save the output</span>
-ntr -f path/to/file.txt <span class="p">|</span> nsec --progress -o path/to/output_file.txt
+<span class="c1"># some detection and correction models (e.g. tokenization repair+, tokenization repair++, transformer with tokenization repair nmt)</span>
+<span class="c1"># can natively deal with incorrect whitespacing in text, so there is no need to use ntr before them if you want to process</span>
+<span class="c1"># text with whitespacing errors</span>
+nsed -d <span class="s2">&quot;core ct thissen tense!&quot;</span> -m <span class="s2">&quot;sed words:tokenization repair+&quot;</span> --sec-out
+nsec -c <span class="s2">&quot;core ct thissen tense!&quot;</span> -m <span class="s2">&quot;tokenization repair++&quot;</span>
+nsec -c <span class="s2">&quot;core ct thissen tense!&quot;</span> -m <span class="s2">&quot;transformer with tokenization repair nmt&quot;</span>
 </pre></div>
 </div>
 <p>There are a few other command line options available for the <code class="docutils literal notranslate"><span class="pre">nsec</span></code>, <code class="docutils literal notranslate"><span class="pre">nsed</span></code> and <code class="docutils literal notranslate"><span class="pre">ntr</span></code> commands. Inspect

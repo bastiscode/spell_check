@@ -77,7 +77,8 @@ After installation there will be three commands available in your environment:
 .UNINDENT
 .sp
 By default all three commands take input from \fIstdin\fP, run their respective task on the
-input line by line and print their output line by line to \fIstdout\fP\&.
+input line by line and print their output line by line to \fIstdout\fP\&. Let’s look at some
+basic examples on how to use the command line tools.
 .sp
 \fBSpelling error correction using\fP \fBnsec\fP
 .INDENT 0.0
@@ -89,11 +90,18 @@ input line by line and print their output line by line to \fIstdout\fP\&.
 echo "This is an incorect sentense!" | nsec
 cat path/to/file.txt | nsec
 
-# by using the \-c flag
+# by using the \-c flag,
 nsec \-c "This is an incorect sentense!"
 
-# or by passing a file
+# by passing a file,
 nsec \-f path/to/file.txt
+
+# or by starting an interactive session
+nsec \-i
+
+# you can also use spelling correction to detect errors on word and sequence level
+nsec \-c "This is an incorect sentense!" \-\-convert\-output word_detections
+nsec \-c "This is an incorect sentense!" \-\-convert\-output sequence_detections
 .ft P
 .fi
 .UNINDENT
@@ -109,11 +117,17 @@ nsec \-f path/to/file.txt
 echo "This is an incorect sentense!" | nsed
 cat path/to/file.txt | nsed
 
-# by using the \-d flag
+# by using the \-d flag,
 nsed \-d "This is an incorect sentense!"
 
-# or by passing a file
+# by passing a file,
 nsed \-f path/to/file.txt
+
+# or by starting an interactive session
+nsed \-i
+
+# you can also use word level spelling error detections to detect sequence level errors
+nsed \-d "This is an incorect sentense!" \-\-convert\-sequence
 .ft P
 .fi
 .UNINDENT
@@ -129,11 +143,14 @@ nsed \-f path/to/file.txt
 echo "Thisis an inc orect sentens e!" | ntr
 cat path/to/file.txt | ntr
 
-# by using the \-r flag
+# by using the \-r flag,
 ntr \-r "Thisis an inc orect sentens e!"
 
-# or by passing a file
+# by passing a file,
 ntr \-f path/to/file.txt
+
+# or by starting an interactive session
+ntr \-i
 .ft P
 .fi
 .UNINDENT
@@ -147,18 +164,27 @@ Some examples are shown below.
 .nf
 .ft C
 # repair and detect
-echo "Repi arand detec erors in tihssen tence!" | ntr | nsed
+echo "Repi arand core ct tihs sen tens!" | ntr | nsed
+# to view both the repaired text and the detections use
+echo "Repi arand core ct tihs sen tens!" | ntr | nsed \-\-sec\-out
 
 # repair and correct
-echo "Repi arand core ct tihssen tens!" | ntr | nsec
+echo "Repi arand core ct tihs sen tens!" | ntr | nsec
+
+# repair and correct a file and save the output
+ntr \-f path/to/file.txt | nsec \-\-progress \-o path/to/output_file.txt
 
 # repair, detect and correct
 # (this pipeline uses the spelling error detection output
 # to guide the spelling error correction model to correct only the misspelled words)
-echo "Repi arand core ct tihssen tens!" | ntr | nsed \-\-sec\-out | nsec \-\-sed\-in
+echo "Repi arand core ct tihs sen tens!" | ntr | nsed \-\-sec\-out | nsec \-\-sed\-in
 
-# repair and correct a file and save the output
-ntr \-f path/to/file.txt | nsec \-\-progress \-o path/to/output_file.txt
+# some detection and correction models (e.g. tokenization repair+, tokenization repair++, transformer with tokenization repair nmt)
+# can natively deal with incorrect whitespacing in text, so there is no need to use ntr before them if you want to process
+# text with whitespacing errors
+nsed \-d "core ct thissen tense!" \-m "sed words:tokenization repair+" \-\-sec\-out
+nsec \-c "core ct thissen tense!" \-m "tokenization repair++"
+nsec \-c "core ct thissen tense!" \-m "transformer with tokenization repair nmt"
 .ft P
 .fi
 .UNINDENT
