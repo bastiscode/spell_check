@@ -74,10 +74,10 @@ def get_available_spelling_error_correction_models() -> List[ModelInfo]:
             task="sec",
             name="transformer with tokenization repair nmt",
             description="Transformer model that translates a sequence with spelling and tokenization errors "
-                        "into a sequence without spelling errors and tokenization errors. Different from "
-                        "transformer_nmt because this model tokenizes into characters and "
+                        "into a sequence without spelling and tokenization errors. Different from "
+                        "transformer nmt because this model tokenizes into characters and "
                         "was trained on text with spelling and tokenization errors, "
-                        "whereas transformer_nmt tokenizes into sub-words and "
+                        "whereas transformer nmt tokenizes into sub-words and "
                         "was trained only on text with spelling errors."
         )
     ]
