@@ -369,6 +369,10 @@ def get_sec_models_and_metrics(
 
     if is_neuspell:
         b_fn = lambda s: s.split("/")[-2] == "neuspell"
+        models[2, "default"].extend([
+            ("transformer word 06/05", "transformer_sec_words_nmt_06_05"),
+            ("transformer word 03/05", "transformer_sec_words_nmt_03_05")
+        ])
     else:
         b_fn = _regular_benchmark
         models[(4, "tr+")] = [
