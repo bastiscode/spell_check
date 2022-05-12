@@ -63,8 +63,7 @@
 <h1>Neural spell checking using Transformers and Graph Neural Networks<a class="headerlink" href="#neural-spell-checking-using-transformers-and-graph-neural-networks" title="Permalink to this headline"></a></h1>
 <p>This project is about detecting and correcting spelling errors using Transformers and
 Graph Neural Networks. Visit the <a class="reference external" href="https://bastiscode.github.io/spell_check">documentation</a> (which also includes this README)
-for information on how to reproduce results and train your own models
-as well as a more detailed description of the <code class="docutils literal notranslate"><span class="pre">nsc</span></code> <a class="reference internal" href="#python-api">Python API</a>.</p>
+for more information on how to reproduce results and train your own models.</p>
 <section id="installation">
 <h2>Installation<a class="headerlink" href="#installation" title="Permalink to this headline"></a></h2>
 <p>Clone the repository</p>
@@ -175,7 +174,8 @@ them by passing the <code class="docutils literal notranslate"><span class="pre"
 <section id="python-api">
 <h3>Python API<a class="headerlink" href="#python-api" title="Permalink to this headline"></a></h3>
 <p>We also provide a Python API for you to use spell checking models directly in code. Below are basic
-code examples on how to use the API.</p>
+code examples on how to use the API. For the full documentation of all classes, methods, etc. provided by
+the Python API see the <a class="reference external" href="#module-nsc">nsc package documentation</a>.</p>
 <p><strong>Spelling error correction</strong></p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">nsc</span> <span class="kn">import</span> <span class="n">SpellingErrorCorrector</span><span class="p">,</span> <span class="n">get_available_spelling_error_correction_models</span>
 
@@ -281,17 +281,17 @@ your own models and evaluating benchmarks, but not for training.</p>
 </tr>
 </thead>
 <tbody>
-<tr class="row-even"><td><p>tokenization repair (<code class="docutils literal notranslate"><span class="pre">nsed</span></code>/<code class="docutils literal notranslate"><span class="pre">SpellingErrorDetector</span></code>)</p></td>
+<tr class="row-even"><td><p>tokenization repair (<code class="docutils literal notranslate"><span class="pre">ntr</span></code>/<code class="docutils literal notranslate"><span class="pre">TokenizationRepairer</span></code>)</p></td>
 <td><p>eo large arxiv with errors</p></td>
 <td><p>Large-sized Transformer model (12 layers) that repairs sequences by predicting repair tokens for each character (ported from <a class="reference external" href="https://github.com/ad-freiburg/trt">https://github.com/ad-freiburg/trt</a>).</p></td>
 <td><p>X</p></td>
 </tr>
-<tr class="row-odd"><td><p>tokenization repair (<code class="docutils literal notranslate"><span class="pre">nsed</span></code>/<code class="docutils literal notranslate"><span class="pre">SpellingErrorDetector</span></code>)</p></td>
+<tr class="row-odd"><td><p>tokenization repair (<code class="docutils literal notranslate"><span class="pre">ntr</span></code>/<code class="docutils literal notranslate"><span class="pre">TokenizationRepairer</span></code>)</p></td>
 <td><p>eo medium arxiv with errors</p></td>
 <td><p>Medium-sized Transformer model (6 layers) that repairs sequences by predicting repair tokens for each character (ported from <a class="reference external" href="https://github.com/ad-freiburg/trt">https://github.com/ad-freiburg/trt</a>).</p></td>
 <td></td>
 </tr>
-<tr class="row-even"><td><p>tokenization repair (<code class="docutils literal notranslate"><span class="pre">nsed</span></code>/<code class="docutils literal notranslate"><span class="pre">SpellingErrorDetector</span></code>)</p></td>
+<tr class="row-even"><td><p>tokenization repair (<code class="docutils literal notranslate"><span class="pre">ntr</span></code>/<code class="docutils literal notranslate"><span class="pre">TokenizationRepairer</span></code>)</p></td>
 <td><p>eo small arxiv with errors</p></td>
 <td><p>Small-sized Transformer model (3 layers) that repairs sequences by predicting repair tokens for each character (ported from <a class="reference external" href="https://github.com/ad-freiburg/trt">https://github.com/ad-freiburg/trt</a>).</p></td>
 <td></td>
@@ -338,12 +338,12 @@ your own models and evaluating benchmarks, but not for training.</p>
 </tr>
 <tr class="row-odd"><td><p>sed words (<code class="docutils literal notranslate"><span class="pre">nsed</span></code>/<code class="docutils literal notranslate"><span class="pre">SpellingErrorDetector</span></code>)</p></td>
 <td><p>tokenization repair+</p></td>
-<td><p>Transformer based model that detects errors in sequences by first correcting the tokenizationand then detecting spelling errors for each word in the repaired text.</p></td>
+<td><p>Transformer based model that detects errors in sequences by first correcting the tokenization and then detecting spelling errors for each word in the repaired text.</p></td>
 <td></td>
 </tr>
 <tr class="row-even"><td><p>sed words (<code class="docutils literal notranslate"><span class="pre">nsed</span></code>/<code class="docutils literal notranslate"><span class="pre">SpellingErrorDetector</span></code>)</p></td>
 <td><p>tokenization repair++</p></td>
-<td><p>Transformer based model that detects errors in sequences by first correcting the tokenizationand then detecting spelling errors for each word in the repaired text. Different from tokenization_repair+ because this model was trained additionally to also correct spelling errors (it is also available in nsec).</p></td>
+<td><p>Transformer based model that detects errors in sequences by first correcting the tokenization and then detecting spelling errors for each word in the repaired text. Different from tokenization repair+ because this model was trained to also correct spelling errors (it is also available in nsec).</p></td>
 <td></td>
 </tr>
 <tr class="row-odd"><td><p>sec (<code class="docutils literal notranslate"><span class="pre">nsec</span></code>/<code class="docutils literal notranslate"><span class="pre">SpellingErrorCorrector</span></code>)</p></td>
@@ -373,7 +373,7 @@ your own models and evaluating benchmarks, but not for training.</p>
 </tr>
 <tr class="row-even"><td><p>sec (<code class="docutils literal notranslate"><span class="pre">nsec</span></code>/<code class="docutils literal notranslate"><span class="pre">SpellingErrorCorrector</span></code>)</p></td>
 <td><p>transformer with tokenization repair nmt</p></td>
-<td><p>Transformer model that translates a sequence with spelling and tokenization errors into a sequence without spelling errors and tokenization errors. Different from transformer_nmt because this model tokenizes into characters and was trained on text with spelling and tokenization errors, whereas transformer_nmt tokenizes into sub-words and was trained only on text with spelling errors.</p></td>
+<td><p>Transformer model that translates a sequence with spelling and tokenization errors into a sequence without spelling and tokenization errors. Different from transformer nmt because this model tokenizes into characters and was trained on text with spelling and tokenization errors, whereas transformer nmt tokenizes into sub-words and was trained only on text with spelling errors.</p></td>
 <td></td>
 </tr>
 </tbody>
@@ -492,7 +492,8 @@ since they call the <code class="docutils literal notranslate"><span class="pre"
 </section>
 <section id="reproduce">
 <h2>Reproduce<a class="headerlink" href="#reproduce" title="Permalink to this headline"></a></h2>
-<p>We make all models that are needed to reproduce the results on the projects’ benchmarks available as pretrained models.
+<p>We make all models that are needed to reproduce the results on the projects’ benchmarks available as
+<a class="reference external" href="#pretrained-models">pretrained models</a>.
 All pretrained models can be accessed either through the command line interface (<code class="docutils literal notranslate"><span class="pre">nsec</span></code>, <code class="docutils literal notranslate"><span class="pre">nsed</span></code>, <code class="docutils literal notranslate"><span class="pre">ntr</span></code>)
 or the Python API.</p>
 <p>The benchmarks can be found here: <code class="docutils literal notranslate"><span class="pre">/nfs/students/sebastian-walter/masters_thesis/benchmarks</span></code>.
@@ -508,7 +509,7 @@ the wikidump realistic benchmark using the command line interface:</p>
 <ol class="arabic simple">
 <li><p>Run model on benchmark:</p></li>
 </ol>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>nsed -m gnn+ <span class="se">\ </span> <span class="c1"># choose the model</span>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>nsed -m <span class="s2">&quot;sed words:gnn+&quot;</span> <span class="se">\ </span> <span class="c1"># choose the model</span>
 -f /nfs/students/sebastian-walter/masters_thesis/benchmarks/sed_words/wikidump/realistic/corrupt.txt <span class="se">\ </span> <span class="c1"># input file</span>
 -o gnn_plus_predictions.txt  <span class="c1"># save output to file</span>
 </pre></div>
@@ -530,12 +531,14 @@ are quite large this can take some time. To cut this time all pretrained models 
 <code class="docutils literal notranslate"><span class="pre">/nfs/students/sebastian-walter/masters_thesis/zipped</span></code>. If you set the env variable
 <code class="docutils literal notranslate"><span class="pre">NSC_DOWNLOAD_DIR</span></code> to this directory, the models are loaded from this directory and must not be downloaded first.
 If you are running this project using Docker you can mount the directory to the containers download directory
-by passing the additional volume flag <code class="docutils literal notranslate"><span class="pre">-v</span> <span class="pre">/nfs/students/sebastian-walter/masters_thesis/zipped:/nsc_download</span></code>.</p>
+by specifying an additional volume flag:
+<code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">DOCKER_ARGS=&quot;-v</span> <span class="pre">/nfs/students/sebastian-walter/masters_thesis/zipped:/nsc_download&quot;</span> <span class="pre">run_docker_cpu</span></code>.</p>
 </div>
 <div class="admonition hint">
 <p class="admonition-title">Hint</p>
 <p>To access the benchmarks if you are running this project with Docker you can mount the benchmark directory
-inside the Docker container using <code class="docutils literal notranslate"><span class="pre">-v</span> <span class="pre">/nfs/students/sebastian-walter/masters_thesis/benchmarks:/benchmarks</span></code>.
+inside the Docker container using
+<code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">DOCKER_ARGS=&quot;-v</span> <span class="pre">/nfs/students/sebastian-walter/masters_thesis/benchmarks:/benchmarks&quot;</span> <span class="pre">run_docker_cpu</span></code>.
 The Docker container also provides additional commands for evaluating benchmarks that are basically
 wrappers around the <a class="reference external" href="https://github.com/bastiscode/spell_check/blob/main/spell_checking/benchmarks/scripts/evaluate.py">evaluation script</a> mentioned above.</p>
 </div>

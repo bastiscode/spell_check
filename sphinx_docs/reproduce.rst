@@ -128,7 +128,8 @@ These scripts do nothing more than setting some environment variables and callin
 Reproduce
 ---------
 
-We make all models that are needed to reproduce the results on the projects' benchmarks available as pretrained models.
+We make all models that are needed to reproduce the results on the projects' benchmarks available as
+`pretrained models <#pretrained-models>`_.
 All pretrained models can be accessed either through the command line interface (``nsec``, ``nsed``, ``ntr``)
 or the Python API.
 
@@ -148,7 +149,7 @@ the wikidump realistic benchmark using the command line interface:
 
 .. code-block:: bash
 
-   nsed -m gnn+ \  # choose the model
+   nsed -m "sed words:gnn+" \  # choose the model
    -f /nfs/students/sebastian-walter/masters_thesis/benchmarks/sed_words/wikidump/realistic/corrupt.txt \  # input file
    -o gnn_plus_predictions.txt  # save output to file
 
@@ -169,12 +170,14 @@ the wikidump realistic benchmark using the command line interface:
     ``/nfs/students/sebastian-walter/masters_thesis/zipped``. If you set the env variable
     ``NSC_DOWNLOAD_DIR`` to this directory, the models are loaded from this directory and must not be downloaded first.
     If you are running this project using Docker you can mount the directory to the containers download directory
-    by passing the additional volume flag ``-v /nfs/students/sebastian-walter/masters_thesis/zipped:/nsc_download``.
+    by specifying an additional volume flag:
+    ``make DOCKER_ARGS="-v /nfs/students/sebastian-walter/masters_thesis/zipped:/nsc_download" run_docker_cpu``.
 
 .. hint::
 
     To access the benchmarks if you are running this project with Docker you can mount the benchmark directory
-    inside the Docker container using ``-v /nfs/students/sebastian-walter/masters_thesis/benchmarks:/benchmarks``.
+    inside the Docker container using
+    ``make DOCKER_ARGS="-v /nfs/students/sebastian-walter/masters_thesis/benchmarks:/benchmarks" run_docker_cpu``.
     The Docker container also provides additional commands for evaluating benchmarks that are basically
     wrappers around the `evaluation script`_ mentioned above.
 

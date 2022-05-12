@@ -3,8 +3,7 @@ Neural spell checking using Transformers and Graph Neural Networks
 
 This project is about detecting and correcting spelling errors using Transformers and
 Graph Neural Networks. Visit the `documentation`_ (which also includes this README)
-for information on how to reproduce results and train your own models
-as well as a more detailed description of the ``nsc`` `Python API`_.
+for more information on how to reproduce results and train your own models.
 
 Installation
 ------------
@@ -133,7 +132,8 @@ Python API
 ~~~~~~~~~~
 
 We also provide a Python API for you to use spell checking models directly in code. Below are basic
-code examples on how to use the API.
+code examples on how to use the API. For the full documentation of all classes, methods, etc. provided by
+the Python API see the `nsc package documentation <#module-nsc>`_.
 
 **Spelling error correction**
 

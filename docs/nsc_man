@@ -33,8 +33,7 @@ Table \- nsc 0.1.0
 .sp
 This project is about detecting and correcting spelling errors using Transformers and
 Graph Neural Networks. Visit the \fI\%documentation\fP (which also includes this README)
-for information on how to reproduce results and train your own models
-as well as a more detailed description of the \fBnsc\fP \fI\%Python API\fP\&.
+for more information on how to reproduce results and train your own models.
 .SH INSTALLATION
 .sp
 Clone the repository
@@ -195,7 +194,8 @@ them by passing the \fB\-h / \-\-help\fP flag to the commands.
 .SS Python API
 .sp
 We also provide a Python API for you to use spell checking models directly in code. Below are basic
-code examples on how to use the API.
+code examples on how to use the API. For the full documentation of all classes, methods, etc. provided by
+the Python API see the \fI\%nsc package documentation\fP\&.
 .sp
 \fBSpelling error correction\fP
 .INDENT 0.0
@@ -345,7 +345,7 @@ Default
 T}
 _
 T{
-tokenization repair (\fBnsed\fP/\fBSpellingErrorDetector\fP)
+tokenization repair (\fBntr\fP/\fBTokenizationRepairer\fP)
 T}	T{
 eo large arxiv with errors
 T}	T{
@@ -355,7 +355,7 @@ X
 T}
 _
 T{
-tokenization repair (\fBnsed\fP/\fBSpellingErrorDetector\fP)
+tokenization repair (\fBntr\fP/\fBTokenizationRepairer\fP)
 T}	T{
 eo medium arxiv with errors
 T}	T{
@@ -364,7 +364,7 @@ T}	T{
 T}
 _
 T{
-tokenization repair (\fBnsed\fP/\fBSpellingErrorDetector\fP)
+tokenization repair (\fBntr\fP/\fBTokenizationRepairer\fP)
 T}	T{
 eo small arxiv with errors
 T}	T{
@@ -450,7 +450,7 @@ sed words (\fBnsed\fP/\fBSpellingErrorDetector\fP)
 T}	T{
 tokenization repair+
 T}	T{
-Transformer based model that detects errors in sequences by first correcting the tokenizationand then detecting spelling errors for each word in the repaired text.
+Transformer based model that detects errors in sequences by first correcting the tokenization and then detecting spelling errors for each word in the repaired text.
 T}	T{
 T}
 _
@@ -459,7 +459,7 @@ sed words (\fBnsed\fP/\fBSpellingErrorDetector\fP)
 T}	T{
 tokenization repair++
 T}	T{
-Transformer based model that detects errors in sequences by first correcting the tokenizationand then detecting spelling errors for each word in the repaired text. Different from tokenization_repair+ because this model was trained additionally to also correct spelling errors (it is also available in nsec).
+Transformer based model that detects errors in sequences by first correcting the tokenization and then detecting spelling errors for each word in the repaired text. Different from tokenization repair+ because this model was trained to also correct spelling errors (it is also available in nsec).
 T}	T{
 T}
 _
@@ -514,7 +514,7 @@ sec (\fBnsec\fP/\fBSpellingErrorCorrector\fP)
 T}	T{
 transformer with tokenization repair nmt
 T}	T{
-Transformer model that translates a sequence with spelling and tokenization errors into a sequence without spelling errors and tokenization errors. Different from transformer_nmt because this model tokenizes into characters and was trained on text with spelling and tokenization errors, whereas transformer_nmt tokenizes into sub\-words and was trained only on text with spelling errors.
+Transformer model that translates a sequence with spelling and tokenization errors into a sequence without spelling and tokenization errors. Different from transformer nmt because this model tokenizes into characters and was trained on text with spelling and tokenization errors, whereas transformer nmt tokenizes into sub\-words and was trained only on text with spelling errors.
 T}	T{
 T}
 _
@@ -680,7 +680,8 @@ since they call the \fBtrain.sh\fP script using SLURMs sbatch command.
 .UNINDENT
 .SH REPRODUCE
 .sp
-We make all models that are needed to reproduce the results on the projects’ benchmarks available as pretrained models.
+We make all models that are needed to reproduce the results on the projects’ benchmarks available as
+\fI\%pretrained models\fP\&.
 All pretrained models can be accessed either through the command line interface (\fBnsec\fP, \fBnsed\fP, \fBntr\fP)
 or the Python API.
 .sp
@@ -707,7 +708,7 @@ Run model on benchmark:
 .sp
 .nf
 .ft C
-nsed \-m gnn+ \e  # choose the model
+nsed \-m "sed words:gnn+" \e  # choose the model
 \-f /nfs/students/sebastian\-walter/masters_thesis/benchmarks/sed_words/wikidump/realistic/corrupt.txt \e  # input file
 \-o gnn_plus_predictions.txt  # save output to file
 .ft P
@@ -741,7 +742,8 @@ are quite large this can take some time. To cut this time all pretrained models 
 \fB/nfs/students/sebastian\-walter/masters_thesis/zipped\fP\&. If you set the env variable
 \fBNSC_DOWNLOAD_DIR\fP to this directory, the models are loaded from this directory and must not be downloaded first.
 If you are running this project using Docker you can mount the directory to the containers download directory
-by passing the additional volume flag \fB\-v /nfs/students/sebastian\-walter/masters_thesis/zipped:/nsc_download\fP\&.
+by specifying an additional volume flag:
+\fBmake DOCKER_ARGS="\-v /nfs/students/sebastian\-walter/masters_thesis/zipped:/nsc_download" run_docker_cpu\fP\&.
 .UNINDENT
 .UNINDENT
 .sp
@@ -749,7 +751,8 @@ by passing the additional volume flag \fB\-v /nfs/students/sebastian\-walter/mas
 .INDENT 0.0
 .INDENT 3.5
 To access the benchmarks if you are running this project with Docker you can mount the benchmark directory
-inside the Docker container using \fB\-v /nfs/students/sebastian\-walter/masters_thesis/benchmarks:/benchmarks\fP\&.
+inside the Docker container using
+\fBmake DOCKER_ARGS="\-v /nfs/students/sebastian\-walter/masters_thesis/benchmarks:/benchmarks" run_docker_cpu\fP\&.
 The Docker container also provides additional commands for evaluating benchmarks that are basically
 wrappers around the \fI\%evaluation script\fP mentioned above.
 .UNINDENT
