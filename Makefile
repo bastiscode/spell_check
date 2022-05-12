@@ -5,8 +5,12 @@ install:
 	@pip install .[train,index,docs,test] -f https://data.dgl.ai/wheels/repo.html
 	@python -m spacy download en_core_web_lg
 
+# use this to change the docker cmd to e.g. wharfer
 DOCKER_CMD ?= "docker"
-DOCKER_ARGS ?= ""
+# use this to pass additional flags to the docker command
+# we set '--cpus=0' here as a placeholder argument (does not change docker behavior)
+# to not get invalid reference format errors from docker
+DOCKER_ARGS ?= "--cpus=0"
 
 .PHONY: build_docker
 build_docker:
