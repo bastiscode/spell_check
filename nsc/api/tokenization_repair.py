@@ -137,7 +137,7 @@ class TokenizationRepairer(_APIBase):
             batch_max_length_factor: Optional[float] = None,
             sort_by_length: bool = True,
             show_progress: bool = False
-    ) -> List[List[int]]:
+    ) -> List[List[str]]:
         if isinstance(inputs, str):
             inputs = load_text_file(inputs)
 
@@ -169,7 +169,7 @@ class TokenizationRepairer(_APIBase):
             batch_max_length_factor: Optional[float] = None,
             sort_by_length: bool = True,
             show_progress: bool = False
-    ) -> Union[List[int], List[List[int]]]:
+    ) -> Union[str, List[str]]:
         """
 
         Repair whitespaces in text.
@@ -210,7 +210,7 @@ class TokenizationRepairer(_APIBase):
             batch_max_length_factor: Optional[float] = None,
             sort_by_length: bool = True,
             show_progress: bool = True
-    ) -> Optional[Union[List[int], List[List[int]]]]:
+    ) -> Optional[List[str]]:
         """
 
         Repair whitespaces in a file.

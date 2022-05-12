@@ -79,7 +79,7 @@ class TestMetrics:
                 and f1 == pytest.approx(0.9444, abs=0.0001)
         )
         assert (
-                avg_prec == pytest.approx(0.9379, abs=0.0001)
+                avg_prec == pytest.approx(0.8958, abs=0.0001)
                 and avg_rec == 1.
-                and avg_f1 == pytest.approx(0.9668, abs=0.0001)
+                and avg_f1 == pytest.approx(0.9391, abs=0.0001)
         )

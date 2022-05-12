@@ -59,7 +59,7 @@ def evaluate(
 
         elif name == "word_accuracy":
             word_predictions = [int(p) for prediction in predictions for p in prediction.split()]
-            word_groundtruths = [int(l) for label in groundtruths for l in label.split()]
+            word_groundtruths = [int(lab) for label in groundtruths for lab in label.split()]
 
             accuracy = metrics.accuracy(word_predictions, word_groundtruths)
             print(f"Word accuracy: {100 * accuracy:.2f}%")

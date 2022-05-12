@@ -129,7 +129,7 @@ def parse_args() -> argparse.Namespace:
         "-v",
         "--version",
         action="store_true",
-        help="Print the version of the ntr library"
+        help="Print the version of the spell checking library"
     )
     parser.add_argument(
         "--force-download",
@@ -141,7 +141,7 @@ def parse_args() -> argparse.Namespace:
         type=str,
         default=None,
         help="Save a runtime report (ignoring startup time) formatted as markdown table to a file, append new line "
-             "if file already exists"
+             "if file already exists (use only when running on files or on stdin without --pipe)"
     )
     return parser.parse_args()
 
@@ -161,9 +161,6 @@ def run(args: argparse.Namespace) -> None:
         )
         print(f"Available models:\n{model_str}")
         return
-
-    # disable logging here since we do not want that for our command line interface, but for the server above
-    logging.disable(logging.CRITICAL)
 
     if args.experiment:
         tok_rep = TokenizationRepairer.from_experiment(
@@ -247,6 +244,8 @@ def run(args: argparse.Namespace) -> None:
     if args.report and num_sequences >= 0 and num_bytes >= 0:
         end = time.perf_counter()
 
+        # temporarily enable autograd to compute potentially unused parameters
+        tok_rep.model.requires_grad_(True)
         sample_inputs = tok_rep.task.generate_sample_inputs(2)
         inputs, _ = tok_rep.task._prepare_inputs_and_labels(sample_inputs, tok_rep.device)
         unused_parameters = task_utils.get_unused_parameters(tok_rep.model, **inputs)
@@ -268,4 +267,6 @@ def run(args: argparse.Namespace) -> None:
 
 
 if __name__ == "__main__":
+    # disable logging since we do not want that for our command line interface
+    logging.disable(logging.CRITICAL)
     run(parse_args())

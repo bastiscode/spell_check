@@ -67,8 +67,7 @@ class _APIBase:
             logger: logging.Logger
     ) -> None:
         self.model = model.eval()
-        for param in self.model.parameters():
-            param.requires_grad = False
+        self.model = self.model.requires_grad_(False)
 
         self.cfg = cfg
         self.task = task
@@ -133,7 +132,7 @@ class _APIBase:
             fix_unicode_errors: bool = False,
             fix_all_uppercase: bool = False,
             **inference_kwargs: Any
-    ) -> List[Any]:
+    ) -> List[Optional[Any]]:
         if isinstance(inputs, str):
             inputs = load_text_file(inputs)
 

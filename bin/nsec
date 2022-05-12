@@ -184,7 +184,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--report",
         action="store_true",
-        help="Print a report on the runtime (ignoring startup time) formatted as markdown table"
+        help="Save a runtime report (ignoring startup time) formatted as markdown table to a file, append new line "
+             "if file already exists (use only when running on files or on stdin without --pipe)"
     )
     parser.add_argument(
         "--tr-plus-no-repair",
@@ -414,6 +415,8 @@ def run(args: argparse.Namespace) -> None:
     if args.report and num_sequences >= 0 and num_bytes >= 0:
         end = time.perf_counter()
 
+        # temporarily enable autograd to compute potentially unused parameters
+        corrector.model.requires_grad_(True)
         sample_inputs = corrector.task.generate_sample_inputs(2)
         inputs, _ = corrector.task._prepare_inputs_and_labels(sample_inputs, corrector.device)
         unused_parameters = task_utils.get_unused_parameters(corrector.model, **inputs)

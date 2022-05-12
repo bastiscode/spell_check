@@ -329,18 +329,10 @@ def get_sed_models_and_metrics(is_neuspell: bool, is_sed_words: bool) \
 
     if is_neuspell:
         b_fn = lambda s: "/".join(s.split("/")[-2:]) in {"neuspell/bea60k", "neuspell/jfleg"}
-        models[2, "default"].extend([
-            ("gnn untuned", "gnn_no_feat_untuned"),
-            ("gnn finetuned 8", "gnn_no_feat_finetuned_8"),
-            (r"gnn\textsuperscript{+} untuned", "gnn_cliques_wfc_untuned"),
-            (r"gnn\textsuperscript{+} finetuned 8", "gnn_cliques_wfc_finetuned_8")
-        ])
     else:
         b_fn = _regular_benchmark
         models[(3, "advanced")] = [
             (r"tokenization repair\textsuperscript{+}", "tokenization_repair_plus_sed"),
-            (r"tokenization repair\rlap{\textsuperscript{+}}\textsubscript{\tiny fixed}",
-             "tokenization_repair_plus_fixed"),
             (r"tokenization repair\textsuperscript{++}", "tokenization_repair_plus_sec")
         ]
 
@@ -377,22 +369,10 @@ def get_sec_models_and_metrics(
 
     if is_neuspell:
         b_fn = lambda s: s.split("/")[-2] == "neuspell"
-        models[2, "default"].extend([
-            ("transformer untuned", "transformer_sec_nmt_untuned"),
-            ("transformer finetuned 8", "transformer_sec_nmt_finetuned_8"),
-            ("transformer word untuned", "transformer_sec_words_nmt_untuned"),
-            ("transformer word finetuned 8", "transformer_sec_words_nmt_finetuned_8"),
-        ])
-        models[3, "advanced"].extend([
-            ("gnn+ --> transformer finetuned 8", "gnn_cliques_wfc_plus_transformer_sec_nmt_finetuned_8"),
-            ("gnn+ --> transformer word finetuned 8", "gnn_cliques_wfc_plus_transformer_sec_words_nmt_finetuned_8"),
-        ])
     else:
         b_fn = _regular_benchmark
         models[(4, "tr+")] = [
             (r"tokenization repair\textsuperscript{+}", "tokenization_repair_plus_sed"),
-            (r"tokenization repair\rlap{\textsuperscript{+}}\textsubscript{\tiny fixed}",
-             "tokenization_repair_plus_fixed"),
             (r"tokenization repair\textsuperscript{++}", "tokenization_repair_plus_sec")
         ]
     return b_fn, models, {"mean_normalized_edit_distance", "correction_f1"}  # , "bleu"}
@@ -433,17 +413,14 @@ def get_sec_whitespace_models_and_metrics() \
             (r"tokenization repair\textsuperscript{++}", "tokenization_repair_plus_sec")
         ],
         (2, "models_advanced"): [
-            (r"tokenization repair $\rightarrow$ gnn\textsuperscript{+} $\rightarrow$ transformer word",
-             "tr_plus_gnn_plus_words_nmt"),
-            (r"trt $\rightarrow$ gnn\textsuperscript{+} $\rightarrow$ transformer word",
-             "trt_plus_gnn_plus_words_nmt"),
-            (r"trt $\rightarrow$ gnn\textsuperscript{+} $\rightarrow$ transformer",
-             "trt_plus_gnn_plus_nmt"),
-            (r"tokenization repair $\rightarrow$ gnn\textsuperscript{+} $\rightarrow$ transformer",
-             "tr_plus_gnn_plus_nmt"),
-            (r"tokenization repair\textsuperscript{+} $\rightarrow$ transformer word", "tr_plus_plus_words_nmt"),
-            (r"tokenization repair\rlap{\textsuperscript{+}}\textsubscript{\tiny fixed} $\rightarrow$ transformer word",
-             "tr_plus_fixed_plus_words_nmt")
+            (r"eo medium $\rightarrow$ gnn\textsuperscript{+} $\rightarrow$ transformer",
+             "eo_medium_plus_gnn_plus_nmt"),
+            (r"eo medium $\rightarrow$ gnn\textsuperscript{+} $\rightarrow$ transformer word",
+             "eo_medium_plus_gnn_plus_words_nmt"),
+            (r"tokenization repair\textsuperscript{+} $\rightarrow$ transformer",
+             "tokenization_repair_plus_plus_nmt"),
+            (r"tokenization repair\textsuperscript{+} $\rightarrow$ transformer word",
+             "tokenization_repair_plus_plus_words_nmt"),
         ]
     }, {"mean_normalized_edit_distance", "correction_f1"}  # , "bleu"}
 
