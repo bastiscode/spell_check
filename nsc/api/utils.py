@@ -444,7 +444,8 @@ def download_model(
         )
 
     cache_dir = cache_dir or get_cache_dir()
-    model_dir = os.path.join(cache_dir, task, name)
+    # replace whitespaces in task and name with underscores to avoid any file system issues
+    model_dir = os.path.join(cache_dir, task.replace(" ", "_"), name.replace(" ", "_"))
     model_zip_not_extracted = not os.path.exists(model_dir)
     if model_zip_not_extracted or force_download:
         shutil.rmtree(model_dir, ignore_errors=True)
