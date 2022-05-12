@@ -93,15 +93,15 @@ def get_available_spelling_error_detection_models() -> List[ModelInfo]:
         ModelInfo(
             task="sed words",
             name="tokenization repair+",
-            description="Transformer based model that detects errors in sequences by first correcting the tokenization"
+            description="Transformer based model that detects errors in sequences by first correcting the tokenization "
                         "and then detecting spelling errors for each word in the repaired text."
         ),
         ModelInfo(
             task="sed words",
             name="tokenization repair++",
-            description="Transformer based model that detects errors in sequences by first correcting the tokenization"
+            description="Transformer based model that detects errors in sequences by first correcting the tokenization "
                         "and then detecting spelling errors for each word in the repaired text. Different from "
-                        "tokenization_repair+ because this model was trained additionally to also correct "
+                        "tokenization repair+ because this model was trained to also correct "
                         "spelling errors (it is also available in nsec)."
         )
     ]
