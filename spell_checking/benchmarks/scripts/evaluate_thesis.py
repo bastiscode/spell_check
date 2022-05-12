@@ -387,11 +387,21 @@ def get_sec_spelling_correction_models_and_metrics(
         (1, "baselines"): [
             ("gpt3", "gpt3_davinci_edit")
         ],
-        (2, "advanced"): [
+        (2, "ours"): [
+            (r"transformer", "transformer_sec_nmt"),
+            (r"transformer\textsubscript{\tiny beam}", "transformer_sec_nmt_beam"),
+            (r"transformer word", "transformer_sec_words_nmt"),
+            (r"transformer word\textsubscript{\tiny beam}", "transformer_sec_words_nmt_beam")
+        ],
+        (3, "advanced"): [
             (r"gnn\textsuperscript{+} $\rightarrow$ neuspell bert", "gnn_cliques_wfc_plus_baseline_neuspell_bert"),
             (r"gnn\textsuperscript{+} $\rightarrow$ transformer", "gnn_cliques_wfc_plus_transformer_sec_nmt"),
+            (r"gnn\textsuperscript{+} $\rightarrow$ transformer\textsubscript{\tiny beam}",
+             "gnn_cliques_wfc_plus_transformer_sec_nmt_beam"),
             (r"gnn\textsuperscript{+} $\rightarrow$ transformer word",
              "gnn_cliques_wfc_plus_transformer_sec_words_nmt"),
+            (r"gnn\textsuperscript{+} $\rightarrow$ transformer word\textsubscript{\tiny beam}",
+             "gnn_cliques_wfc_plus_transformer_sec_words_nmt_beam"),
         ]
     }
 

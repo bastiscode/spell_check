@@ -324,10 +324,13 @@ def best_first_inference(
 
         search_depth = len(token_ids)
 
-        while len(finished_beams) < top_k and positions[b] + search_depth < max_length and not beam_queue.empty():
+        while len(finished_beams) < top_k and not beam_queue.empty():
             beam: Beam = beam_queue.get()[1]
 
-            if stop_fn(beam.token_ids, output_strings[b] if output_strings is not None else None):
+            if (
+                    stop_fn(beam.token_ids, output_strings[b] if output_strings is not None else None)
+                    or positions[b] + search_depth >= max_length
+            ):
                 finished_beams.append(beam)
                 continue
 
@@ -405,6 +408,7 @@ def beam_inference(
 
     search_depths: List[int] = []
     current_beams: List[List[Beam]] = []
+    current_scores: List[List[float]] = []
     for b in range(batch_size):
         # initialize beams
         if output_strings is not None:
@@ -418,13 +422,20 @@ def beam_inference(
         beam.log_prob = log_prob
         current_beams.append([beam])
         search_depths.append(len(beam))
+        current_scores.append([0.0])
+
+    highest_scores_in_queue = [float("-inf") for _ in range(batch_size)]
 
     while True:
-        decoder_mask = [
-            bool(beam_queue.qsize() < beam_width and position + search_depth < max_length and len(beams))
-            for beam_queue, position, search_depth, beams
-            in zip(beam_queues, positions, search_depths, current_beams)
-        ]
+        decoder_mask = []
+        for beam_queue, highest_score, position, search_depth, beams, scores in zip(
+                beam_queues, highest_scores_in_queue, positions, search_depths, current_beams, current_scores
+        ):
+            decoder_mask.append(
+                (beam_queue.qsize() < beam_width or any(score > highest_score for score in scores))
+                and position + search_depth <= max_length
+                and len(beams)
+            )
         if not any(decoder_mask):
             break
 
@@ -480,7 +491,7 @@ def beam_inference(
         log_softmax_scores = torch.log_softmax(decoder_outputs, dim=1)
         beam_token_ids, beam_log_probs = select_fn(log_softmax_scores)
         decoder_log_probs = torch.tensor(
-           decoder_log_probs, dtype=torch.float, device=device
+            decoder_log_probs, dtype=torch.float, device=device
         ).unsqueeze(1)
         beam_scores = (
                 (decoder_log_probs + beam_log_probs) / ((decoder_lengths_tensor + 1) ** 1.0).unsqueeze(1)
@@ -493,7 +504,6 @@ def beam_inference(
                 utils.split(beam_log_probs, num_beams),
                 indices_to_decode
         ):
-
             beam_candidates = []
             for beam, scores, token_ids, log_probs in zip(
                     current_beams[idx], beam_scores_b, token_ids_b, log_probs_b
@@ -505,16 +515,21 @@ def beam_inference(
             beam_candidates = sorted(beam_candidates, key=lambda e: e[1], reverse=True)[:2 * beam_width]
 
             new_current_beams = []
+            new_current_scores = []
             for beam, score in beam_candidates:
                 if stop_fn(beam.token_ids, output_strings[idx] if output_strings is not None else None):
+                    if score > highest_scores_in_queue[idx]:
+                        highest_scores_in_queue[idx] = score
                     beam_queues[idx].put((-score, beam))
                 else:
                     new_current_beams.append(beam)
+                    new_current_scores.append(score)
 
                 if len(new_current_beams) >= beam_width:
                     break
 
             current_beams[idx] = new_current_beams
+            current_scores[idx] = new_current_scores
             search_depths[idx] += 1
 
     for beam_queue, beams in zip(beam_queues, current_beams):
@@ -526,10 +541,16 @@ def beam_inference(
                 if beam_queue.qsize() >= beam_width:
                     break
 
-    return [
-        [beam_queue.get()[1] for _ in range(min(beam_width, beam_queue.qsize()))]
-        for beam_queue in beam_queues
-    ]
+    out_beams = []
+    for beam_queue in beam_queues:
+        best_beams = []
+        best_scores = []
+        for _ in range(min(beam_width, beam_queue.qsize())):
+            score, beam = beam_queue.get()
+            best_beams.append(beam)
+            best_scores.append(score)
+        out_beams.append(best_beams)
+    return out_beams
 
 
 def get_tok_fn(output_tokenizer: tokenization.Tokenizer, bos_token_id: int) -> Callable[[str], List[int]]:
@@ -561,9 +582,9 @@ def run_inference(
         encoder_lengths: Dict[str, torch.Tensor],
         max_length: int,
         search_mode: str = "greedy",
-        score_fn: ScoreFn = spelling_correction_score(),
+        # score_fn: ScoreFn = spelling_correction_score(),
         stop_fn: Optional[StopFn] = None,
-        input_strings: Optional[List[str]] = None,
+        # input_strings: Optional[List[str]] = None,
         output_strings: Optional[List[str]] = None,
         decoder_positions: Optional[torch.Tensor] = None,
         **kwargs: Any
@@ -620,6 +641,7 @@ def run_inference(
             stop_fn=stop_fn,
             beam_width=beam_width,
             # input_strings=input_strings,
+            tok_fn=tok_fn,
             output_strings=output_strings,
             decoder_positions=decoder_positions
         )
@@ -635,6 +657,7 @@ def run_inference(
             stop_fn=stop_fn,
             top_k=top_k,
             # input_strings=input_strings,
+            tok_fn=tok_fn,
             output_strings=output_strings,
             decoder_positions=decoder_positions
         )
