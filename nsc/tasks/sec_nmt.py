@@ -54,10 +54,10 @@ class SECNMT(Seq2Seq):
         if isinstance(inputs, Batch):
             assert input_strings is not None
             batch = inputs
-            input_strings = [model.input_tokenizer.normalize(ipt) for ipt in input_strings]
+            input_strings = model.input_tokenizer.normalize_batch(input_strings)
         else:
             batch = self._batch_sequences_for_inference(inputs)
-            input_strings = [model.input_tokenizer.normalize(str(ipt)) for ipt in inputs]
+            input_strings = model.input_tokenizer.normalize_batch([str(ipt) for ipt in inputs])
 
         if "detections" not in kwargs:
             return super().inference(model, batch, input_strings=input_strings, **kwargs)
@@ -99,7 +99,8 @@ class SECNMT(Seq2Seq):
                     break
 
                 kwargs.update({
-                    "input_strings": [input_strings[i] for i in inputs_to_decode],
+                    "input_strings": [input_words[i][batch_indices_to_decode[i][batch_current_indices[i]]]
+                                      for i in inputs_to_decode],
                     "output_strings": [" ".join(output_words[i]) for i in inputs_to_decode]
                 })
 

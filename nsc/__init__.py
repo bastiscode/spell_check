@@ -5,7 +5,7 @@ __all__ = [
     "get_available_spelling_error_detection_models",
     "get_available_spelling_error_correction_models",
     "get_available_tokenization_repair_models",
-    "SpellingCorrectionScore",
+    "Score",
     "GreedySearch",
     "SampleSearch",
     "BeamSearch",
@@ -19,7 +19,7 @@ from nsc.api.sed import (
 from nsc.api.sec import (
     SpellingErrorCorrector,
     get_available_spelling_error_correction_models,
-    SpellingCorrectionScore,
+    Score,
     GreedySearch,
     SampleSearch,
     BeamSearch,

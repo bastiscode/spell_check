@@ -1257,7 +1257,7 @@ class ModelForTokenizationRepairPlus(TensorModel, TensorEncoderMixin):
         ])
         layer_weights = torch.softmax(self.encoder_layer_weights, dim=0)
         self.encoder_hooks.clear()
-        print(f"layer weights: {layer_weights}, layer indices: {self.encoder_layer_indices}")
+        # print(f"layer weights: {layer_weights}, layer indices: {self.encoder_layer_indices}")
         enc_features = (enc_features * einops.repeat(layer_weights, "f -> f b l h", b=1, l=1, h=1)).sum(dim=0)
         return enc, enc_features
 

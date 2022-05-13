@@ -371,7 +371,9 @@ def get_sec_models_and_metrics(
         b_fn = lambda s: s.split("/")[-2] == "neuspell"
         models[2, "default"].extend([
             ("transformer word 06/05", "transformer_sec_words_nmt_06_05"),
-            ("transformer word 03/05", "transformer_sec_words_nmt_03_05")
+            ("transformer word 03/05", "transformer_sec_words_nmt_03_05"),
+            ("transformer word untuned", "transformer_sec_words_nmt_untuned"),
+            ("transformer untuned", "transformer_sec_nmt_untuned")
         ])
     else:
         b_fn = _regular_benchmark
@@ -389,7 +391,8 @@ def get_sec_spelling_correction_models_and_metrics(
             ("do nothing", "baseline_dummy")
         ],
         (1, "baselines"): [
-            ("gpt3", "gpt3_davinci_edit")
+            ("gpt3", "gpt3_davinci_edit"),
+            ("nlmspell", "hertel_nlmspell")
         ],
         (2, "ours"): [
             (r"transformer", "transformer_sec_nmt"),
@@ -406,6 +409,12 @@ def get_sec_spelling_correction_models_and_metrics(
              "gnn_cliques_wfc_plus_transformer_sec_words_nmt"),
             (r"gnn\textsuperscript{+} $\rightarrow$ transformer word\textsubscript{\tiny beam}",
              "gnn_cliques_wfc_plus_transformer_sec_words_nmt_beam"),
+        ],
+        (4, "bla"): [
+            ("transformer word 06/05", "transformer_sec_words_nmt_06_05"),
+            ("transformer word 03/05", "transformer_sec_words_nmt_03_05"),
+            ("transformer word untuned", "transformer_sec_words_nmt_untuned"),
+            ("transformer untuned", "transformer_sec_nmt_untuned")
         ]
     }
 

@@ -27,10 +27,10 @@ class SECWordsNMT(Token2Seq):
         if isinstance(inputs, Batch):
             assert input_strings is not None
             batch = inputs
-            inputs = [model.input_tokenizer.normalize(ipt) for ipt in input_strings]
+            inputs = model.input_tokenizer.normalize_batch(input_strings)
         else:
             batch = self._batch_sequences_for_inference(inputs)
-            inputs = [model.input_tokenizer.normalize(str(ipt)) for ipt in inputs]
+            inputs = model.input_tokenizer.normalize_batch([str(ipt) for ipt in inputs])
 
         encoder_group_lengths: List[torch.Tensor] = batch.info["encoder_group_lengths"]
         detections = kwargs.get("detections", [[1] * len(group_lengths) for group_lengths in encoder_group_lengths])

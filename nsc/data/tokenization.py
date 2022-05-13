@@ -1,12 +1,11 @@
 import enum
-import hashlib
 import multiprocessing as mp
 import os
 import pickle
 import string
 from collections import Counter
 from dataclasses import dataclass
-from typing import List, Optional, Any, Iterator, Callable, Union
+from typing import List, Optional, Any, Iterator, Callable, Union, Dict
 
 import omegaconf
 import tokenizers
@@ -17,6 +16,8 @@ from tqdm import tqdm
 
 from nsc.data import utils
 from nsc.utils import io, common
+
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 ALL_CHARS = string.ascii_letters + string.digits + string.punctuation + " "
 
@@ -42,14 +43,25 @@ class TokenizerConfig:
 
 
 class Tokenizer:
+    def __init__(self, unk_id: int, bos_id: int, eos_id: int) -> None:
+        self.bos_id = bos_id
+        self.eos_id = eos_id
+        self.unk_id = unk_id
+
     @property
     def vocab_size(self) -> int:
         raise NotImplementedError
 
     def normalize(self, sequence: str) -> str:
-        raise NotImplementedError
+        return self.normalize_batch([sequence])[0]
+
+    def normalize_batch(self, sequences: List[str]) -> List[str]:
+        return sequences
 
     def split(self, sequence: str) -> List[str]:
+        return self.split_batch([sequence])[0]
+
+    def split_batch(self, sequences: List[str]) -> List[List[str]]:
         raise NotImplementedError
 
     def token_to_id(self, token: str) -> int:
@@ -59,9 +71,21 @@ class Tokenizer:
         raise NotImplementedError
 
     def tokenize(self, sequence: str, add_bos_eos: bool = False) -> List[int]:
-        raise NotImplementedError
+        return self.tokenize_batch([sequence], add_bos_eos)[0]
+
+    def tokenize_batch(self, sequences: List[str], add_bos_eos: bool = False) -> List[List[int]]:
+        batch_token_ids = []
+        for tokens in self.split_batch(sequences):
+            token_ids = [self.token_to_id(t) for t in tokens]
+            if add_bos_eos:
+                token_ids = [self.bos_id] + token_ids + [self.eos_id]
+            batch_token_ids.append(token_ids)
+        return batch_token_ids
 
     def de_tokenize(self, token_ids: List[int], **kwargs: Any) -> str:
+        return self.de_tokenize_batch([token_ids], **kwargs)[0]
+
+    def de_tokenize_batch(self, token_ids: List[List[int]], **kwargs: Any) -> List[str]:
         raise NotImplementedError
 
     @property
@@ -114,14 +138,13 @@ def get_tokenization_fn(
 
 class ByteTokenizer(Tokenizer):
     def __init__(self) -> None:
-        self._generate_byte_vocab()
+        self.vocab = self._generate_byte_vocab()
         self.reverse_vocab = {
             v: k for k, v in self.vocab.items()
         }
-        self.bos_id = self.vocab[BOS]
-        self.eos_id = self.vocab[EOS]
+        super().__init__(self.vocab[UNK], self.vocab[BOS], self.vocab[EOS])
 
-    def _generate_byte_vocab(self) -> None:
+    def _generate_byte_vocab(self) -> Dict[str, int]:
         vocab = {chr(i): i for i in range(256)}
         special_vocab = {
             st: 256 + i for i, st in
@@ -129,17 +152,14 @@ class ByteTokenizer(Tokenizer):
         }  # unk should be never needed with bytes, but we still add it because some functions using tokenizers
         # expect every tokenizer to have an unk token
         # put special tokens at end of vocab such that byte == token_id
-        self.vocab = {**vocab, **special_vocab}
+        return {**vocab, **special_vocab}
 
     @property
     def vocab_size(self) -> int:
         return len(self.vocab)
 
-    def normalize(self, sequence: str) -> str:
-        return sequence
-
-    def split(self, sequence: str) -> List[str]:
-        return list(chr(b) for b in self.normalize(sequence).encode("utf8"))
+    def split_batch(self, sequences: List[str]) -> List[List[str]]:
+        return [list(chr(b) for b in s.encode("utf8")) for s in self.normalize_batch(sequences)]
 
     def token_to_id(self, token: str) -> int:
         return self.vocab[token]
@@ -147,14 +167,11 @@ class ByteTokenizer(Tokenizer):
     def id_to_token(self, token_id: int) -> str:
         return self.reverse_vocab[token_id]
 
-    def tokenize(self, sequence: str, add_bos_eos: bool = False) -> List[int]:
-        token_ids = [self.token_to_id(c) for c in self.split(sequence)]
-        if add_bos_eos:
-            token_ids = [self.bos_id] + token_ids + [self.eos_id]
-        return token_ids
-
-    def de_tokenize(self, token_ids: List[int], **kwargs: Any) -> str:
-        return bytes(filter(lambda token_id: token_id < 256, token_ids)).decode("utf8")
+    def de_tokenize_batch(self, token_ids: List[List[int]], **kwargs: Any) -> List[str]:
+        strings = []
+        for ids in token_ids:
+            strings.append(bytes(filter(lambda token_id: token_id < 256, ids)).decode("utf8"))
+        return strings
 
     @property
     def name(self) -> str:
@@ -163,28 +180,23 @@ class ByteTokenizer(Tokenizer):
 
 class CharTokenizer(Tokenizer):
     def __init__(self) -> None:
-        self._generate_char_vocab()
+        self.vocab = self._generate_char_vocab()
         self.reverse_vocab = {
             v: k for k, v in self.vocab.items()
         }
-        self.unk_id = self.vocab[UNK]
-        self.bos_id = self.vocab[BOS]
-        self.eos_id = self.vocab[EOS]
+        super().__init__(self.vocab[UNK], self.vocab[BOS], self.vocab[EOS])
 
-    def _generate_char_vocab(self) -> None:
+    def _generate_char_vocab(self) -> Dict[str, int]:
         special_vocab = {st: i for i, st in enumerate(SPECIAL_TOKENS)}
         vocab = {char: i + len(SPECIAL_TOKENS) for i, char in enumerate(ALL_CHARS)}
-        self.vocab = {**special_vocab, **vocab}
+        return {**special_vocab, **vocab}
 
     @property
     def vocab_size(self) -> int:
         return len(self.vocab)
 
-    def normalize(self, sequence: str) -> str:
-        return sequence
-
-    def split(self, sequence: str) -> List[str]:
-        return list(self.normalize(sequence))
+    def split_batch(self, sequences: List[str]) -> List[List[str]]:
+        return [list(s) for s in self.normalize_batch(sequences)]
 
     def token_to_id(self, token: str) -> int:
         return self.vocab.get(token, self.unk_id)
@@ -192,15 +204,11 @@ class CharTokenizer(Tokenizer):
     def id_to_token(self, token_id: int) -> str:
         return self.reverse_vocab.get(token_id, UNK)
 
-    def tokenize(self, sequence: str, add_bos_eos: bool = False) -> List[int]:
-        token_ids = [self.token_to_id(c) for c in self.split(sequence)]
-        if add_bos_eos:
-            token_ids = [self.bos_id] + token_ids + [self.eos_id]
-        return token_ids
-
-    def de_tokenize(self, token_ids: List[int], **kwargs: Any) -> str:
-        return "".join(self.id_to_token(token_id)
-                       for token_id in token_ids)
+    def de_tokenize_batch(self, token_ids: List[List[int]], **kwargs: Any) -> List[str]:
+        strings = []
+        for ids in token_ids:
+            strings.append("".join(self.id_to_token(token_id) for token_id in ids))
+        return strings
 
     @property
     def name(self) -> str:
@@ -208,10 +216,10 @@ class CharTokenizer(Tokenizer):
 
 
 class TokenizationRepairTokenizer(CharTokenizer):
-    def _generate_char_vocab(self) -> None:
+    def _generate_char_vocab(self) -> Dict[str, int]:
         vocab = {"#": 0, "_": 1, "x": 2}
         special_vocab = {st: i + len(vocab) for i, st in enumerate(SPECIAL_TOKENS)}
-        self.vocab = {**vocab, **special_vocab}
+        return {**vocab, **special_vocab}
 
     @property
     def name(self) -> str:
@@ -229,9 +237,7 @@ class WordTokenizer(Tokenizer):
         self.reverse_vocab = {
             v: k for k, v in self.vocab.items()
         }
-        self.unk_id = self.vocab[UNK]
-        self.bos_id = self.vocab[BOS]
-        self.eos_id = self.vocab[EOS]
+        super().__init__(self.vocab[UNK], self.vocab[BOS], self.vocab[EOS])
 
     @staticmethod
     def train(files: List[str], save_path: str, vocab_size: int, max_sequences: Optional[int] = None) -> None:
@@ -270,11 +276,8 @@ class WordTokenizer(Tokenizer):
         with open(save_path, "wb") as f:  # type: ignore
             pickle.dump(vocab, f)  # type: ignore
 
-    def normalize(self, sequence: str) -> str:
-        return sequence
-
-    def split(self, sequence: str) -> List[str]:
-        return utils.tokenize_words_regex(self.normalize(sequence))[0]
+    def split_batch(self, sequences: List[str]) -> List[List[str]]:
+        return [utils.tokenize_words_regex(s)[0] for s in self.normalize_batch(sequences)]
 
     def token_to_id(self, token: str) -> int:
         return self.vocab.get(token, self.unk_id)
@@ -286,17 +289,19 @@ class WordTokenizer(Tokenizer):
     def vocab_size(self) -> int:
         return len(self.vocab)
 
-    def tokenize(self, sequence: str, add_bos_eos: bool = False) -> List[int]:
-        token_ids = [self.token_to_id(w) for w in self.split(sequence)]
-        if add_bos_eos:
-            token_ids = [self.bos_id] + token_ids + [self.eos_id]
-        return token_ids
-
     def de_tokenize(self, token_ids: List[int], **kwargs: Any) -> str:
-        return utils.de_tokenize_words(
-            [self.id_to_token(token_id) for token_id in token_ids],
-            kwargs.get("whitespaces", kwargs.get("doc"))
-        )
+        batch_whitespaces = [kwargs.get("whitespaces", kwargs.get("doc"))]
+        return super().de_tokenize(token_ids, whitespaces=batch_whitespaces)
+
+    def de_tokenize_batch(self, token_ids: List[List[int]], **kwargs: Any) -> List[str]:
+        strings = []
+        batch_whitespaces = kwargs.get("whitespaces", kwargs.get("doc", [None for _ in range(len(token_ids))]))
+        for ids, ws in zip(token_ids, batch_whitespaces):
+            strings.append(utils.de_tokenize_words(
+                [self.id_to_token(token_id) for token_id in ids],
+                ws
+            ))
+        return strings
 
     @property
     def name(self) -> str:
@@ -307,9 +312,7 @@ class BPETokenizer(Tokenizer):
     def __init__(self, cfg: TokenizerConfig) -> None:
         self.file_path = cfg.file_path
         self.tokenizer = tokenizers.Tokenizer.from_file(cfg.file_path)
-        self.bos_id = self.token_to_id(BOS)
-        self.eos_id = self.token_to_id(EOS)
-        self.unk_id = self.token_to_id(UNK)
+        super().__init__(self.token_to_id(UNK), self.token_to_id(BOS), self.token_to_id(EOS))
 
     @staticmethod
     def train(
@@ -358,11 +361,11 @@ class BPETokenizer(Tokenizer):
     def vocab_size(self) -> int:
         return self.tokenizer.get_vocab_size()
 
-    def normalize(self, sequence: str) -> str:
-        return self.tokenizer.normalizer.normalize_str(sequence)
+    def normalize_batch(self, sequences: List[str]) -> List[str]:
+        return [self.tokenizer.normalizer.normalize_str(s) for s in sequences]
 
-    def split(self, sequence: str) -> List[str]:
-        return self.tokenizer.encode(sequence).tokens
+    def split_batch(self, sequences: List[str]) -> List[List[str]]:
+        return [enc.tokens for enc in self.tokenizer.encode_batch(sequences)]
 
     def token_to_id(self, token: str) -> int:
         token_id = self.tokenizer.token_to_id(token)
@@ -372,21 +375,25 @@ class BPETokenizer(Tokenizer):
         token = self.tokenizer.id_to_token(token_id)
         return UNK if token is None else token
 
-    def tokenize(self, sequence: str, add_bos_eos: bool = False) -> List[int]:
-        token_ids = self.tokenizer.encode(sequence).ids
-        if add_bos_eos:
-            token_ids = [self.bos_id] + token_ids + [self.eos_id]
-        return token_ids
+    def tokenize_batch(self, sequences: List[str], add_bos_eos: bool = False) -> List[List[int]]:
+        batch_token_ids = []
+        for enc in self.tokenizer.encode_batch(sequences):
+            token_ids = enc.ids
+            if add_bos_eos:
+                token_ids = [self.bos_id] + token_ids + [self.eos_id]
+            batch_token_ids.append(token_ids)
+        return batch_token_ids
 
-    def de_tokenize(self, token_ids: List[int], **kwargs: Any) -> str:
-        de_tokenized = self.tokenizer.decode(
+    def de_tokenize_batch(self, token_ids: List[List[int]], **kwargs: Any) -> List[str]:
+        batch_decoded = self.tokenizer.decode_batch(
             token_ids,
             skip_special_tokens=False
         )
         if self.tokenizer.pre_tokenizer.add_prefix_space:
-            return de_tokenized.lstrip()
+            # remove prefix space added by tokenizer
+            return [s.lstrip() for s in batch_decoded]
         else:
-            return de_tokenized
+            return batch_decoded
 
     @property
     def name(self) -> str:

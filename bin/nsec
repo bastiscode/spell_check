@@ -12,7 +12,7 @@ from torch.backends import cudnn
 
 import nsc
 from nsc import SpellingErrorCorrector, get_available_spelling_error_correction_models, GreedySearch, SampleSearch, \
-    BeamSearch, BestFirstSearch, SpellingCorrectionScore
+    BeamSearch, BestFirstSearch, Score
 from nsc.api.utils import load_text_file, generate_report, save_text_file
 from nsc.modules import inference
 from nsc.utils import common, edit
@@ -51,7 +51,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--score",
-        choices=["log_likelihood", "dictionary", "dictionary_or_eq_input", "dictionary_or_in_input"],
+        choices=["log_likelihood", "dictionary", "diff_from_input"],
         default="log_likelihood",
         help="Set the scoring method to score potential solution candidates during decoding"
     )
@@ -264,6 +264,26 @@ def run(args: argparse.Namespace) -> None:
         print(f"Available models:\n{model_str}")
         return
 
+    if args.search == "greedy":
+        search = GreedySearch()
+    elif args.search == "sample":
+        search = SampleSearch(top_k=args.sample_top_k)
+    elif args.search == "beam":
+        search = BeamSearch(beam_width=args.beam_width)
+    elif args.search == "best_first":
+        # best first search is only implemented unbatched, set batch size alyways to 1 such that progress is reported
+        # more frequently if enabled
+        args.batch_size = 1
+        search = BestFirstSearch()
+    else:
+        raise RuntimeError("should not happen")
+
+    if args.score != "log_likelihood":
+        assert args.search == "best_first", \
+            "to use a score other than log_likelihood you need to set the search method to " \
+            "best_first search, because its the only search method supporting different scoring modes for now"
+    score = Score(mode=args.score, prefix_index=args.prefix_index)
+
     if args.experiment:
         corrector = SpellingErrorCorrector.from_experiment(
             experiment_dir=args.experiment,
@@ -275,19 +295,6 @@ def run(args: argparse.Namespace) -> None:
             device="cpu" if args.cpu else "cuda",
             force_download=args.force_download
         )
-
-    if args.search == "greedy":
-        search = GreedySearch()
-    elif args.search == "sample":
-        search = SampleSearch(top_k=args.sample_top_k)
-    elif args.search == "beam":
-        search = BeamSearch(beam_width=args.beam_width)
-    elif args.search == "best_first":
-        search = BestFirstSearch()
-    else:
-        raise RuntimeError("should not happen")
-
-    score = SpellingCorrectionScore(mode=args.score, prefix_index=args.prefix_index)
 
     corrector.set_precision(args.precision)
     corrector_kwargs = {

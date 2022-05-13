@@ -27,7 +27,7 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .in \\n[rst2man-indent\\n[rst2man-indent-level]]u
 ..
-.TH "TABLE" "1" "May 12, 2022" "" "nsc"
+.TH "TABLE" "1" "May 13, 2022" "" "nsc"
 .SH NAME
 Table \- nsc 0.1.0
 .sp
@@ -837,14 +837,14 @@ None
 .UNINDENT
 .INDENT 0.0
 .TP
-.B class  nsc.SpellingCorrectionScore
+.B class  nsc.Score
 Bases: \fBobject\fP
 .sp
 Determines how paths during decoding are scored.
 .sp
-The default mode \fIlog_likelihood\fP is to score path using the
-token sequence log likelihood given as the sum of all token log probabilities one got during
-decoding a particular path normalized by the token sequence length (so shorter paths are not preferred):
+The default mode “log_likelihood” is to score a candidate using the
+token sequence log likelihood given as the sum of all token log probabilities
+normalized by the token sequence length (so shorter paths are not preferred):
 .INDENT 7.0
 .INDENT 3.5
 score = sum(log_probabilities) / (len(log_probabilities) ** alpha)
@@ -852,13 +852,13 @@ score = sum(log_probabilities) / (len(log_probabilities) ** alpha)
 .UNINDENT
 .sp
 Alpha here can be used to steer the decoding towards shorter or longer sequences, if alpha > 1 longer sequences are
-preferred, if alpha < 1 shorter sequences are preferred.
+preferred, if alpha < 1 shorter sequences are preferred, and if alpha = 0 the score equals the sum of the
+log probabilities.
 .sp
-Other supported modes are \fIdictionary\fP, \fIdictionary_or_eq_input\fP and \fIdictionary_or_in_input\fP\&. They only allow
-paths that either contain dictionary words only, contain dictionary words or are equal to the input text or contain
-dictionary words or words from the input text.
-Note that for all these modes prefix_index must be specified, since we use a prefix index to determine if
-a word is in a dictionary or is a prefix of a word in a dictionary.
+Other supported modes are “dictionary” and “diff_from_input”. They only allow
+candidates that either contain dictionary words only or differ from the input text.
+For “dictionary” mode a prefix index must be specified, so that we are able to check if a decoded text is
+a prefix of or equal to a dictionary word.
 .INDENT 7.0
 .TP
 .B __init__(normalize_by_length=True, alpha=1.0, mode=\(aqlog_likelihood\(aq, prefix_index=None)
@@ -926,7 +926,7 @@ None
 .UNINDENT
 .INDENT 7.0
 .TP
-.B correct_file(input_file_path, output_file_path=None, detections=None, search=GreedySearch(), score=SpellingCorrectionScore(normalize_by_length=True, alpha=1.0, mode=\(aqlog_likelihood\(aq, prefix_index=None), batch_size=16, batch_max_length_factor=None, sort_by_length=True, show_progress=True, **kwargs)
+.B correct_file(input_file_path, output_file_path=None, detections=None, search=GreedySearch(), score=Score(normalize_by_length=True, alpha=1.0, mode=\(aqlog_likelihood\(aq, prefix_index=None), batch_size=16, batch_max_length_factor=None, sort_by_length=True, show_progress=True, **kwargs)
 Correct spelling errors in a file.
 .INDENT 7.0
 .TP
@@ -942,7 +942,7 @@ be a path to a file containing detections or a list of lists of integers
 .IP \(bu 2
 \fBsearch\fP (\fInsc.api.sec.Search\fP) – instance of a Search object to determine the search method to use for decoding
 .IP \(bu 2
-\fBscore\fP (\fI\%nsc.api.sec.SpellingCorrectionScore\fP) – instance of a SpellingCorrectionScore object to determine how to score search paths during decoding
+\fBscore\fP (\fI\%nsc.api.sec.Score\fP) – instance of a SpellingCorrectionScore object to determine how to score search paths during decoding
 .IP \(bu 2
 \fBbatch_size\fP (\fIint\fP) – how many sequences to process at once
 .IP \(bu 2
@@ -966,7 +966,7 @@ Returns: corrected file as list of strings if output_file_path is not specified 
 .UNINDENT
 .INDENT 7.0
 .TP
-.B correct_text(inputs, detections=None, search=GreedySearch(), score=SpellingCorrectionScore(normalize_by_length=True, alpha=1.0, mode=\(aqlog_likelihood\(aq, prefix_index=None), batch_size=16, batch_max_length_factor=None, sort_by_length=True, show_progress=False, **kwargs)
+.B correct_text(inputs, detections=None, search=GreedySearch(), score=Score(normalize_by_length=True, alpha=1.0, mode=\(aqlog_likelihood\(aq, prefix_index=None), batch_size=16, batch_max_length_factor=None, sort_by_length=True, show_progress=False, **kwargs)
 Correct spelling errors in text.
 .INDENT 7.0
 .TP
@@ -981,7 +981,7 @@ detections should be a list of lists of integers
 .IP \(bu 2
 \fBsearch\fP (\fInsc.api.sec.Search\fP) – Search instance to determine the search method to use for decoding
 .IP \(bu 2
-\fBscore\fP (\fI\%nsc.api.sec.SpellingCorrectionScore\fP) – SpellingCorrectionScore instance to determine how to score search paths during decoding
+\fBscore\fP (\fI\%nsc.api.sec.Score\fP) – SpellingCorrectionScore instance to determine how to score search paths during decoding
 .IP \(bu 2
 \fBbatch_size\fP (\fIint\fP) – how many sequences to process at once
 .IP \(bu 2

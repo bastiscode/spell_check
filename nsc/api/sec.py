@@ -134,25 +134,25 @@ class BeamSearch(Search):
 
 
 @dataclass
-class SpellingCorrectionScore:
+class Score:
     """
 
     Determines how paths during decoding are scored.
 
-    The default mode `log_likelihood` is to score path using the
-    token sequence log likelihood given as the sum of all token log probabilities one got during
-    decoding a particular path normalized by the token sequence length (so shorter paths are not preferred):
+    The default mode "log_likelihood" is to score a candidate using the
+    token sequence log likelihood given as the sum of all token log probabilities
+    normalized by the token sequence length (so shorter paths are not preferred):
 
         score = sum(log_probabilities) / (len(log_probabilities) ** alpha)
 
     Alpha here can be used to steer the decoding towards shorter or longer sequences, if alpha > 1 longer sequences are
-    preferred, if alpha < 1 shorter sequences are preferred.
+    preferred, if alpha < 1 shorter sequences are preferred, and if alpha = 0 the score equals the sum of the
+    log probabilities.
 
-    Other supported modes are `dictionary`, `dictionary_or_eq_input` and `dictionary_or_in_input`. They only allow
-    paths that either contain dictionary words only, contain dictionary words or are equal to the input text or contain
-    dictionary words or words from the input text.
-    Note that for all these modes prefix_index must be specified, since we use a prefix index to determine if
-    a word is in a dictionary or is a prefix of a word in a dictionary.
+    Other supported modes are "dictionary" and "diff_from_input". They only allow
+    candidates that either contain dictionary words only or differ from the input text.
+    For "dictionary" mode a prefix index must be specified, so that we are able to check if a decoded text is
+    a prefix of or equal to a dictionary word.
 
     """
     normalize_by_length: bool = True
@@ -163,7 +163,7 @@ class SpellingCorrectionScore:
 
 def inference_kwargs_from_search_and_score(
         search: Search,
-        score: SpellingCorrectionScore,
+        score: Score,
         tokenizer: tokenization.Tokenizer
 ) -> Dict[str, Any]:
     inference_kwargs = {}
@@ -180,26 +180,29 @@ def inference_kwargs_from_search_and_score(
     else:
         raise RuntimeError(f"unknown search specification {search.__class__.__name__}")
 
-    if score.mode != "log_likelihood" and score.prefix_index is None:
+    if score.mode == "dictionary" and score.prefix_index is None:
         logger = common.get_logger("DOWNLOAD")
         logger.info(f"score mode is {score.mode}, but no prefix index is given, downloading data to use "
-                    f"pretrained prefix index")
+                    f"our precomputed prefix index")
         data_dir = download_data(False, logger)
         score.prefix_index = index.PrefixIndex(
             os.path.join(data_dir, "prefix_index", "merged_train_100k_prefix_index.pkl")
         )
 
-    inference_kwargs["score_fn"] = inference.spelling_correction_score(
-        mode=score.mode,
-        prefix_index=score.prefix_index,
-        de_tok_fn=inference.get_de_tok_fn(
-            tokenizer,
-            tokenizer.token_to_id(tokenization.BOS),
-            tokenizer.token_to_id(tokenization.EOS)
-        ),
-        normalize_by_length=score.normalize_by_length,
-        alpha=score.alpha
-    )
+    inference_kwargs["normalize_by_length"] = score.normalize_by_length
+    inference_kwargs["alpha"] = score.alpha
+    if score.mode != "log_likelihood":
+        inference_kwargs["re_score_fn"] = inference.spelling_correction_score(
+            mode=score.mode,
+            prefix_index=score.prefix_index,
+            de_tok_fn=inference.get_de_tok_fn(
+                tokenizer,
+                tokenizer.token_to_id(tokenization.BOS),
+                tokenizer.token_to_id(tokenization.EOS)
+            ),
+            eos_token_id=tokenizer.token_to_id(tokenization.EOS),
+            unk_token_id=tokenizer.token_to_id(tokenization.UNK)
+        )
 
     return inference_kwargs
 
@@ -238,9 +241,10 @@ class SpellingErrorCorrector(_APIBase):
                 or isinstance(task, sec_nmt.SECNMT)
                 or isinstance(task, graph_sec_words_nmt.GraphSECWordsNMT)
                 or isinstance(task, sec_words_nmt.SECWordsNMT)
-                or isinstance(task, tokenization_repair_plus.TokenizationRepairPlus)
+                or (isinstance(task, tokenization_repair_plus.TokenizationRepairPlus)
+                    and model.cfg.output_type == "tokenization_repair_plus_sed_plus_sec")
         ), f"expected experiment to be of type SECNMT, GraphSECNMT, SECWordsNMT, GraphSECWordsNMT or " \
-           f"TokenizationRepairPlus, but got {task.__class__.__name__}"
+           f"TokenizationRepairPlus (with sec output type), but got {task.__class__.__name__}"
 
         super().__init__(model, cfg, task, device, logger)
 
@@ -305,7 +309,7 @@ class SpellingErrorCorrector(_APIBase):
             inputs: Union[str, List[str]],
             detections: Optional[List[List[int]]] = None,
             search: Search = GreedySearch(),
-            score: SpellingCorrectionScore = SpellingCorrectionScore(),
+            score: Score = Score(),
             batch_size: int = 16,
             batch_max_length_factor: Optional[float] = None,
             sort_by_length: bool = True,
@@ -320,8 +324,8 @@ class SpellingErrorCorrector(_APIBase):
         invalid_inputs = set(i for i in range(num_inputs) if inputs[i] == "")
         inputs = [inputs[i] for i in range(num_inputs) if i not in invalid_inputs]
 
-        assert score.mode == "log_likelihood", \
-            "for spelling correction only the log_likelihood scoring mode is supported for now"
+        # assert score.mode == "log_likelihood", \
+        #     "for spelling correction only the log_likelihood scoring mode is supported for now"
 
         inference_kwargs = inference_kwargs_from_search_and_score(search, score, self._get_output_tokenizer())
         is_tokenization_repair_plus = isinstance(self.task, tokenization_repair_plus.TokenizationRepairPlus)
@@ -440,7 +444,7 @@ class SpellingErrorCorrector(_APIBase):
             inputs: StringInputOutput,
             detections: Optional[Detections] = None,
             search: Search = GreedySearch(),
-            score: SpellingCorrectionScore = SpellingCorrectionScore(),
+            score: Score = Score(),
             batch_size: int = 16,
             batch_max_length_factor: Optional[float] = None,
             sort_by_length: bool = True,
@@ -494,7 +498,7 @@ class SpellingErrorCorrector(_APIBase):
             output_file_path: Optional[str] = None,
             detections: Optional[Union[str, List[List[int]]]] = None,
             search: Search = GreedySearch(),
-            score: SpellingCorrectionScore = SpellingCorrectionScore(),
+            score: Score = Score(),
             batch_size: int = 16,
             batch_max_length_factor: Optional[float] = None,
             sort_by_length: bool = True,

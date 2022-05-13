@@ -27,7 +27,7 @@ from nsc.tasks import utils as task_utils
 from nsc.utils import common, data_containers, config, io
 from nsc.utils.distributed import DistributedDevice, unwrap_ddp
 
-os.environ["TOKENIZERS_PARALLELISM"] = "false"
+os.environ["TOKENIZERS_PARALLELISM"] = "true"
 
 
 def worker_init_fn(_: int) -> None:
