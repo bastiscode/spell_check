@@ -401,20 +401,10 @@ def get_sec_spelling_correction_models_and_metrics(
             (r"transformer word\textsubscript{\tiny beam}", "transformer_sec_words_nmt_beam")
         ],
         (3, "advanced"): [
-            (r"gnn\textsuperscript{+} $\rightarrow$ neuspell bert", "gnn_cliques_wfc_plus_baseline_neuspell_bert"),
             (r"gnn\textsuperscript{+} $\rightarrow$ transformer", "gnn_cliques_wfc_plus_transformer_sec_nmt"),
-            (r"gnn\textsuperscript{+} $\rightarrow$ transformer\textsubscript{\tiny beam}",
-             "gnn_cliques_wfc_plus_transformer_sec_nmt_beam"),
             (r"gnn\textsuperscript{+} $\rightarrow$ transformer word",
              "gnn_cliques_wfc_plus_transformer_sec_words_nmt"),
-            (r"gnn\textsuperscript{+} $\rightarrow$ transformer word\textsubscript{\tiny beam}",
-             "gnn_cliques_wfc_plus_transformer_sec_words_nmt_beam"),
-        ],
-        (4, "bla"): [
-            ("transformer word 06/05", "transformer_sec_words_nmt_06_05"),
-            ("transformer word 03/05", "transformer_sec_words_nmt_03_05"),
-            ("transformer word untuned", "transformer_sec_words_nmt_untuned"),
-            ("transformer untuned", "transformer_sec_nmt_untuned")
+            (r"tokenization repair\textsuperscript{++}", "tokenization_repair_plus_sec"),
         ]
     }
 

@@ -270,7 +270,8 @@ class TokenizationRepairPlus(tasks.Task):
                 outputs[i]["sed"] = predictions
 
         if output_type in {"all", "sec"} and model_cfg.output_type.endswith("plus_sec"):
-            repaired_words = [repaired_string.split() for repaired_string in repaired_strings]
+            repaired_words = [repaired_string.split()
+                              for repaired_string in model.sec_tokenizer.normalize_batch(repaired_strings)]
             detections = [output["sed"] for output in outputs]
             detections_flattened = utils.flatten(detections)
             if sum(detections_flattened) == 0:

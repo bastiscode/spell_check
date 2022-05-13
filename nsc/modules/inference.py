@@ -241,7 +241,7 @@ def token_inference(
         positions = einops.repeat(torch.arange(max_length + 1, device=device), "l -> b l", b=batch_size)
 
     smaller_max_length_mask = torch.ones(batch_size, dtype=torch.bool, device=device)
-    smaller_max_length_mask[lengths + positions[:, 0] > max_length] = False
+    smaller_max_length_mask[lengths + positions[:, 0] >= max_length] = False
     non_stop_mask = torch.ones(batch_size, dtype=torch.bool, device=device)
     indices_to_decode = non_stop_mask & smaller_max_length_mask
 
@@ -274,7 +274,7 @@ def token_inference(
 
         lengths[indices_to_decode] += 1
 
-        max_length_indices = torch.where(lengths + positions[:, 0] > max_length)[0]
+        max_length_indices = torch.where(lengths + positions[:, 0] >= max_length)[0]
         smaller_max_length_mask[max_length_indices] = False
 
         batch_indices = torch.where(indices_to_decode)[0].tolist()
@@ -341,7 +341,7 @@ def best_first_inference(
 
             if (
                     stop_fn(beam.token_ids, output_strings[b] if output_strings is not None else None)
-                    or positions[b] + len(beam) > max_length
+                    or positions[b] + len(beam) >= max_length
             ):
                 finished_beams.append(beam)
                 break
@@ -438,7 +438,7 @@ def beam_inference(
         ):
             decoder_mask.append(
                 (len(beam_queue) < beam_width or any(beam.decoded_log_p > highest_score for beam in beams))
-                and position + search_depth <= max_length
+                and position + search_depth < max_length
                 and len(beams)
             )
 

@@ -102,7 +102,10 @@ class SECWordsNMT(Token2Seq):
                 result_idx = 0
                 for input_word, detection in zip(input_words, word_detections):
                     if detection:
-                        result_words.append(word_results[result_idx][i])
+                        result_word = word_results[result_idx][i]
+                        if result_word == "" or " " in result_word:
+                            result_word = input_word
+                        result_words.append(result_word)
                         result_idx += 1
                     else:
                         result_words.append(input_word)
