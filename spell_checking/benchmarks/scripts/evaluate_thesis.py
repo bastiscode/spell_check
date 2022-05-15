@@ -369,16 +369,9 @@ def get_sec_models_and_metrics(
 
     if is_neuspell:
         b_fn = lambda s: s.split("/")[-2] == "neuspell"
-        models[2, "default"].extend([
-            ("transformer word 06/05", "transformer_sec_words_nmt_06_05"),
-            ("transformer word 03/05", "transformer_sec_words_nmt_03_05"),
-            ("transformer word untuned", "transformer_sec_words_nmt_untuned"),
-            ("transformer untuned", "transformer_sec_nmt_untuned")
-        ])
     else:
         b_fn = _regular_benchmark
         models[(4, "tr+")] = [
-            (r"tokenization repair\textsuperscript{+}", "tokenization_repair_plus_sed"),
             (r"tokenization repair\textsuperscript{++}", "tokenization_repair_plus_sec")
         ]
     return b_fn, models, {"mean_normalized_edit_distance", "correction_f1"}  # , "bleu"}
@@ -405,6 +398,10 @@ def get_sec_spelling_correction_models_and_metrics(
             (r"gnn\textsuperscript{+} $\rightarrow$ transformer word",
              "gnn_cliques_wfc_plus_transformer_sec_words_nmt"),
             (r"tokenization repair\textsuperscript{++}", "tokenization_repair_plus_sec"),
+            (r"tokenization repair\rlap{\textsuperscript{++}}\textsubscript{\tiny w/o detection}",
+             "tokenization_repair_plus_sec_no_detect"),
+            (r"tokenization repair\rlap{\textsuperscript{++}}\textsubscript{\tiny w/o detection+beam}",
+             "tokenization_repair_plus_sec_no_detect_beam"),
         ]
     }
 

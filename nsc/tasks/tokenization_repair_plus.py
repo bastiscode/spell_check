@@ -1,3 +1,4 @@
+import copy
 from typing import List, Any, Dict, Tuple, Union, Optional
 
 import torch
@@ -204,7 +205,8 @@ class TokenizationRepairPlus(tasks.Task):
 
             char_to_word_groups = utils.get_character_groups_from_repaired_doc(list(input_string), repaired_doc)
             if self.variant.cfg.add_bos_eos:
-                char_to_word_groups = [-1] + char_to_word_groups + [-1]
+                # count bos to first and eos to last group
+                char_to_word_groups = [char_to_word_groups[0]] + char_to_word_groups + [char_to_word_groups[-1]]
             word_groups.append({
                 "stage": "char_to_word",
                 "groups": torch.tensor(char_to_word_groups, dtype=torch.long)
@@ -270,8 +272,7 @@ class TokenizationRepairPlus(tasks.Task):
                 outputs[i]["sed"] = predictions
 
         if output_type in {"all", "sec"} and model_cfg.output_type.endswith("plus_sec"):
-            repaired_words = [repaired_string.split()
-                              for repaired_string in model.sec_tokenizer.normalize_batch(repaired_strings)]
+            repaired_words = [repaired_string.split() for repaired_string in repaired_strings]
             detections = [output["sed"] for output in outputs]
             detections_flattened = utils.flatten(detections)
             if sum(detections_flattened) == 0:
@@ -334,21 +335,18 @@ class TokenizationRepairPlus(tasks.Task):
                     assert len(word_results) == num_words
 
                     batch_result_str = []
-                    if len(word_results) == 0:
-                        # greedy or sample inference give exactly one output per word
-                        min_num_word_results = 1
-                    else:
-                        # best first or beam search inference can give more than 1 output per word
-                        min_num_word_results = min(len(num_outputs_per_word) for num_outputs_per_word in word_results)
+                    min_num_word_results = min(
+                        len(num_outputs_per_word) for num_outputs_per_word in word_results
+                    ) if len(word_results) else 1
                     for i in range(min_num_word_results):
-                        result_words = []
+                        result_words = copy.deepcopy(words)
                         result_idx = 0
-                        for repaired_word, detection in zip(words, word_detections):
+                        for word_idx, detection in enumerate(word_detections):
                             if detection:
-                                result_words.append(word_results[result_idx][i])
+                                result_word = word_results[result_idx][i]
+                                if result_word != "" and " " not in result_word:
+                                    result_words[word_idx] = result_word
                                 result_idx += 1
-                            else:
-                                result_words.append(repaired_word)
                         assert result_idx == num_words
                         batch_result_str.append(" ".join(result_words))
                     outputs[output_idx]["sec"] = batch_result_str

@@ -123,6 +123,8 @@ def batch_match_words(
 
 
 def find_word_boundaries(s: str) -> List[Tuple[int, int]]:
+    if s == "":
+        return [(0, 0)]
     word_boundaries = []
     start_idx = 0
     for word in s.split():
@@ -172,7 +174,7 @@ def get_edited_words(ipts: List[str], tgts: List[str]) -> Tuple[List[Set[int]], 
                         edited_tgt_indices.add(tgt_word_idx + 1)
                     break
                 tgt_word_idx += 1
-            assert tgt_word_idx < len(tgt_word_boundaries)
+            assert tgt_word_idx < len(tgt_word_boundaries), f"tgt: '{tgt}'\nipt: '{ipt}'\nops: {edit_ops}"
 
         edited_in_ipts.append(edited_ipt_indices)
         edited_in_tgts.append(edited_tgt_indices)

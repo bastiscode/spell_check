@@ -429,15 +429,15 @@ def beam_inference(
         current_beams.append([beam])
         search_depths.append(len(beam))
 
-    highest_scoring_beams = [float("-inf") for _ in range(batch_size)]
+    stop_mask = [False for _ in range(batch_size)]
 
     while True:
         decoder_mask = []
-        for highest_score, beam_queue, position, search_depth, beams in zip(
-                highest_scoring_beams, beam_queues, positions, search_depths, current_beams
+        for stop, beam_queue, position, search_depth, beams in zip(
+                stop_mask, beam_queues, positions, search_depths, current_beams
         ):
             decoder_mask.append(
-                (len(beam_queue) < beam_width or any(beam.decoded_log_p > highest_score for beam in beams))
+                not stop
                 and position + search_depth < max_length
                 and len(beams)
             )
@@ -520,12 +520,15 @@ def beam_inference(
             new_current_scores = []
             for i, (score, beam, beam_idx) in enumerate(beam_candidates):
                 # only consider eos beams if they are in top beam_width beams
-                if (
-                        i < beam_width
-                        and stop_fn(beam.token_ids, output_strings[idx] if output_strings is not None else None)
+                if i < beam_width and stop_fn(
+                        beam.token_ids,
+                        output_strings[idx] if output_strings is not None else None
                 ):
+                    # we record all eos beams, but only stop when the top beam is eos (because then we are sure there
+                    # exists no better candidate)
                     beam_queues[idx].append(beam)
-                    highest_scoring_beams[idx] = max(score, highest_scoring_beams[idx])
+                    if i == 0:
+                        stop_mask[idx] = True
                 else:
                     new_current_beams.append(beam)
                     new_current_scores.append(score)

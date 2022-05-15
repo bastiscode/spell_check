@@ -1,3 +1,4 @@
+import copy
 from typing import List, Any, Union, Tuple, Optional
 
 import torch
@@ -42,8 +43,9 @@ class SECWordsNMT(Token2Seq):
 
         detection_mask = torch.tensor(detections_flattened, dtype=torch.bool)
 
-        input_words = flatten([ipt.split() for ipt in inputs])
-        assert len(detections_flattened) == len(input_words), (len(detections_flattened), len(input_words))
+        input_words = [ipt.split() for ipt in inputs]
+        input_words_flattened = flatten(input_words)
+        assert len(detections_flattened) == len(input_words_flattened)
 
         encoder_lengths = [len(t) for t in batch.data]
         encoder_inputs, encoder_padding_mask = model.pad_inputs(batch.data)
@@ -71,7 +73,7 @@ class SECWordsNMT(Token2Seq):
             encoder_outputs={"encoder_outputs": encoder_outputs[detection_mask]},
             encoder_lengths={"encoder_outputs": encoder_lengths[detection_mask]},
             max_length=model_cfg.max_output_length,
-            input_strings=[w for w, det in zip(input_words, detections_flattened) if det],
+            input_strings=[w for w, det in zip(input_words_flattened, detections_flattened) if det],
             decoder_positions=decoder_positions[detection_mask],
             **kwargs
         )
@@ -80,35 +82,27 @@ class SECWordsNMT(Token2Seq):
         word_results_per_input = mod_utils.split(word_results, words_per_input)
 
         all_results = []
-        for input_str, word_results, word_detections, num_words in zip(
-                inputs,
+        for words, word_results, word_detections, num_words in zip(
+                input_words,
                 word_results_per_input,
                 detections,
                 words_per_input
         ):
             assert len(word_results) == num_words
 
-            input_words = input_str.split()
-
             batch_result_str = []
-            if len(word_results) == 0:
-                # greedy or sample inference give exactly one output per word
-                min_num_word_results = 1
-            else:
-                # best first or beam search inference can give more than 1 output per word
-                min_num_word_results = min(len(num_outputs_per_word) for num_outputs_per_word in word_results)
+            min_num_word_results = min(
+                len(num_outputs_per_word) for num_outputs_per_word in word_results
+            ) if len(word_results) else 1
             for i in range(min_num_word_results):
-                result_words = []
+                result_words = copy.deepcopy(words)
                 result_idx = 0
-                for input_word, detection in zip(input_words, word_detections):
+                for word_idx, detection in enumerate(word_detections):
                     if detection:
                         result_word = word_results[result_idx][i]
-                        if result_word == "" or " " in result_word:
-                            result_word = input_word
-                        result_words.append(result_word)
+                        if result_word != "" and " " not in result_word:
+                            result_words[word_idx] = result_word
                         result_idx += 1
-                    else:
-                        result_words.append(input_word)
                 assert result_idx == num_words
                 batch_result_str.append(" ".join(result_words))
             all_results.append(batch_result_str)
