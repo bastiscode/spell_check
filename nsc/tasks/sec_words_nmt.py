@@ -28,10 +28,9 @@ class SECWordsNMT(Token2Seq):
         if isinstance(inputs, Batch):
             assert input_strings is not None
             batch = inputs
-            inputs = model.input_tokenizer.normalize_batch(input_strings)
         else:
             batch = self._batch_sequences_for_inference(inputs)
-            inputs = model.input_tokenizer.normalize_batch([str(ipt) for ipt in inputs])
+            input_strings = [str(ipt) for ipt in inputs]
 
         encoder_group_lengths: List[torch.Tensor] = batch.info["encoder_group_lengths"]
         detections = kwargs.get("detections", [[1] * len(group_lengths) for group_lengths in encoder_group_lengths])
@@ -39,11 +38,11 @@ class SECWordsNMT(Token2Seq):
         detections_flattened = flatten(detections)
         assert all(det in {0, 1} for det in detections_flattened)
         if sum(detections_flattened) == 0:
-            return [[ipt] for ipt in inputs]
+            return [[ipt] for ipt in input_strings]
 
         detection_mask = torch.tensor(detections_flattened, dtype=torch.bool)
 
-        input_words = [ipt.split() for ipt in inputs]
+        input_words = [ipt.split() for ipt in input_strings]
         input_words_flattened = flatten(input_words)
         assert len(detections_flattened) == len(input_words_flattened)
 
@@ -73,7 +72,9 @@ class SECWordsNMT(Token2Seq):
             encoder_outputs={"encoder_outputs": encoder_outputs[detection_mask]},
             encoder_lengths={"encoder_outputs": encoder_lengths[detection_mask]},
             max_length=model_cfg.max_output_length,
-            input_strings=[w for w, det in zip(input_words_flattened, detections_flattened) if det],
+            input_strings=model.input_tokenizer.normalize_batch(
+                [w for w, det in zip(input_words_flattened, detections_flattened) if det]
+            ),
             decoder_positions=decoder_positions[detection_mask],
             **kwargs
         )

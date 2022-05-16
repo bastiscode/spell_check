@@ -44,7 +44,7 @@ class SECNMT(Seq2Seq):
             self,
             model: models.ModelForSeq2Seq,
             inputs: Union[Batch, List[Union[str, Sample]]],
-            input_strings: Optional[List[int]] = None,
+            input_strings: Optional[List[str]] = None,
             **kwargs: Any
     ) -> List[List[str]]:
         self._check_model(model)
@@ -54,13 +54,14 @@ class SECNMT(Seq2Seq):
         if isinstance(inputs, Batch):
             assert input_strings is not None
             batch = inputs
-            input_strings = model.input_tokenizer.normalize_batch(input_strings)
         else:
             batch = self._batch_sequences_for_inference(inputs)
-            input_strings = model.input_tokenizer.normalize_batch([str(ipt) for ipt in inputs])
+            input_strings = [str(ipt) for ipt in inputs]
 
         if "detections" not in kwargs:
-            return super().inference(model, batch, input_strings=input_strings, **kwargs)
+            return super().inference(
+                model, batch, input_strings=model.input_tokenizer.normalize_batch(input_strings), **kwargs
+            )
 
         else:
             input_words = [ipt.split() for ipt in input_strings]
@@ -99,9 +100,13 @@ class SECNMT(Seq2Seq):
                     break
 
                 kwargs.update({
-                    "input_strings": [input_words[i][batch_indices_to_decode[i][batch_current_indices[i]]]
-                                      for i in inputs_to_decode],
-                    "output_strings": [" ".join(output_words[i]) for i in inputs_to_decode]
+                    "input_strings": model.input_tokenizer.normalize_batch([
+                        input_words[i][batch_indices_to_decode[i][batch_current_indices[i]]]
+                        for i in inputs_to_decode
+                    ]),
+                    "output_strings": model.output_tokenizer.normalize_batch(
+                        [" ".join(output_words[i]) for i in inputs_to_decode]
+                    )
                 })
 
                 inputs_to_decode = torch.tensor(inputs_to_decode, dtype=torch.long)

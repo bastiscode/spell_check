@@ -318,7 +318,9 @@ class TokenizationRepairPlus(tasks.Task):
                         "word": word_lengths[detection_mask]
                     },
                     max_length=model_cfg.sec_max_output_length,
-                    input_strings=[w for w, det in zip(repaired_words_flattened, detections_flattened) if det],
+                    input_strings=model.input_tokenizer.normalize_batch(
+                        [w for w, det in zip(repaired_words_flattened, detections_flattened) if det]
+                    ),
                     decoder_positions=decoder_positions[detection_mask],
                     **kwargs
                 )

@@ -385,7 +385,9 @@ def get_sec_spelling_correction_models_and_metrics(
         ],
         (1, "baselines"): [
             ("gpt3", "gpt3_davinci_edit"),
-            ("nlmspell", "hertel_nlmspell")
+            ("nlmspell", "hertel_nlmspell"),
+            (r"google", "google_docs_grammar"),
+            (r"google\textsubscript{\tiny w/o grammar}", "google_docs_no_grammar")
         ],
         (2, "ours"): [
             (r"transformer", "transformer_sec_nmt"),
@@ -396,11 +398,15 @@ def get_sec_spelling_correction_models_and_metrics(
         (3, "advanced"): [
             (r"gnn\textsuperscript{+} $\rightarrow$ transformer", "gnn_cliques_wfc_plus_transformer_sec_nmt"),
             (r"gnn\textsuperscript{+} $\rightarrow$ transformer word",
-             "gnn_cliques_wfc_plus_transformer_sec_words_nmt"),
+             "gnn_cliques_wfc_plus_transformer_sec_words_nmt")
+        ],
+        (4, "tr+"): [
             (r"tokenization repair\textsuperscript{++}", "tokenization_repair_plus_sec"),
+            (r"tokenization repair\rlap{\textsuperscript{++}}\textsubscript{\tiny beam}",
+             "tokenization_repair_plus_sec_beam"),
             (r"tokenization repair\rlap{\textsuperscript{++}}\textsubscript{\tiny w/o detection}",
              "tokenization_repair_plus_sec_no_detect"),
-            (r"tokenization repair\rlap{\textsuperscript{++}}\textsubscript{\tiny w/o detection+beam}",
+            (r"tokenization repair\rlap{\textsuperscript{++}}\textsubscript{\tiny w/o detection,beam}",
              "tokenization_repair_plus_sec_no_detect_beam"),
         ]
     }
@@ -431,6 +437,12 @@ def get_sec_whitespace_models_and_metrics() \
              "tokenization_repair_plus_plus_nmt"),
             (r"tokenization repair\textsuperscript{+} $\rightarrow$ transformer word",
              "tokenization_repair_plus_plus_words_nmt"),
+            (r"tokenization repair\rlap{\textsuperscript{++}}\textsubscript{\tiny detection only} "
+             r"$\rightarrow$ transformer",
+             "tokenization_repair_plus_plus_plus_nmt"),
+            (r"tokenization repair\rlap{\textsuperscript{++}}\textsubscript{\tiny detection only} "
+             r"$\rightarrow$ transformer word",
+             "tokenization_repair_plus_plus_plus_words_nmt"),
         ]
     }, {"mean_normalized_edit_distance", "correction_f1"}  # , "bleu"}
 
@@ -641,7 +653,7 @@ if __name__ == "__main__":
             elif metric_name == "word_accuracy":
                 if not len(additional_headers):
                     additional_headers += [[""], [""]]
-                additional_headers[0] += [r"\tiny Accuracy", r"\tiny Real word", r"\tiny Non word"]
+                additional_headers[0] += [r"\tiny Accuracy", r"\tiny Real-word", r"\tiny Nonword"]
                 _, _, rw_total, _, nw_total = scores
                 additional_headers[1] += ["", f"\\tiny {{{rw_total:,}}}", f"\\tiny {{{nw_total:,}}}"]
             elif metric_name == "binary_f1":
