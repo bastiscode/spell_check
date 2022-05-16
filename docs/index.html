@@ -296,6 +296,16 @@ your own models and evaluating benchmarks, but not for training.</p>
 <td><p>Small-sized Transformer model (3 layers) that repairs sequences by predicting repair tokens for each character (ported from <a class="reference external" href="https://github.com/ad-freiburg/trt">https://github.com/ad-freiburg/trt</a>).</p></td>
 <td></td>
 </tr>
+<tr class="row-odd"><td><p>tokenization repair (<code class="docutils literal notranslate"><span class="pre">ntr</span></code>/<code class="docutils literal notranslate"><span class="pre">TokenizationRepairer</span></code>)</p></td>
+<td><p>tokenization repair+</p></td>
+<td><p>Same as eo medium arxiv with errors, available here for completeness.</p></td>
+<td></td>
+</tr>
+<tr class="row-even"><td><p>tokenization repair (<code class="docutils literal notranslate"><span class="pre">ntr</span></code>/<code class="docutils literal notranslate"><span class="pre">TokenizationRepairer</span></code>)</p></td>
+<td><p>tokenization repair++</p></td>
+<td><p>Same as eo medium arxiv with errors, available here for completeness.</p></td>
+<td></td>
+</tr>
 <tr class="row-odd"><td><p>sed words (<code class="docutils literal notranslate"><span class="pre">nsed</span></code>/<code class="docutils literal notranslate"><span class="pre">SpellingErrorDetector</span></code>)</p></td>
 <td><p>gnn+</p></td>
 <td><p>Attentional Graph Neural Network which processes language graphs with fully connected word nodes, word features and fully connected sub-word cliques. Predicts spelling errors on word level using the word node representations.</p></td>
@@ -496,7 +506,7 @@ since they call the <code class="docutils literal notranslate"><span class="pre"
 <a class="reference external" href="#pretrained-models">pretrained models</a>.
 All pretrained models can be accessed either through the command line interface (<code class="docutils literal notranslate"><span class="pre">nsec</span></code>, <code class="docutils literal notranslate"><span class="pre">nsed</span></code>, <code class="docutils literal notranslate"><span class="pre">ntr</span></code>)
 or the Python API.</p>
-<p>The benchmarks can be found here: <code class="docutils literal notranslate"><span class="pre">/nfs/students/sebastian-walter/masters_thesis/benchmarks</span></code>.
+<p>The <a class="reference external" href="https://github.com/bastiscode/spell_check/tree/main/spell_checking/benchmarks/test">benchmarks can be found here</a> or under <code class="docutils literal notranslate"><span class="pre">/nfs/students/sebastian-walter/masters_thesis/benchmarks</span></code>.
 Every benchmark follows the same directory structure:</p>
 <ul class="simple">
 <li><p>&lt;task&gt;/&lt;benchmark_group&gt;/&lt;benchmark_split&gt;/corrupt.txt</p></li>

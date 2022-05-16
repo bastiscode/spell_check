@@ -42,6 +42,16 @@ def get_available_tokenization_repair_models() -> List[ModelInfo]:
             name="eo small arxiv with errors",
             description="Small-sized Transformer model (3 layers) that repairs sequences by predicting repair tokens "
                         "for each character (ported from https://github.com/ad-freiburg/trt)."
+        ),
+        ModelInfo(
+            task="tokenization repair",
+            name="tokenization repair+",
+            description="Same as eo medium arxiv with errors, available here for completeness."
+        ),
+        ModelInfo(
+            task="tokenization repair",
+            name="tokenization repair++",
+            description="Same as eo medium arxiv with errors, available here for completeness."
         )
     ]
 

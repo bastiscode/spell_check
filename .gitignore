@@ -22,7 +22,8 @@ dist
 !/third_party/trt
 
 /nsc/utils/edit_distance_rs/target
-/spell_checking/benchmarks/dev
-/spell_checking/benchmarks/test
+/spell_checking/benchmarks/dev/*/results
+/spell_checking/benchmarks/test/tokenization_repair
+/spell_checking/benchmarks/test/*_tables
 /spell_checking/baselines/jamspell
 /spell_checking/baselines/languagetool/ngram_data

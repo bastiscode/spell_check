@@ -27,7 +27,7 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .in \\n[rst2man-indent\\n[rst2man-indent-level]]u
 ..
-.TH "TABLE" "1" "May 13, 2022" "" "nsc"
+.TH "TABLE" "1" "May 17, 2022" "" "nsc"
 .SH NAME
 Table \- nsc 0.1.0
 .sp
@@ -373,6 +373,24 @@ T}	T{
 T}
 _
 T{
+tokenization repair (\fBntr\fP/\fBTokenizationRepairer\fP)
+T}	T{
+tokenization repair+
+T}	T{
+Same as eo medium arxiv with errors, available here for completeness.
+T}	T{
+T}
+_
+T{
+tokenization repair (\fBntr\fP/\fBTokenizationRepairer\fP)
+T}	T{
+tokenization repair++
+T}	T{
+Same as eo medium arxiv with errors, available here for completeness.
+T}	T{
+T}
+_
+T{
 sed words (\fBnsed\fP/\fBSpellingErrorDetector\fP)
 T}	T{
 gnn+
@@ -685,7 +703,7 @@ We make all models that are needed to reproduce the results on the projects’ b
 All pretrained models can be accessed either through the command line interface (\fBnsec\fP, \fBnsed\fP, \fBntr\fP)
 or the Python API.
 .sp
-The benchmarks can be found here: \fB/nfs/students/sebastian\-walter/masters_thesis/benchmarks\fP\&.
+The \fI\%benchmarks can be found here\fP or under \fB/nfs/students/sebastian\-walter/masters_thesis/benchmarks\fP\&.
 Every benchmark follows the same directory structure:
 .INDENT 0.0
 .IP \(bu 2

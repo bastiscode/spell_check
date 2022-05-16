@@ -133,7 +133,7 @@ We make all models that are needed to reproduce the results on the projects' ben
 All pretrained models can be accessed either through the command line interface (``nsec``, ``nsed``, ``ntr``)
 or the Python API.
 
-The benchmarks can be found here: ``/nfs/students/sebastian-walter/masters_thesis/benchmarks``.
+The `benchmarks can be found here`_ or under ``/nfs/students/sebastian-walter/masters_thesis/benchmarks``.
 Every benchmark follows the same directory structure:
 
 - <task>/<benchmark_group>/<benchmark_split>/corrupt.txt
@@ -188,3 +188,4 @@ the wikidump realistic benchmark using the command line interface:
 .. _directory: https://github.com/bastiscode/spell_check/tree/main/spell_checking/scripts
 .. _SLURM: https://slurm.schedmd.com/documentation.html
 .. _evaluation script: https://github.com/bastiscode/spell_check/blob/main/spell_checking/benchmarks/scripts/evaluate.py
+.. _benchmarks can be found here: https://github.com/bastiscode/spell_check/tree/main/spell_checking/benchmarks/test

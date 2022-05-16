@@ -3,7 +3,6 @@ from typing import Dict, List, Union, Any, Tuple
 import torch
 
 from nsc import models
-from nsc.data import variants
 from nsc.data.utils import Sample, InferenceInfo
 from nsc.tasks import utils as task_utils
 from nsc.tasks.multi_node_classification import MultiNodeClassification

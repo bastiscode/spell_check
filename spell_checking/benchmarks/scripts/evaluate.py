@@ -1,6 +1,7 @@
 import argparse
-from typing import Set
+from typing import Set, Union
 
+from nsc.api.utils import load_text_file
 from nsc.data.utils import clean_sequence
 from nsc.utils import metrics
 
@@ -21,9 +22,22 @@ def parse_args():
     parser.add_argument("gt_file", type=str, help="Path to the groundtruth file containing the target outputs.")
     parser.add_argument("pred_file", type=str,
                         help="Path to the predicted file as outputted by a spell checking model.")
-    parser.add_argument("--lowercase", action="store_true",
-                        help="Whether to lowercase the model predictions before evaluation. Useful "
-                             "for sec benchmarks that have lowercased inputs and groundtruths.")
+    lowercase_group = parser.add_argument_group()
+    lowercase_group.add_argument(
+        "--lowercase",
+        action="store_true",
+        help="Whether to lowercase the model predictions before evaluation. Useful "
+             "for spelling correction benchmarks that have lowercased inputs and groundtruths such as bea322/bea4660."
+    )
+    lowercase_group.add_argument(
+        "--lowercase-file",
+        type=str,
+        default=None,
+        help="Path to a file containing a 0 or 1 for each line in the benchmark, indicating whether the corresponding "
+             "predictions should be lowercased or not. Useful e.g. when evaluating on the spelling_correction/neuspell "
+             "benchmark because half of its sequences are from bea322/bea4660 and they have lowercased inputs "
+             "and groundtruths."
+    )
     return parser.parse_args()
 
 
@@ -32,23 +46,24 @@ def evaluate(
         groundtruth_file: str,
         predicted_file: str,
         metric_names: Set[str],
-        lowercase: bool
+        lowercase: Union[bool, str]
 ) -> None:
-    groundtruths = []
-    predictions = []
-    corrupted = []
-    with open(groundtruth_file, "r", encoding="utf8") as gtf, \
-            open(predicted_file, "r", encoding="utf8") as pf, \
-            open(corrupted_file, "r", encoding="utf8") as cf:
-        for gt, p, c in zip(gtf, pf, cf):
-            groundtruths.append(clean_sequence(gt))
-            corrupted.append(clean_sequence(c))
-            p = clean_sequence(p)
-            if lowercase:
-                p = p.lower()
-            predictions.append(p)
+    groundtruths = load_text_file(groundtruth_file)
+    predictions = load_text_file(predicted_file)
+    corrupted = load_text_file(corrupted_file)
+    if isinstance(lowercase, str):
+        lowercase_lines = [int(lower) for lower in load_text_file(lowercase)]
+    elif isinstance(lowercase, bool):
+        lowercase_lines = [int(lowercase) for _ in range(len(predictions))]
+    else:
+        raise TypeError(f"expected lowercase to be a string or a bool, but got {type(lowercase)}")
 
-    assert len(predictions) == len(groundtruths) == len(corrupted)
+    assert len(predictions) == len(groundtruths) == len(corrupted) == len(lowercase_lines)
+
+    groundtruths = [clean_sequence(gt) for gt in groundtruths]
+    corrupted = [clean_sequence(c) for c in corrupted]
+    predictions = [clean_sequence(p).lower() if lower else clean_sequence(p)
+                   for p, lower in zip(predictions, lowercase_lines)]
 
     for name in metric_names:
         if name == "binary_f1":

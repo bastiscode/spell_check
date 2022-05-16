@@ -327,7 +327,7 @@ class SpellingErrorCorrector(_APIBase):
         inference_kwargs = inference_kwargs_from_search_and_score(search, score, self._get_output_tokenizer())
         is_tokenization_repair_plus = isinstance(self.task, tokenization_repair_plus.TokenizationRepairPlus)
         if is_tokenization_repair_plus:
-            # ignore detections with tr+, because tr+ has a detection mechanism in itself
+            # ignore detections with tr+, because tr+ has a detection capabilities in itself
             detections = None
             inference_kwargs["output_type"] = "sec"
             inference_kwargs["no_repair"] = kwargs.get("tokenization_repair_plus_no_repair", False)

@@ -30,6 +30,8 @@ _TASK_AND_NAME_TO_URL = {
         "eo small arxiv with errors": f"{_BASE_URL}/tokenization_repair_eo_small_arxiv_with_errors_ported.zip",
         "eo medium arxiv with errors": f"{_BASE_URL}/tokenization_repair_eo_medium_arxiv_with_errors_ported.zip",
         "eo large arxiv with errors": f"{_BASE_URL}/tokenization_repair_eo_large_arxiv_with_errors_ported.zip",
+        "tokenization repair+": f"{_BASE_URL}/tokenization_repair_plus_sed.zip",
+        "tokenization repair++": f"{_BASE_URL}/tokenization_repair_plus_sed_plus_sec.zip",
     },
     "sed words": {
         "gnn": f"{_BASE_URL}/sed_words_gnn_no_feat.zip",
