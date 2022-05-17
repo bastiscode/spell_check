@@ -780,7 +780,7 @@ wrappers around the \fI\%evaluation script\fP mentioned above.
 .B class  nsc.BeamSearch
 Bases: \fBnsc.api.sec.Search\fP
 .sp
-Beam search: Keep the best beam_width paths during search.
+Beam search: Maintain and expand the top beam_width paths.
 .INDENT 7.0
 .TP
 .B __init__(beam_width=5)
@@ -803,7 +803,7 @@ None
 .B class  nsc.BestFirstSearch
 Bases: \fBnsc.api.sec.Search\fP
 .sp
-Best first search: Choose the highest scoring path out of all paths encountered so far.
+Best first search: Always expand the highest scoring path out of all paths encountered so far.
 .INDENT 7.0
 .TP
 .B __init__()
@@ -819,7 +819,7 @@ None
 .B class  nsc.GreedySearch
 Bases: \fBnsc.api.sec.Search\fP
 .sp
-Greedy search: Always take the path with the highest score.
+Greedy search: Always go to the highest scoring next node.
 .INDENT 7.0
 .TP
 .B __init__()
@@ -835,7 +835,7 @@ None
 .B class  nsc.SampleSearch
 Bases: \fBnsc.api.sec.Search\fP
 .sp
-Sample search: Choose a random path from the top_k highest scoring paths.
+Sample search: Go to a random node of the top_k highest scoring next nodes.
 .INDENT 7.0
 .TP
 .B __init__(top_k=5)
@@ -858,18 +858,19 @@ None
 .B class  nsc.Score
 Bases: \fBobject\fP
 .sp
-Determines how paths during decoding are scored.
+Determines how paths during/after decoding are scored/rescored.
 .sp
 The default mode “log_likelihood” is to score a candidate using the
-token sequence log likelihood given as the sum of all token log probabilities
-normalized by the token sequence length (so shorter paths are not preferred):
+token sequence log likelihood given as the sum of all token log probabilities.
+For some search methods we optionally support normalization by the token sequence length
+(so shorter paths are not preferred):
 .INDENT 7.0
 .INDENT 3.5
-score = sum(log_probabilities) / (len(log_probabilities) ** alpha)
+score = sum(log_probabilities) / (len(log_probabilities)^alpha)
 .UNINDENT
 .UNINDENT
 .sp
-Alpha here can be used to steer the decoding towards shorter or longer sequences, if alpha > 1 longer sequences are
+Alpha here can be used to state a preference for shorter or longer sequences, if alpha > 1 longer sequences are
 preferred, if alpha < 1 shorter sequences are preferred, and if alpha = 0 the score equals the sum of the
 log probabilities.
 .sp
@@ -926,14 +927,19 @@ Class to run spelling error correction models.
 .INDENT 7.0
 .TP
 .B __init__(model_dir, device, **kwargs)
+Spelling error correction constructor.
+.sp
+Do not use this explicitly.
+Use the static SpellingErrorCorrector.from_pretrained() and SpellingErrorCorrector.from_experiment() methods
+instead.
 .INDENT 7.0
 .TP
 .B Parameters
 .INDENT 7.0
 .IP \(bu 2
-\fBmodel_dir\fP (\fIstr\fP) – 
+\fBmodel_dir\fP (\fIstr\fP) – directory of the model to load
 .IP \(bu 2
-\fBdevice\fP (\fIUnion\fP\fI[\fP\fIstr\fP\fI, \fP\fIint\fP\fI]\fP) – 
+\fBdevice\fP (\fIUnion\fP\fI[\fP\fIstr\fP\fI, \fP\fIint\fP\fI]\fP) – device to load the model in
 .IP \(bu 2
 \fBkwargs\fP (\fIDict\fP\fI[\fP\fIstr\fP\fI, \fP\fIAny\fP\fI]\fP) – 
 .UNINDENT
@@ -958,9 +964,9 @@ Correct spelling errors in a file.
 \fBdetections\fP (\fIOptional\fP\fI[\fP\fIUnion\fP\fI[\fP\fIstr\fP\fI, \fP\fIList\fP\fI[\fP\fIList\fP\fI[\fP\fIint\fP\fI]\fP\fI]\fP\fI]\fP\fI]\fP) – spelling error detections (from a SpellingErrorDetector) to guide the correction, can either
 be a path to a file containing detections or a list of lists of integers
 .IP \(bu 2
-\fBsearch\fP (\fInsc.api.sec.Search\fP) – instance of a Search object to determine the search method to use for decoding
+\fBsearch\fP (\fInsc.api.sec.Search\fP) – Search instance to determine the search method to use for decoding
 .IP \(bu 2
-\fBscore\fP (\fI\%nsc.api.sec.Score\fP) – instance of a SpellingCorrectionScore object to determine how to score search paths during decoding
+\fBscore\fP (\fI\%nsc.api.sec.Score\fP) – Score instance to determine how to score search paths during decoding
 .IP \(bu 2
 \fBbatch_size\fP (\fIint\fP) – how many sequences to process at once
 .IP \(bu 2
@@ -999,7 +1005,7 @@ detections should be a list of lists of integers
 .IP \(bu 2
 \fBsearch\fP (\fInsc.api.sec.Search\fP) – Search instance to determine the search method to use for decoding
 .IP \(bu 2
-\fBscore\fP (\fI\%nsc.api.sec.Score\fP) – SpellingCorrectionScore instance to determine how to score search paths during decoding
+\fBscore\fP (\fI\%nsc.api.sec.Score\fP) – Score instance to determine how to score search paths during decoding
 .IP \(bu 2
 \fBbatch_size\fP (\fIint\fP) – how many sequences to process at once
 .IP \(bu 2
@@ -1342,14 +1348,19 @@ Class to run tokenization repair models.
 .INDENT 7.0
 .TP
 .B __init__(model_dir, device, **kwargs)
+Tokenization repair constructor.
+.sp
+Do not use this explicitly.
+Use the static TokenizationRepairer.from_pretrained() and TokenizationRepairer.from_experiment() methods
+instead.
 .INDENT 7.0
 .TP
 .B Parameters
 .INDENT 7.0
 .IP \(bu 2
-\fBmodel_dir\fP (\fIstr\fP) – 
+\fBmodel_dir\fP (\fIstr\fP) – directory of the model to load
 .IP \(bu 2
-\fBdevice\fP (\fIUnion\fP\fI[\fP\fIstr\fP\fI, \fP\fIint\fP\fI]\fP) – 
+\fBdevice\fP (\fIUnion\fP\fI[\fP\fIstr\fP\fI, \fP\fIint\fP\fI]\fP) – device to load the model in
 .IP \(bu 2
 \fBkwargs\fP (\fIDict\fP\fI[\fP\fIstr\fP\fI, \fP\fIAny\fP\fI]\fP) – 
 .UNINDENT

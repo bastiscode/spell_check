@@ -97,7 +97,7 @@ class Search:
 class GreedySearch(Search):
     """
 
-    Greedy search: Always take the path with the highest score.
+    Greedy search: Always go to the highest scoring next node.
 
     """
     pass
@@ -107,7 +107,7 @@ class GreedySearch(Search):
 class SampleSearch(Search):
     """
 
-    Sample search: Choose a random path from the top_k highest scoring paths.
+    Sample search: Go to a random node of the top_k highest scoring next nodes.
 
     """
     top_k: int = 5
@@ -117,7 +117,7 @@ class SampleSearch(Search):
 class BestFirstSearch(Search):
     """
 
-    Best first search: Choose the highest scoring path out of all paths encountered so far.
+    Best first search: Always expand the highest scoring path out of all paths encountered so far.
 
     """
     pass
@@ -127,7 +127,7 @@ class BestFirstSearch(Search):
 class BeamSearch(Search):
     """
 
-    Beam search: Keep the best beam_width paths during search.
+    Beam search: Maintain and expand the top beam_width paths.
 
     """
     beam_width: int = 5
@@ -137,15 +137,16 @@ class BeamSearch(Search):
 class Score:
     """
 
-    Determines how paths during decoding are scored.
+    Determines how paths during/after decoding are scored/rescored.
 
     The default mode "log_likelihood" is to score a candidate using the
-    token sequence log likelihood given as the sum of all token log probabilities
-    normalized by the token sequence length (so shorter paths are not preferred):
+    token sequence log likelihood given as the sum of all token log probabilities.
+    For some search methods we optionally support normalization by the token sequence length
+    (so shorter paths are not preferred):
 
-        score = sum(log_probabilities) / (len(log_probabilities) ** alpha)
+        score = sum(log_probabilities) / (len(log_probabilities)^alpha)
 
-    Alpha here can be used to steer the decoding towards shorter or longer sequences, if alpha > 1 longer sequences are
+    Alpha here can be used to state a preference for shorter or longer sequences, if alpha > 1 longer sequences are
     preferred, if alpha < 1 shorter sequences are preferred, and if alpha = 0 the score equals the sum of the
     log probabilities.
 
@@ -220,6 +221,16 @@ class SpellingErrorCorrector(_APIBase):
             device: Union[str, int],
             **kwargs: Dict[str, Any]
     ) -> None:
+        """Spelling error correction constructor.
+
+        Do not use this explicitly.
+        Use the static SpellingErrorCorrector.from_pretrained() and SpellingErrorCorrector.from_experiment() methods
+        instead.
+
+        Args:
+            model_dir: directory of the model to load
+            device: device to load the model in
+        """
         logger = common.get_logger("SPELLING_ERROR_CORRECTION")
 
         if device != "cpu" and not torch.cuda.is_available():
@@ -458,7 +469,7 @@ class SpellingErrorCorrector(_APIBase):
                 inputs is a single str, detections must be a list of integers, otherwise if inputs is a list of strings,
                 detections should be a list of lists of integers
             search: Search instance to determine the search method to use for decoding
-            score: SpellingCorrectionScore instance to determine how to score search paths during decoding
+            score: Score instance to determine how to score search paths during decoding
             batch_size: how many sequences to process at once
             batch_max_length_factor: sets the maximum total length of a batch to be
                 batch_max_length_factor * model_max_input_length, if a model e.g. has a max input length of 512 tokens
@@ -511,8 +522,8 @@ class SpellingErrorCorrector(_APIBase):
             output_file_path: path to an output file, where corrected text will be saved line by line
             detections: spelling error detections (from a SpellingErrorDetector) to guide the correction, can either
                 be a path to a file containing detections or a list of lists of integers
-            search: instance of a Search object to determine the search method to use for decoding
-            score: instance of a SpellingCorrectionScore object to determine how to score search paths during decoding
+            search: Search instance to determine the search method to use for decoding
+            score:  Score instance to determine how to score search paths during decoding
             batch_size: how many sequences to process at once
             batch_max_length_factor: sets the maximum total length of a batch to be
                 batch_max_length_factor * model_max_input_length, if a model e.g. has a max input length of 512 tokens

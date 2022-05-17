@@ -560,7 +560,7 @@ wrappers around the <a class="reference external" href="https://github.com/basti
 <dt class="sig sig-object py" id="nsc.BeamSearch">
 <em class="property"><span class="pre">class</span><span class="w">  </span></em><span class="sig-prename descclassname"><span class="pre">nsc.</span></span><span class="sig-name descname"><span class="pre">BeamSearch</span></span><a class="headerlink" href="#nsc.BeamSearch" title="Permalink to this definition"></a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">nsc.api.sec.Search</span></code></p>
-<p>Beam search: Keep the best beam_width paths during search.</p>
+<p>Beam search: Maintain and expand the top beam_width paths.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="nsc.BeamSearch.__init__">
 <span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">beam_width</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">5</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#nsc.BeamSearch.__init__" title="Permalink to this definition"></a></dt>
@@ -585,7 +585,7 @@ wrappers around the <a class="reference external" href="https://github.com/basti
 <dt class="sig sig-object py" id="nsc.BestFirstSearch">
 <em class="property"><span class="pre">class</span><span class="w">  </span></em><span class="sig-prename descclassname"><span class="pre">nsc.</span></span><span class="sig-name descname"><span class="pre">BestFirstSearch</span></span><a class="headerlink" href="#nsc.BestFirstSearch" title="Permalink to this definition"></a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">nsc.api.sec.Search</span></code></p>
-<p>Best first search: Choose the highest scoring path out of all paths encountered so far.</p>
+<p>Best first search: Always expand the highest scoring path out of all paths encountered so far.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="nsc.BestFirstSearch.__init__">
 <span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#nsc.BestFirstSearch.__init__" title="Permalink to this definition"></a></dt>
@@ -602,7 +602,7 @@ wrappers around the <a class="reference external" href="https://github.com/basti
 <dt class="sig sig-object py" id="nsc.GreedySearch">
 <em class="property"><span class="pre">class</span><span class="w">  </span></em><span class="sig-prename descclassname"><span class="pre">nsc.</span></span><span class="sig-name descname"><span class="pre">GreedySearch</span></span><a class="headerlink" href="#nsc.GreedySearch" title="Permalink to this definition"></a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">nsc.api.sec.Search</span></code></p>
-<p>Greedy search: Always take the path with the highest score.</p>
+<p>Greedy search: Always go to the highest scoring next node.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="nsc.GreedySearch.__init__">
 <span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#nsc.GreedySearch.__init__" title="Permalink to this definition"></a></dt>
@@ -619,7 +619,7 @@ wrappers around the <a class="reference external" href="https://github.com/basti
 <dt class="sig sig-object py" id="nsc.SampleSearch">
 <em class="property"><span class="pre">class</span><span class="w">  </span></em><span class="sig-prename descclassname"><span class="pre">nsc.</span></span><span class="sig-name descname"><span class="pre">SampleSearch</span></span><a class="headerlink" href="#nsc.SampleSearch" title="Permalink to this definition"></a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">nsc.api.sec.Search</span></code></p>
-<p>Sample search: Choose a random path from the top_k highest scoring paths.</p>
+<p>Sample search: Go to a random node of the top_k highest scoring next nodes.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="nsc.SampleSearch.__init__">
 <span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">top_k</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">5</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#nsc.SampleSearch.__init__" title="Permalink to this definition"></a></dt>
@@ -644,14 +644,15 @@ wrappers around the <a class="reference external" href="https://github.com/basti
 <dt class="sig sig-object py" id="nsc.Score">
 <em class="property"><span class="pre">class</span><span class="w">  </span></em><span class="sig-prename descclassname"><span class="pre">nsc.</span></span><span class="sig-name descname"><span class="pre">Score</span></span><a class="headerlink" href="#nsc.Score" title="Permalink to this definition"></a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
-<p>Determines how paths during decoding are scored.</p>
+<p>Determines how paths during/after decoding are scored/rescored.</p>
 <p>The default mode “log_likelihood” is to score a candidate using the
-token sequence log likelihood given as the sum of all token log probabilities
-normalized by the token sequence length (so shorter paths are not preferred):</p>
+token sequence log likelihood given as the sum of all token log probabilities.
+For some search methods we optionally support normalization by the token sequence length
+(so shorter paths are not preferred):</p>
 <blockquote>
-<div><p>score = sum(log_probabilities) / (len(log_probabilities) ** alpha)</p>
+<div><p>score = sum(log_probabilities) / (len(log_probabilities)^alpha)</p>
 </div></blockquote>
-<p>Alpha here can be used to steer the decoding towards shorter or longer sequences, if alpha &gt; 1 longer sequences are
+<p>Alpha here can be used to state a preference for shorter or longer sequences, if alpha &gt; 1 longer sequences are
 preferred, if alpha &lt; 1 shorter sequences are preferred, and if alpha = 0 the score equals the sum of the
 log probabilities.</p>
 <p>Other supported modes are “dictionary” and “diff_from_input”. They only allow
@@ -707,11 +708,15 @@ a prefix of or equal to a dictionary word.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="nsc.SpellingErrorCorrector.__init__">
 <span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model_dir</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#nsc.SpellingErrorCorrector.__init__" title="Permalink to this definition"></a></dt>
-<dd><dl class="field-list simple">
+<dd><p>Spelling error correction constructor.</p>
+<p>Do not use this explicitly.
+Use the static SpellingErrorCorrector.from_pretrained() and SpellingErrorCorrector.from_experiment() methods
+instead.</p>
+<dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>model_dir</strong> (<em>str</em>) – </p></li>
-<li><p><strong>device</strong> (<em>Union</em><em>[</em><em>str</em><em>, </em><em>int</em><em>]</em>) – </p></li>
+<li><p><strong>model_dir</strong> (<em>str</em>) – directory of the model to load</p></li>
+<li><p><strong>device</strong> (<em>Union</em><em>[</em><em>str</em><em>, </em><em>int</em><em>]</em>) – device to load the model in</p></li>
 <li><p><strong>kwargs</strong> (<em>Dict</em><em>[</em><em>str</em><em>, </em><em>Any</em><em>]</em>) – </p></li>
 </ul>
 </dd>
@@ -732,8 +737,8 @@ a prefix of or equal to a dictionary word.</p>
 <li><p><strong>output_file_path</strong> (<em>Optional</em><em>[</em><em>str</em><em>]</em>) – path to an output file, where corrected text will be saved line by line</p></li>
 <li><p><strong>detections</strong> (<em>Optional</em><em>[</em><em>Union</em><em>[</em><em>str</em><em>, </em><em>List</em><em>[</em><em>List</em><em>[</em><em>int</em><em>]</em><em>]</em><em>]</em><em>]</em>) – spelling error detections (from a SpellingErrorDetector) to guide the correction, can either
 be a path to a file containing detections or a list of lists of integers</p></li>
-<li><p><strong>search</strong> (<em>nsc.api.sec.Search</em>) – instance of a Search object to determine the search method to use for decoding</p></li>
-<li><p><strong>score</strong> (<a class="reference internal" href="index.html#nsc.Score" title="nsc.api.sec.Score"><em>nsc.api.sec.Score</em></a>) – instance of a SpellingCorrectionScore object to determine how to score search paths during decoding</p></li>
+<li><p><strong>search</strong> (<em>nsc.api.sec.Search</em>) – Search instance to determine the search method to use for decoding</p></li>
+<li><p><strong>score</strong> (<a class="reference internal" href="index.html#nsc.Score" title="nsc.api.sec.Score"><em>nsc.api.sec.Score</em></a>) – Score instance to determine how to score search paths during decoding</p></li>
 <li><p><strong>batch_size</strong> (<em>int</em>) – how many sequences to process at once</p></li>
 <li><p><strong>batch_max_length_factor</strong> (<em>Optional</em><em>[</em><em>float</em><em>]</em>) – sets the maximum total length of a batch to be
 batch_max_length_factor * model_max_input_length, if a model e.g. has a max input length of 512 tokens
@@ -763,7 +768,7 @@ and batch_max_length_factor is 4 then one batch will contain as many input seque
 inputs is a single str, detections must be a list of integers, otherwise if inputs is a list of strings,
 detections should be a list of lists of integers</p></li>
 <li><p><strong>search</strong> (<em>nsc.api.sec.Search</em>) – Search instance to determine the search method to use for decoding</p></li>
-<li><p><strong>score</strong> (<a class="reference internal" href="index.html#nsc.Score" title="nsc.api.sec.Score"><em>nsc.api.sec.Score</em></a>) – SpellingCorrectionScore instance to determine how to score search paths during decoding</p></li>
+<li><p><strong>score</strong> (<a class="reference internal" href="index.html#nsc.Score" title="nsc.api.sec.Score"><em>nsc.api.sec.Score</em></a>) – Score instance to determine how to score search paths during decoding</p></li>
 <li><p><strong>batch_size</strong> (<em>int</em>) – how many sequences to process at once</p></li>
 <li><p><strong>batch_max_length_factor</strong> (<em>Optional</em><em>[</em><em>float</em><em>]</em>) – sets the maximum total length of a batch to be
 batch_max_length_factor * model_max_input_length, if a model e.g. has a max input length of 512 tokens
@@ -1066,11 +1071,15 @@ When running on CPU fp16 will be overwritten with bfp16 since only bfp16 is supp
 <dl class="py method">
 <dt class="sig sig-object py" id="nsc.TokenizationRepairer.__init__">
 <span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model_dir</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#nsc.TokenizationRepairer.__init__" title="Permalink to this definition"></a></dt>
-<dd><dl class="field-list simple">
+<dd><p>Tokenization repair constructor.</p>
+<p>Do not use this explicitly.
+Use the static TokenizationRepairer.from_pretrained() and TokenizationRepairer.from_experiment() methods
+instead.</p>
+<dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>model_dir</strong> (<em>str</em>) – </p></li>
-<li><p><strong>device</strong> (<em>Union</em><em>[</em><em>str</em><em>, </em><em>int</em><em>]</em>) – </p></li>
+<li><p><strong>model_dir</strong> (<em>str</em>) – directory of the model to load</p></li>
+<li><p><strong>device</strong> (<em>Union</em><em>[</em><em>str</em><em>, </em><em>int</em><em>]</em>) – device to load the model in</p></li>
 <li><p><strong>kwargs</strong> (<em>Dict</em><em>[</em><em>str</em><em>, </em><em>Any</em><em>]</em>) – </p></li>
 </ul>
 </dd>

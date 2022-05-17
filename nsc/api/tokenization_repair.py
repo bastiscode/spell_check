@@ -62,12 +62,23 @@ class TokenizationRepairer(_APIBase):
     Class to run tokenization repair models.
 
     """
+
     def __init__(
             self,
             model_dir: str,
             device: Union[str, int],
             **kwargs: Dict[str, Any]
     ) -> None:
+        """Tokenization repair constructor.
+
+        Do not use this explicitly.
+        Use the static TokenizationRepairer.from_pretrained() and TokenizationRepairer.from_experiment() methods
+        instead.
+
+        Args:
+            model_dir: directory of the model to load
+            device: device to load the model in
+        """
         logger = common.get_logger("TOKENIZATION_REPAIR")
 
         if device != "cpu" and not torch.cuda.is_available():
