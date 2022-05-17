@@ -11,7 +11,9 @@
 /experiments
 /third_party
 /tensorboard
+/zipped
 .*cache
+.download
 .idea
 .git
 __pycache__**

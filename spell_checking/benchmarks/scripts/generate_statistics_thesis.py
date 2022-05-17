@@ -139,8 +139,9 @@ def generate_statistics(args: argparse.Namespace) -> None:
 
     groups = sorted(statistics)
     headers = [
-        ["Benchmark", r"\#Sequences", r"\#Words", r"$\overline{\text{Sequence length}}$",
-         "Word errors", "Real word errors", "Non word errors"]
+        ["Benchmark", r"\#Sequences", r"\#Words", r"$\overline{\text{Sequence length}}\tnote{*}$",
+         r"Word errors\tnote{\textdagger}", r"Real-word errors\tnote{\textdaggerdbl}",
+         r"Nonword errors\tnote{\textdaggerdbl}"]
     ]
     is_sed_sequence = args.benchmark_type == "sed_sequence"
     if is_sed_sequence:
@@ -150,8 +151,8 @@ def generate_statistics(args: argparse.Namespace) -> None:
     rand = random.Random(24)
     sample_headers = [["Error type"], [""]]
     sample_data = [[""] for _ in range(num_samples * 2)]
-    sample_data[0][0] = "Real word"
-    sample_data[num_samples][0] = "Non word"
+    sample_data[0][0] = "Real-word"
+    sample_data[num_samples][0] = "Nonword"
 
     charts = []
     data = []
@@ -167,7 +168,7 @@ def generate_statistics(args: argparse.Namespace) -> None:
             non_word_percentage = 100 * nw_err / total_err
 
             data.append([
-                f"{group} {split}", f"{num_seq:,}", f"{num_words:,}", f"{avg_seq_length:.1f} chars",
+                f"{group} {split}", f"{num_seq:,}", f"{num_words:,}", f"{avg_seq_length:.1f}",
                 f"{total_err:,} ({error_percentage: >4.1f}%)",
                 f"{rw_err:,} ({real_word_percentage: >4.1f}%)", f"{nw_err:,} ({non_word_percentage: >4.1f}%)",
             ])

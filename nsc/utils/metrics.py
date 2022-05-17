@@ -75,16 +75,17 @@ def accuracy(predictions: List, target: List) -> float:
     return sum(correct) / max(1, len(correct))
 
 
-def _tp_fp_fn_to_f1_prec_rec(tp: int, fp: int, fn: int) -> Tuple[float, float, float]:
+def _tp_fp_fn_to_f1_prec_rec(tp: int, fp: int, fn: int, beta: float = 1.0) -> Tuple[float, float, float]:
     precision = tp / max(tp + fp, 1)
     recall = tp / max(tp + fn, 1)
-    f1 = ((2 * precision * recall) / (precision + recall)) if precision + recall > 0 else 0
+    f1 = (((1 + beta ** 2) * precision * recall) / ((beta ** 2) * precision + recall)) if precision + recall > 0 else 0
     return f1, precision, recall
 
 
 def binary_f1_prec_rec(
         predictions: List[int],
-        targets: List[int]
+        targets: List[int],
+        beta: float = 1.0
 ) -> Tuple[float, float, float]:
     """
 
@@ -92,6 +93,7 @@ def binary_f1_prec_rec(
 
     :param predictions: list of predictions
     :param targets: list of targets
+    :param beta: give beta times more importance to recall
     :return: f1, precision and recall scores
     """
     check_same_length(predictions, targets)
@@ -110,7 +112,7 @@ def binary_f1_prec_rec(
     fn = predicted_false.sum() - tn
 
     assert tp + fp + tn + fn == len(predictions)
-    return _tp_fp_fn_to_f1_prec_rec(tp, fp, fn)
+    return _tp_fp_fn_to_f1_prec_rec(tp, fp, fn, beta)
 
 
 def match_words(preds: List[str], tgts: List[str]) -> Tuple[List[Set[int]], List[Set[int]]]:
@@ -179,7 +181,8 @@ def group_words(
 def correction_f1_prec_rec(
         input_sequences: List[str],
         predicted_sequences: List[str],
-        target_sequences: List[str]
+        target_sequences: List[str],
+        beta: float = 1.0
 ) -> Tuple[Tuple[float, float, float], Tuple[float, float, float]]:
     check_same_length(input_sequences, predicted_sequences, target_sequences)
 
@@ -205,13 +208,13 @@ def correction_f1_prec_rec(
         if len(mis) == 0 and len(cha) == 0:
             f1, prec, rec = (1., 1., 1.)
         else:
-            f1, prec, rec = _tp_fp_fn_to_f1_prec_rec(len(tp_indices), len(fp_indices), len(fn_indices))
+            f1, prec, rec = _tp_fp_fn_to_f1_prec_rec(len(tp_indices), len(fp_indices), len(fn_indices), beta)
         f1s.append(f1)
         precs.append(prec)
         recs.append(rec)
 
     return (
-        _tp_fp_fn_to_f1_prec_rec(tp, fp, fn),
+        _tp_fp_fn_to_f1_prec_rec(tp, fp, fn, beta),
         (float(np.mean(f1s)), float(np.mean(precs)), float(np.mean(recs)))
     )
 

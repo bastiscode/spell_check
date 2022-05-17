@@ -404,10 +404,10 @@ def get_sec_spelling_correction_models_and_metrics(
             (r"tokenization repair\textsuperscript{++}", "tokenization_repair_plus_sec"),
             (r"tokenization repair\rlap{\textsuperscript{++}}\textsubscript{\tiny beam}",
              "tokenization_repair_plus_sec_beam"),
-            (r"tokenization repair\rlap{\textsuperscript{++}}\textsubscript{\tiny w/o detection}",
-             "tokenization_repair_plus_sec_no_detect"),
-            (r"tokenization repair\rlap{\textsuperscript{++}}\textsubscript{\tiny w/o detection,beam}",
-             "tokenization_repair_plus_sec_no_detect_beam"),
+            # (r"tokenization repair\rlap{\textsuperscript{++}}\textsubscript{\tiny w/o detection}",
+            #  "tokenization_repair_plus_sec_no_detect"),
+            # (r"tokenization repair\rlap{\textsuperscript{++}}\textsubscript{\tiny w/o detection,beam}",
+            #  "tokenization_repair_plus_sec_no_detect_beam"),
         ]
     }
 
@@ -426,7 +426,11 @@ def get_sec_whitespace_models_and_metrics() \
         ],
         (1, "models"): [
             ("transformer with tokenization repair", "transformer_sec_with_tokenization_repair_nmt"),
-            (r"tokenization repair\textsuperscript{++}", "tokenization_repair_plus_sec")
+            (r"transformer with tokenization repair\textsubscript{\tiny beam}",
+             "transformer_sec_with_tokenization_repair_nmt_beam"),
+            (r"tokenization repair\textsuperscript{++}", "tokenization_repair_plus_sec"),
+            (r"tokenization repair\rlap{\textsuperscript{++}}\textsubscript{\tiny beam}",
+             "tokenization_repair_plus_sec_beam"),
         ],
         (2, "models_advanced"): [
             (r"eo medium $\rightarrow$ gnn\textsuperscript{+} $\rightarrow$ transformer",
@@ -437,12 +441,12 @@ def get_sec_whitespace_models_and_metrics() \
              "tokenization_repair_plus_plus_nmt"),
             (r"tokenization repair\textsuperscript{+} $\rightarrow$ transformer word",
              "tokenization_repair_plus_plus_words_nmt"),
-            (r"tokenization repair\rlap{\textsuperscript{++}}\textsubscript{\tiny detection only} "
-             r"$\rightarrow$ transformer",
-             "tokenization_repair_plus_plus_plus_nmt"),
-            (r"tokenization repair\rlap{\textsuperscript{++}}\textsubscript{\tiny detection only} "
-             r"$\rightarrow$ transformer word",
-             "tokenization_repair_plus_plus_plus_words_nmt"),
+            # (r"tokenization repair\rlap{\textsuperscript{++}}\textsubscript{\tiny detection only} "
+            #  r"$\rightarrow$ transformer",
+            #  "tokenization_repair_plus_plus_plus_nmt"),
+            # (r"tokenization repair\rlap{\textsuperscript{++}}\textsubscript{\tiny detection only} "
+            #  r"$\rightarrow$ transformer word",
+            #  "tokenization_repair_plus_plus_plus_words_nmt"),
         ]
     }, {"mean_normalized_edit_distance", "correction_f1"}  # , "bleu"}
 
