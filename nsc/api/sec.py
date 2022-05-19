@@ -325,8 +325,9 @@ class SpellingErrorCorrector(_APIBase):
             batch_max_length_factor: Optional[float] = None,
             sort_by_length: bool = True,
             show_progress: bool = False,
+            return_raw: bool = False,
             **kwargs: Any
-    ) -> List[str]:
+    ) -> List[Any]:
         if isinstance(inputs, str):
             inputs = load_text_file(inputs)
 
@@ -440,9 +441,12 @@ class SpellingErrorCorrector(_APIBase):
         output_idx = 0
         for i in range(num_inputs):
             if i in invalid_inputs:
-                all_outputs_with_invalid.append("")
+                all_outputs_with_invalid.append(None if return_raw else "")
             else:
-                all_outputs_with_invalid.append(inference.inference_output_to_str(all_outputs[output_idx]))
+                all_outputs_with_invalid.append(
+                    all_outputs[output_idx] if return_raw
+                    else inference.inference_output_to_str(all_outputs[output_idx])
+                )
                 output_idx += 1
         assert output_idx == len(all_outputs)
         return all_outputs_with_invalid
@@ -555,3 +559,38 @@ class SpellingErrorCorrector(_APIBase):
             save_text_file(output_file_path, outputs)
         else:
             return outputs
+
+    def suggest(
+            self,
+            text: str,
+            n: int,
+            detections: Optional[List[int]] = None
+    ) -> List[str]:
+        """
+
+        Generate suggestions for possible corrections of a text.
+
+        Note that if you use this with a model that translates each word individually (e.g. transformer word),
+        the i-th suggestion string is built by joining the i-th suggestions for all words (they do not necessarily form
+        a useful sentence together). To obtain n suggestions for each word in the text you can simply split every
+        suggestion string on whitespaces.
+
+        Args:
+            text: text to generate suggestions for
+            n: number of suggestions to generate
+            detections: optional detections to exclude some words
+
+        Returns: suggestions as list of strings
+
+        """
+        suggestions = self._correct_text_raw(
+            inputs=[text],
+            detections=[detections] if detections is not None else None,
+            search=BeamSearch(n),
+            batch_size=1,
+            return_raw=True
+        )[0]
+        if suggestions is None:
+            return [""]
+        else:
+            return suggestions

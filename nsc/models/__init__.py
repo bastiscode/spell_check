@@ -1138,7 +1138,7 @@ class ModelForTokenizationRepairPlusConfig(TensorModelConfig):
 
     # special args for sec head
     sec_tokenizer: Optional[TokenizerConfig] = None
-    num_sec_layers: int = MISSING
+    num_sec_layers: int = 0
     sec_max_output_length: int = 512
 
 

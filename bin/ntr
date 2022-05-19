@@ -244,17 +244,20 @@ def run(args: argparse.Namespace) -> None:
     if args.report and num_sequences >= 0 and num_bytes >= 0:
         end = time.perf_counter()
 
-        # temporarily enable autograd to compute potentially unused parameters
-        tok_rep.model.requires_grad_(True)
+        # for reporting model parameters create new model like before training, so we can record
+        # fixed parameters, unused parameters and trainable parameters
         sample_inputs = tok_rep.task.generate_sample_inputs(2)
-        inputs, _ = tok_rep.task._prepare_inputs_and_labels(sample_inputs, tok_rep.device)
-        unused_parameters = task_utils.get_unused_parameters(tok_rep.model, **inputs)
-        parameter_dict = common.get_num_parameters(tok_rep.model, unused_parameters)
+        cpu = torch.device("cpu")
+        report_model = tok_rep.task.get_model(sample_inputs, tok_rep.model.cfg, cpu)
+        inputs, _ = tok_rep.task._prepare_inputs_and_labels(sample_inputs, cpu)
+        unused_parameters = task_utils.get_unused_parameters(report_model, **inputs)
+        task_utils.disable_parameters(report_model, unused_parameters)
+        parameter_dict = common.get_num_parameters(report_model, unused_parameters)
 
         generate_report(
             tok_rep.task_name,
             tok_rep.model_name,
-            parameter_dict["total"] - parameter_dict["unused"],
+            parameter_dict,
             num_sequences,
             num_bytes,
             end - start,

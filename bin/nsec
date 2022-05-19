@@ -5,7 +5,7 @@ import logging
 import os
 import sys
 import time
-from typing import Tuple, Optional, List
+from typing import Tuple, Optional, List, Dict
 
 import torch
 from torch.backends import cudnn
@@ -13,6 +13,7 @@ from torch.backends import cudnn
 import nsc
 from nsc import SpellingErrorCorrector, get_available_spelling_error_correction_models, GreedySearch, SampleSearch, \
     BeamSearch, BestFirstSearch, Score
+from nsc.api.sec import Search
 from nsc.api.utils import load_text_file, generate_report, save_text_file
 from nsc.modules import inference
 from nsc.utils import common, edit
@@ -128,6 +129,12 @@ def parse_args() -> argparse.Namespace:
         help="Disable sorting of the inputs before processing (for a large number of inputs or large text files "
              "sorting the sequences beforehand leads to speed ups because it minimizes the amount of padding needed "
              "within a batch of sequences)"
+    )
+    parser.add_argument(
+        "--suggest",
+        type=int,
+        default=None,
+        help="Output this many suggestions for corrections, can be used together with --correct or --interactive"
     )
     parser.add_argument(
         "--sed-in",
@@ -248,6 +255,30 @@ def format_output_batch(corrections: List[str], sequences: List[str], convert_ou
         raise RuntimeError("should not happen")
 
 
+def correct_and_print(
+        corrector: SpellingErrorCorrector,
+        text: str,
+        sed_in: bool,
+        suggest: Optional[int],
+        search: Search,
+        score: Score,
+        convert_output: Optional[str],
+        **corrector_kwargs: Dict
+) -> None:
+    line, detection = process_input(text, sed_in)
+    if suggest is None:
+        print(format_output(
+            corrector.correct_text(
+                line, detection, search=search, score=score, sort_by_length=False, **corrector_kwargs
+            ),
+            line,
+            convert_output
+        ))
+    else:
+        for suggestion in corrector.suggest(line, suggest, detection):
+            print(format_output(suggestion, line, convert_output))
+
+
 def run(args: argparse.Namespace) -> None:
     torch.backends.cudnn.benchmark = True
     torch.set_num_threads(len(os.sched_getaffinity(0)))
@@ -307,14 +338,16 @@ def run(args: argparse.Namespace) -> None:
     num_sequences = -1
     num_bytes = -1
     if args.correct is not None:
-        line, detection = process_input(args.correct, args.sed_in)
-        print(format_output(
-            corrector.correct_text(
-                line, detection, search=search, score=score, sort_by_length=False, **corrector_kwargs
-            ),
-            line,
-            args.convert_output
-        ))
+        correct_and_print(
+            corrector,
+            args.correct,
+            args.sed_in,
+            args.suggest,
+            search,
+            score,
+            args.convert_output,
+            **corrector_kwargs
+        )
 
     elif args.file is not None:
         lines = load_text_file(args.file)
@@ -358,11 +391,15 @@ def run(args: argparse.Namespace) -> None:
         while True:
             try:
                 line = input()
-                line, detection = process_input(line, False)
-                print(format_output(
-                    corrector.correct_text(
-                        line, detection, search=search, score=score, sort_by_length=False, **corrector_kwargs
-                    ), line, args.convert_output)
+                correct_and_print(
+                    corrector,
+                    line,
+                    args.sed_in,
+                    args.suggest,
+                    search,
+                    score,
+                    args.convert_output,
+                    **corrector_kwargs
                 )
             except KeyboardInterrupt:
                 return
@@ -423,17 +460,20 @@ def run(args: argparse.Namespace) -> None:
     if args.report and num_sequences >= 0 and num_bytes >= 0:
         end = time.perf_counter()
 
-        # temporarily enable autograd to compute potentially unused parameters
-        corrector.model.requires_grad_(True)
+        # for reporting model parameters create new model like before training, so we can record
+        # fixed parameters, unused parameters and trainable parameters
         sample_inputs = corrector.task.generate_sample_inputs(2)
-        inputs, _ = corrector.task._prepare_inputs_and_labels(sample_inputs, corrector.device)
-        unused_parameters = task_utils.get_unused_parameters(corrector.model, **inputs)
-        parameter_dict = common.get_num_parameters(corrector.model, unused_parameters)
+        cpu = torch.device("cpu")
+        report_model = corrector.task.get_model(sample_inputs, corrector.model.cfg, cpu)
+        inputs, _ = corrector.task._prepare_inputs_and_labels(sample_inputs, cpu)
+        unused_parameters = task_utils.get_unused_parameters(report_model, **inputs)
+        task_utils.disable_parameters(report_model, unused_parameters)
+        parameter_dict = common.get_num_parameters(report_model, unused_parameters)
 
         generate_report(
             corrector.task_name,
             corrector.model_name,
-            parameter_dict["total"] - parameter_dict["unused"],
+            parameter_dict,
             num_sequences,
             num_bytes,
             end - start,

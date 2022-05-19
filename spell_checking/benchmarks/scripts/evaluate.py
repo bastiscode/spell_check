@@ -65,7 +65,7 @@ def evaluate(
     predictions = [clean_sequence(p).lower() if lower else clean_sequence(p)
                    for p, lower in zip(predictions, lowercase_lines)]
 
-    for name in metric_names:
+    for name in sorted(metric_names):
         if name == "binary_f1":
             binary_predictions = [int(p) for prediction in predictions for p in prediction.split()]
             binary_labels = [int(lab) for label in groundtruths for lab in label.split()]

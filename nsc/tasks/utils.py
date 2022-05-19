@@ -19,6 +19,12 @@ SAMPLE_SEQUENCE = \
     " encounter consequences that are extremely painful."
 
 
+def disable_parameters(model: nn.Module, parameters: Optional[Set[str]] = None) -> None:
+    for name, p in model.named_parameters():
+        if parameters is None or name in parameters:
+            p.requires_grad = False
+
+
 def class_predictions(logits: torch.Tensor, threshold: float = 0.5, temperature: float = 1.0) -> torch.Tensor:
     if logits.shape[-1] > 2:
         # multi-class classification

@@ -734,7 +734,7 @@ def reorder_data(items: List, original_indices: List[int]) -> List:
 def generate_report(
         task: str,
         model_name: str,
-        num_parameters: int,
+        parameters: Dict[str, int],
         num_sequences: int,
         num_bytes: int,
         runtime: float,
@@ -752,6 +752,10 @@ def generate_report(
         precision_str = "fp32"
     else:
         raise ValueError(f"expected precision to be one of torch.float16, torch.bfloat16 or torch.float32")
+
+    parameter_str = f"{parameters['used'] / 1e6:,.1f}"
+    if parameters["fixed"] > 0:
+        parameter_str += f" ({parameters['fixed'] / 1e6:,.1f} fixed)"
 
     report = tables.generate_table(
         headers=[[
@@ -777,7 +781,7 @@ def generate_report(
                 f"{num_sequences / runtime:.1f}",
                 f"{num_bytes / (runtime * 1000):.1f}",
                 f"{torch.cuda.max_memory_reserved(device) // (1024 ** 2):,}" if device.type == "cuda" else "-",
-                f"{num_parameters / 1e6:,.1f}",
+                parameter_str,
                 precision_str,
                 str(batch_size),
                 "yes" if sort_by_length else "no",

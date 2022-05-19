@@ -108,14 +108,17 @@ def get_num_parameters(module: nn.Module, unused_parameters: Optional[Set[str]] 
         if unused_parameters is not None and name in unused_parameters:
             assert not p.requires_grad, f"expected unused parameter {name} to be fixed (requires_grad=False)"
             unused += p.numel()
-        if p.requires_grad:
+        elif p.requires_grad:
             trainable += p.numel()
         else:
             fixed += p.numel()
-    return {"trainable": trainable,
-            "fixed": fixed,
-            "unused": unused,
-            "total": trainable + fixed}
+    return {
+        "trainable": trainable,
+        "fixed": fixed,
+        "unused": unused,
+        "used": trainable + fixed,
+        "total": trainable + fixed + unused
+    }
 
 
 def disable_tqdm() -> bool:

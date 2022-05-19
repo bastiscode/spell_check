@@ -66,10 +66,7 @@ class Task:
         inputs, _ = self._prepare_inputs_and_labels(batch, device.device)
 
         unused_parameters = utils.get_unused_parameters(model, **inputs)
-        # disable unused parameters
-        for name, p in model.named_parameters():
-            if name in unused_parameters:
-                p.requires_grad = False
+        utils.disable_parameters(model, unused_parameters)
 
         if device.is_main_process:
             sample_data = batch.data

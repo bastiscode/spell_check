@@ -278,12 +278,7 @@ def get_tokenization_repair_models_and_metrics() \
             ("tr+ bos eos eo_medium_arxiv_with_errors", "tr_plus_fixed_ported_bos_eos"),
             ("trt eo_large_arxiv_with_errors", "eo_large_arxiv_with_errors"),
             ("ntr eo_large_arxiv_with_errors", "eo_large_arxiv_with_errors_ported"),
-        ],
-        # (2, "tok_rep_advanced"): [
-        #     (r"tokenization repair\textsuperscript{+}", "tokenization_repair_plus_sed"),
-        #     (r"tokenization repair\textsuperscript{+}\textsubscript{\tiny fixed}", "tokenization_repair_plus_fixed"),
-        #     (r"tokenization repair\textsuperscript{++}", "tokenization_repair_plus_sec"),
-        # ]
+        ]
     }
     metric_names = {"sequence_accuracy", "tok_rep_f1"}
     return lambda s: s.split("/")[-1] == "test", dictionary, metric_names
@@ -302,14 +297,14 @@ def _regular_benchmark(s: str) -> bool:
 def get_sed_models_and_metrics(is_neuspell: bool, is_sed_words: bool) \
         -> Tuple[Callable[[str], bool], Dict[Tuple[int, str], List[Tuple[str, str]]], Set[str]]:
     models = {
-        (0, "baselines"): [
+        (0, "classical baselines"): [
             ("do nothing", "baseline_dummy"),
             ("out of dictionary", "baseline_ood"),
             ("aspell", "baseline_aspell"),
             ("jamspell", "baseline_jamspell"),
             ("languagetool", "baseline_languagetool")
         ],
-        (1, "baselines"): [
+        (1, "neural baselines"): [
             ("gector bert", "gector_bert"),
             ("gector xlnet", "gector_xlnet"),
             ("neuspell bert", "baseline_neuspell_bert")
@@ -343,14 +338,14 @@ def get_sec_models_and_metrics(
         is_neuspell: bool
 ) -> Tuple[Callable[[str], bool], Dict[Tuple[int, str], List[Tuple[str, str]]], Set[str]]:
     models = {
-        (0, "baselines"): [
+        (0, "classical baselines"): [
             ("do nothing", "baseline_dummy"),
             ("close to dictionary", "baseline_ctd"),
             ("aspell", "baseline_aspell"),
             ("jamspell", "baseline_jamspell"),
             ("languagetool", "baseline_languagetool")
         ],
-        (1, "baselines"): [
+        (1, "neural baselines"): [
             ("gector bert", "gector_bert"),
             ("gector xlnet", "gector_xlnet"),
             ("neuspell bert", "baseline_neuspell_bert")
@@ -358,20 +353,24 @@ def get_sec_models_and_metrics(
         (2, "default"): [
             ("transformer", "transformer_sec_nmt"),
             ("transformer word", "transformer_sec_words_nmt")
-        ],
-        (3, "advanced"): [
-            (r"gnn\textsuperscript{+} $\rightarrow$ neuspell bert", "gnn_cliques_wfc_plus_baseline_neuspell_bert"),
-            (r"gnn\textsuperscript{+} $\rightarrow$ transformer", "gnn_cliques_wfc_plus_transformer_sec_nmt"),
-            (r"gnn\textsuperscript{+} $\rightarrow$ transformer word",
-             "gnn_cliques_wfc_plus_transformer_sec_words_nmt"),
         ]
     }
 
     if is_neuspell:
         b_fn = lambda s: s.split("/")[-2] == "neuspell"
+        models[3, "advanced"] = [
+            (r"gnn\textsuperscript{+} $\rightarrow$ transformer", "gnn_cliques_wfc_plus_transformer_sec_nmt"),
+            (r"gnn\textsuperscript{+} $\rightarrow$ transformer word",
+             "gnn_cliques_wfc_plus_transformer_sec_words_nmt")
+        ]
     else:
         b_fn = _regular_benchmark
-        models[(4, "tr+")] = [
+        models[3, "advanced"] = [
+            (r"transformer\textsuperscript{+} $\rightarrow$ transformer", "transformer_plus_transformer_sec_nmt"),
+            (r"transformer\textsuperscript{+} $\rightarrow$ transformer word",
+             "transformer_plus_transformer_sec_words_nmt")
+        ]
+        models[4, "tr+"] = [
             (r"tokenization repair\textsuperscript{++}", "tokenization_repair_plus_sec")
         ]
     return b_fn, models, {"mean_normalized_edit_distance", "correction_f1"}  # , "bleu"}
@@ -380,34 +379,47 @@ def get_sec_models_and_metrics(
 def get_sec_spelling_correction_models_and_metrics(
 ) -> Tuple[Callable[[str], bool], Dict[Tuple[int, str], List[Tuple[str, str]]], Set[str]]:
     models = {
-        (0, "baselines"): [
+        (0, "classical baselines"): [
             ("do nothing", "baseline_dummy")
         ],
-        (1, "baselines"): [
+        (1, "neural baselines"): [
             ("gpt3", "gpt3_davinci_edit"),
             ("nlmspell", "hertel_nlmspell"),
             (r"google", "google_docs_grammar"),
             (r"google\textsubscript{\tiny w/o grammar}", "google_docs_no_grammar")
         ],
-        (2, "ours"): [
+        (2, "transformer"): [
             (r"transformer", "transformer_sec_nmt"),
-            (r"transformer\textsubscript{\tiny beam}", "transformer_sec_nmt_beam"),
+            (r"transformer\textsubscript{\tiny beam}", "transformer_sec_nmt_beam")
+        ],
+        (3, "transformer word"): [
             (r"transformer word", "transformer_sec_words_nmt"),
             (r"transformer word\textsubscript{\tiny beam}", "transformer_sec_words_nmt_beam")
         ],
-        (3, "advanced"): [
-            (r"gnn\textsuperscript{+} $\rightarrow$ transformer", "gnn_cliques_wfc_plus_transformer_sec_nmt"),
+        (4, "advanced transformer"): [
+            (r"transformer $\rightarrow$ transformer",
+             "transformer_no_feat_plus_transformer_sec_nmt"),
+            (r"gnn $\rightarrow$ transformer",
+             "gnn_no_feat_plus_transformer_sec_nmt"),
+            (r"transformer\textsuperscript{+} $\rightarrow$ transformer",
+             "transformer_plus_transformer_sec_nmt"),
+            (r"gnn\textsuperscript{+} $\rightarrow$ transformer",
+             "gnn_cliques_wfc_plus_transformer_sec_nmt")
+        ],
+        (5, "advanced transformer word"): [
+            (r"transformer $\rightarrow$ transformer word",
+             "transformer_no_feat_plus_transformer_sec_words_nmt"),
+            (r"gnn $\rightarrow$ transformer word",
+             "gnn_no_feat_plus_transformer_sec_words_nmt"),
+            (r"transformer\textsuperscript{+} $\rightarrow$ transformer word",
+             "transformer_plus_transformer_sec_words_nmt"),
             (r"gnn\textsuperscript{+} $\rightarrow$ transformer word",
              "gnn_cliques_wfc_plus_transformer_sec_words_nmt")
         ],
-        (4, "tr+"): [
+        (6, "tr+"): [
             (r"tokenization repair\textsuperscript{++}", "tokenization_repair_plus_sec"),
             (r"tokenization repair\rlap{\textsuperscript{++}}\textsubscript{\tiny beam}",
-             "tokenization_repair_plus_sec_beam"),
-            # (r"tokenization repair\rlap{\textsuperscript{++}}\textsubscript{\tiny w/o detection}",
-            #  "tokenization_repair_plus_sec_no_detect"),
-            # (r"tokenization repair\rlap{\textsuperscript{++}}\textsubscript{\tiny w/o detection,beam}",
-            #  "tokenization_repair_plus_sec_no_detect_beam"),
+             "tokenization_repair_plus_sec_beam")
         ]
     }
 
@@ -421,7 +433,7 @@ def get_sec_spelling_correction_models_and_metrics(
 def get_sec_whitespace_models_and_metrics() \
         -> Tuple[Callable[[str], bool], Dict[Tuple[int, str], List[Tuple[str, str]]], Set[str]]:
     return lambda s: s.split("/")[-2] == "whitespace", {
-        (0, "baselines"): [
+        (0, "classical baselines"): [
             ("do nothing", "baseline_dummy")
         ],
         (1, "models"): [
@@ -586,7 +598,9 @@ if __name__ == "__main__":
 
         horizontal_lines = []
         for model_group in model_groups:
-            horizontal_lines.extend([0] * (len(models[model_group]) - 1) + [1])
+            _, group_name = model_group
+            horizontal_lines.extend([0] * (len(models[model_group]) - 1) +
+                                    [1 if group_name != "neural baselines" else 2])
 
         higher_better = _METRIC_TO_HIGHER_BETTER[metric_name]
         best_scores_per_benchmark = [float("-inf")] * len(data[0])

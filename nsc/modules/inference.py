@@ -395,6 +395,7 @@ def beam_inference(
         encoder_lengths: Dict[str, torch.Tensor],
         bos_token_id: int,
         pad_token_id: int,
+        vocab_size: int,
         max_length: int,
         stop_fn: StopFn,
         normalize_by_length: bool,
@@ -410,6 +411,7 @@ def beam_inference(
     batch_size = len(next(iter(encoder_outputs.values())))
 
     score_fn = log_likelihood_score(normalize_by_length, alpha)
+    beam_width = min(beam_width, vocab_size - 1)  # never produce pad
     select_fn = beam_select_fn(2 * beam_width)
 
     positions = decoder_positions.cpu() if decoder_positions is not None else torch.zeros(batch_size, dtype=torch.long)
@@ -559,6 +561,7 @@ def get_tok_fn(output_tokenizer: tokenization.Tokenizer, bos_token_id: int) -> C
 def get_de_tok_fn(output_tokenizer: tokenization.Tokenizer, bos_token_id: int, eos_token_id: int) \
         -> Callable[[List[int]], str]:
     def de_tokenize(token_ids: List[int]) -> str:
+        # strip bos and eos tokens before de-tokenization
         if len(token_ids) and token_ids[0] == bos_token_id:
             token_ids = token_ids[1:]
         if len(token_ids) and token_ids[-1] == eos_token_id:
@@ -628,6 +631,7 @@ def run_inference(
             encoder_lengths=encoder_lengths,
             bos_token_id=bos_token_id,
             pad_token_id=pad_token_id,
+            vocab_size=output_tokenizer.vocab_size,
             max_length=max_length,
             stop_fn=stop_fn,
             normalize_by_length=normalize_by_length,
@@ -679,6 +683,7 @@ def inference_output_to_str(output: Union[int, List[int], List[str], str]) -> st
     elif isinstance(output, list) and all(isinstance(o, int) for o in output):
         return " ".join(str(o) for o in output)
     elif isinstance(output, list) and all(isinstance(o, str) for o in output):
+        # for inference outputs consisting of multiple strings (e.g. beam search) only take the top one
         return output[0]
     elif isinstance(output, str):
         return output
