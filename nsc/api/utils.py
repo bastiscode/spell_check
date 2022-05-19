@@ -533,7 +533,8 @@ def load_experiment(
     model = task.get_model(
         sample_inputs=sample_inputs,
         cfg=cfg.model,
-        device=device
+        device=device,
+        inference=True
     )
     task.load_best(model)
     return cfg, task, model

@@ -389,9 +389,10 @@ class Task:
             self,
             sample_inputs: Batch,
             cfg: omegaconf.DictConfig,
-            device: torch.device
+            device: torch.device,
+            **kwargs: Any
     ) -> Model:
-        model = models.get_model_from_config(cfg, sample_inputs, device).to(device)
+        model = models.get_model_from_config(cfg, sample_inputs, device, **kwargs).to(device)
         self._check_model(model)
         return model
 

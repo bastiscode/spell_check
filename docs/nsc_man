@@ -27,7 +27,7 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .in \\n[rst2man-indent\\n[rst2man-indent-level]]u
 ..
-.TH "TABLE" "1" "May 17, 2022" "" "nsc"
+.TH "TABLE" "1" "May 19, 2022" "" "nsc"
 .SH NAME
 Table \- nsc 0.1.0
 .sp
@@ -1105,6 +1105,33 @@ None
 .UNINDENT
 .sp
 Returns: None
+.UNINDENT
+.INDENT 7.0
+.TP
+.B suggest(text, n, detections=None)
+Generate suggestions for possible corrections of a text.
+.sp
+Note that if you use this with a model that translates each word individually (e.g. transformer word),
+the i\-th suggestion string is built by joining the i\-th suggestions for all words (they do not necessarily form
+a useful sentence together). To obtain n suggestions for each word in the text you can simply split every
+suggestion string on whitespaces.
+.INDENT 7.0
+.TP
+.B Parameters
+.INDENT 7.0
+.IP \(bu 2
+\fBtext\fP (\fIstr\fP) – text to generate suggestions for
+.IP \(bu 2
+\fBn\fP (\fIint\fP) – number of suggestions to generate
+.IP \(bu 2
+\fBdetections\fP (\fIOptional\fP\fI[\fP\fIList\fP\fI[\fP\fIint\fP\fI]\fP\fI]\fP) – optional detections to exclude some words
+.UNINDENT
+.TP
+.B Return type
+\fIList\fP[str]
+.UNINDENT
+.sp
+Returns: suggestions as list of strings
 .UNINDENT
 .INDENT 7.0
 .TP

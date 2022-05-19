@@ -857,6 +857,29 @@ When running on CPU fp16 will be overwritten with bfp16 since only bfp16 is supp
 <p>Returns: None</p>
 </dd></dl>
 
+<dl class="py method">
+<dt class="sig sig-object py" id="nsc.SpellingErrorCorrector.suggest">
+<span class="sig-name descname"><span class="pre">suggest</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">text</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">detections</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#nsc.SpellingErrorCorrector.suggest" title="Permalink to this definition"></a></dt>
+<dd><p>Generate suggestions for possible corrections of a text.</p>
+<p>Note that if you use this with a model that translates each word individually (e.g. transformer word),
+the i-th suggestion string is built by joining the i-th suggestions for all words (they do not necessarily form
+a useful sentence together). To obtain n suggestions for each word in the text you can simply split every
+suggestion string on whitespaces.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>text</strong> (<em>str</em>) – text to generate suggestions for</p></li>
+<li><p><strong>n</strong> (<em>int</em>) – number of suggestions to generate</p></li>
+<li><p><strong>detections</strong> (<em>Optional</em><em>[</em><em>List</em><em>[</em><em>int</em><em>]</em><em>]</em>) – optional detections to exclude some words</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><em>List</em>[str]</p>
+</dd>
+</dl>
+<p>Returns: suggestions as list of strings</p>
+</dd></dl>
+
 <dl class="py property">
 <dt class="sig sig-object py" id="nsc.SpellingErrorCorrector.task_name">
 <em class="property"><span class="pre">property</span><span class="w">  </span></em><span class="sig-name descname"><span class="pre">task_name</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w">  </span><span class="pre">str</span></em><a class="headerlink" href="#nsc.SpellingErrorCorrector.task_name" title="Permalink to this definition"></a></dt>

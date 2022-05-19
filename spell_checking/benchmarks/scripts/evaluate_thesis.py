@@ -445,20 +445,14 @@ def get_sec_whitespace_models_and_metrics() \
              "tokenization_repair_plus_sec_beam"),
         ],
         (2, "models_advanced"): [
-            (r"eo medium $\rightarrow$ gnn\textsuperscript{+} $\rightarrow$ transformer",
-             "eo_medium_plus_gnn_plus_nmt"),
-            (r"eo medium $\rightarrow$ gnn\textsuperscript{+} $\rightarrow$ transformer word",
-             "eo_medium_plus_gnn_plus_words_nmt"),
+            (r"eo medium $\rightarrow$ transformer\textsuperscript{+} $\rightarrow$ transformer",
+             "eo_medium_plus_transformer_plus_nmt"),
+            (r"eo medium $\rightarrow$ transformer\textsuperscript{+} $\rightarrow$ transformer word",
+             "eo_medium_plus_transformer_plus_words_nmt"),
             (r"tokenization repair\textsuperscript{+} $\rightarrow$ transformer",
              "tokenization_repair_plus_plus_nmt"),
             (r"tokenization repair\textsuperscript{+} $\rightarrow$ transformer word",
-             "tokenization_repair_plus_plus_words_nmt"),
-            # (r"tokenization repair\rlap{\textsuperscript{++}}\textsubscript{\tiny detection only} "
-            #  r"$\rightarrow$ transformer",
-            #  "tokenization_repair_plus_plus_plus_nmt"),
-            # (r"tokenization repair\rlap{\textsuperscript{++}}\textsubscript{\tiny detection only} "
-            #  r"$\rightarrow$ transformer word",
-            #  "tokenization_repair_plus_plus_plus_words_nmt"),
+             "tokenization_repair_plus_plus_words_nmt")
         ]
     }, {"mean_normalized_edit_distance", "correction_f1"}  # , "bleu"}
 

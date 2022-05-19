@@ -270,7 +270,8 @@ class TensorModel(Model):
 def get_model_from_config(
         cfg: Union[ModelConfig, omegaconf.DictConfig],
         sample_inputs: Batch,
-        device: torch.device
+        device: torch.device,
+        **kwargs: Any
 ) -> Model:
     # explicitly convert ot dict config first, this way we support both dictconfigs
     # and structured configs as input
@@ -302,9 +303,9 @@ def get_model_from_config(
         return ModelForSequenceClassification(sample_inputs, cfg, device)
     elif model_type == Models.MODEL_FOR_TOKENIZATION_REPAIR_PLUS:
         cfg = omegaconf.OmegaConf.structured(ModelForTokenizationRepairPlusConfig(**cfg))
-        return ModelForTokenizationRepairPlus(sample_inputs, cfg, device)
+        return ModelForTokenizationRepairPlus(sample_inputs, cfg, device, kwargs.get("inference", False))
     else:
-        raise ValueError(f"Unknown model type {model_type}")
+        raise ValueError(f"unknown model type {model_type}")
 
 
 @dataclass
@@ -1147,7 +1148,8 @@ class ModelForTokenizationRepairPlus(TensorModel, TensorEncoderMixin):
             self,
             sample_inputs: Batch,
             cfg: ModelForTokenizationRepairPlusConfig,
-            device: torch.device
+            device: torch.device,
+            inference: bool = False
     ) -> None:
         assert cfg.output_type in {
             "tokenization_repair_plus_sed",
@@ -1170,7 +1172,7 @@ class ModelForTokenizationRepairPlus(TensorModel, TensorEncoderMixin):
 
         super().__init__(sample_inputs, cfg, device)
 
-        if cfg.start_from_tokenization_repair_checkpoint is not None:
+        if cfg.start_from_tokenization_repair_checkpoint is not None and not inference:
             checkpoint = io.load_checkpoint(cfg.start_from_tokenization_repair_checkpoint, self.device)
             ckpt_state_dict = checkpoint["model_state_dict"]
             ckpt_encoder_state_dict = io.filter_state_dict(ckpt_state_dict, "encoder.")

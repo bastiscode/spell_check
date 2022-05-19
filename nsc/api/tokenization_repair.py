@@ -86,7 +86,7 @@ class TokenizationRepairer(_APIBase):
             device = "cpu"
 
         device = torch.device(device)
-        logger.info(f"running spelling error detection on device {get_device_info(device)}")
+        logger.info(f"running tokenization repair on device {get_device_info(device)}")
 
         cfg, task, model = load_experiment(
             model_dir,
