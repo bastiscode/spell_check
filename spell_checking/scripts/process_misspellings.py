@@ -360,7 +360,7 @@ if __name__ == "__main__":
         all_misspellings = load_misspellings(out_file)
     else:
         misspellings_list = []
-        if not args.only_bea and not args.only_neuspell:
+        if not args.only_bea and not args.only_neuspell and not args.only_moe:
             tweet_misspellings = process_tweet(os.path.join(args.misspellings_dir, "tweet", "tweet.txt"))
 
             homophones_misspellings = process_homophones(
@@ -407,21 +407,21 @@ if __name__ == "__main__":
                 homophones_misspellings
             ])
 
-        if not args.only_moe and not args.no_moe:
+        if not args.only_bea and not args.only_neuspell and not args.no_moe:
             moe_misspellings = process_moe(
                 os.path.join(args.misspellings_dir, "moe", "moe_misspellings_train.tsv")
             )
             save_misspellings(os.path.join(args.out_dir, "moe_misspellings.json"), moe_misspellings)
             misspellings_list.append(moe_misspellings)
 
-        if not args.only_bea and not args.no_neuspell:
+        if not args.only_bea and not args.only_moe and not args.no_neuspell:
             neuspell_misspellings = process_neuspell(
                 os.path.join(args.data_dir, "raw", "neuspell", "traintest", "wo_context")
             )
             save_misspellings(os.path.join(args.out_dir, "neuspell_misspellings.json"), neuspell_misspellings)
             misspellings_list.append(neuspell_misspellings)
 
-        if not args.only_neuspell and not args.no_bea:
+        if not args.only_neuspell and not args.only_moe and not args.no_bea:
             fce_m2_files = io.glob_safe(os.path.join(args.data_dir, "raw", "fce_v2.1.bea19", "fce", "m2", "*.m2"))
             lang8_m2_files = io.glob_safe(os.path.join(args.data_dir, "raw", "lang8.bea19", "*.m2"))
             nucle_m2_files = io.glob_safe(os.path.join(args.data_dir, "raw", "release3.3", "bea2019", "*.m2"))
