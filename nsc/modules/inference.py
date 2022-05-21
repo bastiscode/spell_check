@@ -527,7 +527,7 @@ def beam_inference(
                         output_strings[idx] if output_strings is not None else None
                 ):
                     # we record all eos beams, but only stop when the top beam is eos (because then we are sure there
-                    # exists no better candidate)
+                    # is no better candidate left to decode)
                     beam_queues[idx].append(beam)
                     if i == 0:
                         stop_mask[idx] = True
