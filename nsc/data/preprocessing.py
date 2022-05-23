@@ -186,10 +186,6 @@ def realistic_edits(
         return word
 
 
-# tokens_edited = 0
-# tokens_seen = 0
-
-
 def corrupt_words(
         words: List[str],
         doc: Doc,
@@ -212,7 +208,9 @@ def corrupt_words(
         num_non_special_tokens = np.logical_not(special_tokens_mask).sum()
         if corrupt_method == "artificial":
             # compensate for the special tokens, because we do not edit them during artificial corruption
-            artificial_p = edit_token_p * (len(words) / max(1, num_non_special_tokens))
+            artificial_p = (
+                    edit_token_p * (len(words) / num_non_special_tokens)
+            ) if num_non_special_tokens > 0 else 0
         else:
             assert word_misspellings is not None, \
                 "need word misspellings and char operations for realistic and mixed noise"
@@ -228,14 +226,17 @@ def corrupt_words(
                 in_misspellings_mask
             ).sum()
 
-            realistic_editable_frac = len(words) / max(1, num_non_special_and_in_misspellings_tokens)
             if corrupt_method == "realistic":
-                realistic_p = edit_token_p * realistic_editable_frac
+                realistic_p = (
+                        edit_token_p * (len(words) / num_non_special_and_in_misspellings_tokens)
+                ) if num_non_special_and_in_misspellings_tokens > 0 else 0
             else:
-                artificial_p = edit_token_p * (len(words) / max(1, num_non_special_tokens)) * mixed_artificial_p
+                artificial_p = (
+                        edit_token_p * (len(words) / num_non_special_tokens) * mixed_artificial_p
+                ) if num_non_special_tokens > 0 else 0
                 realistic_p = artificial_p + edit_token_p * (
-                        len(words) / max(1, num_non_special_and_in_misspellings_tokens)
-                ) * (1 - mixed_artificial_p)
+                        len(words) / num_non_special_and_in_misspellings_tokens
+                ) * (1 - mixed_artificial_p) if num_non_special_and_in_misspellings_tokens > 0 else 0
     else:
         if corrupt_method == "artificial":
             artificial_p = edit_token_p

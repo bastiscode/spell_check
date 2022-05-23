@@ -275,7 +275,7 @@ def correct_and_print(
             convert_output
         ))
     else:
-        for suggestion in corrector.suggest(line, suggest, detection):
+        for suggestion in corrector.suggest(line, suggest, detection, **corrector_kwargs):
             print(format_output(suggestion, line, convert_output))
 
 

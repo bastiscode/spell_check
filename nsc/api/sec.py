@@ -564,7 +564,8 @@ class SpellingErrorCorrector(_APIBase):
             self,
             text: str,
             n: int,
-            detections: Optional[List[int]] = None
+            detections: Optional[List[int]] = None,
+            **kwargs: Any
     ) -> List[str]:
         """
 
@@ -588,7 +589,8 @@ class SpellingErrorCorrector(_APIBase):
             detections=[detections] if detections is not None else None,
             search=BeamSearch(n),
             batch_size=1,
-            return_raw=True
+            return_raw=True,
+            **kwargs
         )[0]
         if suggestions is None:
             return [""]
