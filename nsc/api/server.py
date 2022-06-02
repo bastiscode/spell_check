@@ -157,7 +157,6 @@ def repair_text() -> Response:
     if "task" not in request.args:
         return abort(Response("request missing required 'task' query parameter", status=400))
     task = request.args["task"]
-    print(request.args)
     with models.get_model(task, request.args.get("model")) as spell_checker:
         if isinstance(spell_checker, tuple):
             message, status_code = spell_checker
