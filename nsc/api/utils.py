@@ -296,6 +296,7 @@ class _APIBase:
         logger = common.get_logger("DOWNLOAD")
 
         data_dir = download_data(force_download, logger, download_dir, cache_dir)
+        config_dir = download_configs(force_download, logger, download_dir, cache_dir)
 
         model_dir = download_model(
             task=task,
@@ -305,8 +306,6 @@ class _APIBase:
             force_download=force_download,
             logger=logger
         )
-
-        config_dir = download_configs(force_download, logger, download_dir, cache_dir)
 
         return model_dir, data_dir, config_dir
 
@@ -394,7 +393,7 @@ def download_configs(
     zip_file_path = os.path.join(download_dir, "configs.zip")
     config_zip_not_downloaded = not os.path.exists(zip_file_path)
     if config_zip_not_downloaded or force_download:
-        logger.info(f"downloading data files from {_CONFIGS_URL} to directory {download_dir}")
+        logger.info(f"downloading config files from {_CONFIGS_URL} to directory {download_dir}")
         _download_zip(
             _CONFIGS_URL,
             zip_file_path,
@@ -443,7 +442,7 @@ def download_model(
         _download_zip(
             url,
             zip_file_path,
-            description=f"Downloading model {name} for task {task}"
+            description=f"downloading model {name} for task {task}"
         )
 
     cache_dir = cache_dir or get_cache_dir()
@@ -488,12 +487,17 @@ def get_device_info(device: torch.device) -> str:
     return get_gpu_info(device) if device.type == "cuda" else get_cpu_info()
 
 
+_CACHE_ENV_VAR = "NSC_CACHE_DIR"
+_DOWNLOAD_ENV_VAR = "NSC_DOWNLOAD_DIR"
+_SPECIAL_ENV_VARS = {_CACHE_ENV_VAR, _DOWNLOAD_ENV_VAR}
+
+
 def get_cache_dir() -> str:
-    return os.getenv("NSC_CACHE_DIR", os.path.join(os.path.dirname(__file__), ".cache"))
+    return os.getenv(_CACHE_ENV_VAR, os.path.join(os.path.dirname(__file__), ".cache"))
 
 
 def get_download_dir() -> str:
-    return os.getenv("NSC_DOWNLOAD_DIR", os.path.join(os.path.dirname(__file__), ".download"))
+    return os.getenv(_DOWNLOAD_ENV_VAR, os.path.join(os.path.dirname(__file__), ".download"))
 
 
 def load_experiment_config(
@@ -520,6 +524,12 @@ def load_experiment(
         override_env_vars: Optional[Dict[str, str]] = None,
         keep_existing_env_vars: Optional[Set[str]] = None
 ) -> Tuple[config.TrainConfig, tasks.Task, models.Model]:
+    # always keep the download and cache dir env variables
+    if keep_existing_env_vars is None:
+        keep_existing_env_vars = _SPECIAL_ENV_VARS
+    else:
+        keep_existing_env_vars = keep_existing_env_vars.union(_SPECIAL_ENV_VARS)
+
     cfg = load_experiment_config(experiment, override_env_vars, keep_existing_env_vars)
 
     # disable some config options here that are only used for training

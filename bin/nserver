@@ -1,0 +1,24 @@
+#!/usr/bin/env python
+import argparse
+import os
+
+import torch
+from torch.backends import cudnn
+
+from nsc.api.server import run_flask_server
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-c", "--config", required=True, help="Path to yaml config file.")
+    return parser.parse_args()
+
+
+if __name__ == "__main__":
+    args = parse_args()
+
+    torch.backends.cudnn.benchmark = True
+    torch.set_num_threads(len(os.sched_getaffinity(0)))
+    torch.use_deterministic_algorithms(False)
+
+    run_flask_server(args.config)
