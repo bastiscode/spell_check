@@ -652,7 +652,8 @@ if __name__ == "__main__":
 
         additional_headers = []
         for b_group, b_split in zip(benchmark_groups, benchmark_splits):
-            formatted_headers[0].extend([b_group] + [""] * (num_cols_for_metric - 1))
+            formatted_headers[0].extend(
+                [b_group if b_group != "spelling_correction" else "combined"] + [""] * (num_cols_for_metric - 1))
             if len(benchmark_groups) > 1:
                 formatted_headers[1].extend([b_split] + [""] * (num_cols_for_metric - 1))
 

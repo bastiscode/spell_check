@@ -22,7 +22,8 @@ from nsc.data.utils import BucketSampler, clean_sequence
 from nsc.tasks import Task
 from nsc.utils import config, common, DataInput, InfoInput, Batch
 
-_BASE_URL = "https://tokenization.cs.uni-freiburg.de/transformer/nsc"
+_BASE_URL = "https://ad-publications.informatik.uni-freiburg.de/" \
+            "EMNLP_tokenization_repair_transformer_BHW_2022.materials/nsc"
 _CONFIGS_URL = f"{_BASE_URL}/configs.zip"
 _DATA_URL = f"{_BASE_URL}/data.zip"
 _TASK_AND_NAME_TO_URL = {
@@ -342,9 +343,9 @@ def _download_zip(
 
         pbar.close()
 
-    except Exception as e:
-        # only remove the dir on error when it did not exist before
-        shutil.rmtree(zip_file_path, ignore_errors=True)
+    except BaseException as e:
+        if os.path.exists(zip_file_path):
+            os.remove(zip_file_path)
         raise e
 
 
@@ -471,7 +472,7 @@ def get_cpu_info() -> str:
                 match = cpu_regex.match(line)
                 if match is not None:
                     return match.group(1)
-        except Exception:
+        except BaseException:
             return platform.processor()
     return platform.processor()
 
