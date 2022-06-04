@@ -5,7 +5,7 @@ import os
 import pprint
 import threading
 import time
-from typing import Dict, Generator, List, Optional
+from typing import Dict, Generator, List, Optional, Any
 
 import omegaconf
 from flask import Flask, Response, abort, cli, jsonify, request
@@ -19,13 +19,14 @@ from nsc import (
     TokenizationRepairer,
     get_available_tokenization_repair_models,
     get_available_spelling_error_detection_models,
-    get_available_spelling_error_correction_models
+    get_available_spelling_error_correction_models, version
 )
-from nsc.api.utils import ModelInfo
+from nsc.api.utils import ModelInfo, get_cpu_info, get_gpu_info
 from nsc.utils import common
 
 # disable flask startup message and set flask mode to development
 from nsc.utils.edit import get_edited_words
+from nsc.utils.tokenization_repair import get_whitespace_operations
 
 cli.show_server_banner = lambda *_: None
 os.environ["FLASK_ENV"] = "development"
@@ -52,16 +53,22 @@ def _full_name(model: ModelInfo) -> str:
 class Models:
     def __init__(self) -> None:
         self.timeout = 1.0
+        self.precision = "fp32"
         self.locks: Dict[str, threading.Lock] = {}
         self.streams: Dict[str, torch.cuda.Stream] = {}
+        self.model_to_device: Dict[str, str] = {}
+        self.models_on_gpu: Dict[str, int] = {}
         self.loaded = False
-        self.default_models = {}
+        self.max_models_per_device = 3
 
-    def init(self, model_infos: List[ModelInfo], timeout: float, precision: str) -> None:
+    def init(self, model_infos: List[ModelInfo], timeout: float, precision: str, max_models_per_gpu: int) -> None:
         num_devices = torch.cuda.device_count()
         logger.info(f"found {num_devices} GPUs")
+        self.precision = precision
         self.timeout = timeout
+        self.max_models_per_device = max_models_per_gpu
         for i, model_info in enumerate(model_infos):
+            logger.info(f"loading model {model_info.name} for task {model_info.task}")
             name = _full_name(model_info)
             self.locks[name] = threading.Lock()
 
@@ -76,14 +83,29 @@ class Models:
 
             if num_devices > 0:
                 self.streams[name] = torch.cuda.Stream()
-                spell_checker = cls.from_pretrained(task=model_info.task, model=model_info.name, device=i % num_devices)
+                device_name = f"cuda:{i % num_devices}"
+                self.model_to_device[name] = device_name
+                if device_name not in self.models_on_gpu:
+                    self.models_on_gpu[device_name] = 1
+                elif self.models_on_gpu[device_name] < self.max_models_per_device:
+                    self.models_on_gpu[device_name] += 1
+                else:
+                    device_name = "cpu"
+                spell_checker = cls.from_pretrained(
+                    task=model_info.task,
+                    model=model_info.name,
+                    device=device_name
+                )
             else:
-                spell_checker = cls.from_pretrained(task=model_info.task, model=model_info.name, device="cpu")
+                spell_checker = cls.from_pretrained(
+                    task=model_info.task,
+                    model=model_info.name,
+                    device="cpu"
+                )
+                self.model_to_device[name] = "cpu"
 
             spell_checker.set_precision(precision)
             self.__setattr__(name, spell_checker)
-            if model_info.task not in self.default_models:
-                self.default_models[model_info.task] = model_info.name
 
         self.loaded = True
 
@@ -92,16 +114,10 @@ class Models:
         return [model for model in _all_models() if _full_name(model) in self.locks]
 
     @contextlib.contextmanager
-    def get_model(self, task: str, model_name: Optional[str] = None) -> Generator:
+    def get_model(self, task: str, model_name: str) -> Generator:
         if not self.loaded:
             yield "models were not loaded", 500  # internal error, need to load models before using them
             return
-
-        if model_name is None:
-            if task not in self.default_models:
-                yield f"no model for task {task} found", 400
-                return
-            model_name = self.default_models[task]
 
         name = f"{task}:{model_name}"
 
@@ -133,17 +149,26 @@ def after_request(response: Response) -> Response:
     return response
 
 
-@server.route(f"{server_base_url}/models")
-def get_models() -> Response:
+@server.route(f"{server_base_url}/info")
+def get_info() -> Response:
     response = jsonify(
         {
-            "models": [
-                {"task": model.task, "name": model.name, "description": model.description}
-                for model in models.available_models
-            ],
-            "default": models.default_models
+            "gpu": [get_gpu_info(i) for i in range(torch.cuda.device_count())],
+            "cpu": get_cpu_info(),
+            "timeout": models.timeout,
+            "precision": models.precision,
+            "version": version.__version__
         }
     )
+    return response
+
+
+@server.route(f"{server_base_url}/models")
+def get_models() -> Response:
+    response = jsonify([
+        {"task": model.task, "name": model.name, "description": model.description}
+        for model in models.available_models
+    ])
     return response
 
 
@@ -157,40 +182,41 @@ def repair_text() -> Response:
     if "task" not in request.args:
         return abort(Response("request missing required 'task' query parameter", status=400))
     task = request.args["task"]
-    with models.get_model(task, request.args.get("model")) as spell_checker:
+    if "model" not in request.args:
+        return abort(Response("request missing required 'model' query parameter", status=400))
+    model = request.args["model"]
+    output: Dict[str, Any] = {}
+    with models.get_model(task, model) as spell_checker:
         if isinstance(spell_checker, tuple):
             message, status_code = spell_checker
             logger.warning(f"Repairing text aborted with status {status_code}: {message}")
             return abort(Response(message, status=status_code))
         elif isinstance(spell_checker, TokenizationRepairer):
             repaired = spell_checker.repair_text(text, show_progress=False)
-            output = {
-                "text": repaired
-            }
+            output["text"] = repaired
+            if request.args.get("edited", "false") == "true":
+                edited = [get_whitespace_operations(ipt, rep) for ipt, rep in zip(text, repaired)]
+                output["edited"] = edited
         elif isinstance(spell_checker, SpellingErrorDetector):
             detections, repaired = spell_checker.detect_text(text, show_progress=False)
-            output = {
-                "detections": detections,
-                "text": repaired
-            }
+            output["text"] = repaired
+            output["detections"] = detections
         elif isinstance(spell_checker, SpellingErrorCorrector):
             corrected = spell_checker.correct_text(text, show_progress=False)
-            edited_in_input, edited_in_correction = get_edited_words(text, corrected)
-            output = {
-                "text": corrected,
-                "edited": {
+            output["text"] = corrected
+            if request.args.get("edited", "false") == "true":
+                edited_in_input, edited_in_correction = get_edited_words(text, corrected)
+                output["edited"] = {
                     "input": [sorted(list(e)) for e in edited_in_input],
                     "text": [sorted(list(e)) for e in edited_in_correction]
                 }
-            }
         else:
             raise RuntimeError("should not happen")
 
     end = time.perf_counter()
     runtime = end - start
     text_bytes = sum(len(line.encode("utf8")) for line in text)
-    logger.info(f"processing text with {text_bytes} bytes for task {task} with model "
-                f"{request.args.get('model', models.default_models[task])} took {runtime:.2f}s")
+    logger.info(f"processing text with {text_bytes} bytes for task {task} with model {model} took {runtime:.2f}s")
     response = jsonify(
         {
             "output": output,
@@ -210,6 +236,7 @@ class ServerConfig:
     precision: str = "fp32"
     timeout: float = 10.0
     models: Dict[str, List[str]] = MISSING
+    max_models_per_gpu: int = 3
 
 
 def run_flask_server(config_path: str) -> None:
@@ -225,7 +252,12 @@ def run_flask_server(config_path: str) -> None:
                    if model_info.task in config.models and model_info.name in config.models[model_info.task]]
     logger.info(f"found {len(model_infos)} valid model specifications, loading the following models:\n"
                 f"{pprint.pformat(model_infos)}")
-    models.init(model_infos=model_infos, timeout=config.timeout, precision=config.precision)
+    models.init(
+        model_infos=model_infos,
+        timeout=config.timeout,
+        precision=config.precision,
+        max_models_per_gpu=config.max_models_per_gpu
+    )
 
     logger.info(f"starting server on {config.host}:{config.port}...")
     server.run(config.host, config.port, debug=False, use_reloader=False)

@@ -135,9 +135,7 @@ class SpellingErrorDetector(_APIBase):
         if device != "cpu" and not torch.cuda.is_available():
             logger.info(f"could not find a GPU, using CPU as fallback option")
             device = "cpu"
-
         device = torch.device(device)
-        logger.info(f"running spelling error detection on device {get_device_info(device)}")
 
         cfg, task, model = load_experiment(
             model_dir,
