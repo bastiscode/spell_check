@@ -1,12 +1,14 @@
 import 'dart:convert' show utf8;
 import 'package:collection/collection.dart';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:webapp/base_view.dart';
 import 'package:webapp/colors.dart';
 import 'package:webapp/components/file_upload.dart';
+import 'package:webapp/components/result.dart';
+import 'package:webapp/components/sec_result.dart';
+import 'package:webapp/components/sedw_result.dart';
 import 'package:webapp/components/tr_result.dart';
 import 'package:webapp/home_model.dart';
 
@@ -33,8 +35,6 @@ class _HomeViewState extends State<HomeView> {
   final GlobalKey<FormFieldState> _secModelKey = GlobalKey();
   final GlobalKey<FormFieldState> _textKey = GlobalKey();
 
-  bool hidePipeline = false;
-
   @override
   Widget build(BuildContext homeContext) {
     return BaseView<HomeModel>(
@@ -49,8 +49,18 @@ class _HomeViewState extends State<HomeView> {
           return wrapScaffold(Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
-              children: const [
-                Text("Failed to retrieve models, please refresh and try again.")
+              children: [
+                const Text(
+                    "Failed to retrieve models, please try again and reload."),
+                const SizedBox(
+                  height: 8,
+                ),
+                ElevatedButton.icon(
+                    onPressed: () async {
+                      await model.init();
+                    },
+                    icon: const Icon(Icons.refresh),
+                    label: const Text("Reload"))
               ],
             ),
           ));
@@ -60,6 +70,7 @@ class _HomeViewState extends State<HomeView> {
             appBar: AppBar(
               backgroundColor: uniBlue,
               title: const Text("Spell checking"),
+              centerTitle: true,
               actions: [
                 IconButton(
                   icon: const Icon(Icons.info),
@@ -136,8 +147,7 @@ class _HomeViewState extends State<HomeView> {
                   child: wrapPadding(
                     Column(
                       mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         const Text(
                           "Detect and correct spelling errors in text with or without space errors.",
@@ -145,31 +155,35 @@ class _HomeViewState extends State<HomeView> {
                         ),
                         const Divider(height: 32),
                         Row(
+                          mainAxisAlignment: MainAxisAlignment.start,
                           children: [
-                            const Flexible(
-                              child: Text(
-                                "Select a model pipeline",
-                                style: TextStyle(fontSize: 20),
-                              ),
+                            const Text(
+                              "Select a model pipeline",
+                              style: TextStyle(fontSize: 20),
                             ),
-                            const SizedBox(width: 8),
+                            const Spacer(),
                             IconButton(
                               onPressed: model.validPipeline
                                   ? () {
                                       setState(() {
-                                        hidePipeline = !hidePipeline;
+                                        model.hidePipeline =
+                                            !model.hidePipeline;
                                       });
                                     }
                                   : null,
                               splashRadius: 16,
-                              tooltip: hidePipeline
+                              tooltip: model.hidePipeline
                                   ? "Show pipeline"
                                   : "Hide pipeline",
-                              icon: Icon(hidePipeline
-                                  ? Icons.visibility
-                                  : Icons.visibility_off),
+                              icon: AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 200),
+                                child: model.hidePipeline
+                                    ? Icon(key: Key("eye"), Icons.visibility)
+                                    : Icon(
+                                        key: Key("eyeClosed"),
+                                        Icons.visibility_off),
+                              ),
                             ),
-                            const SizedBox(width: 8),
                             IconButton(
                               onPressed: model.validPipeline
                                   ? () {
@@ -177,157 +191,175 @@ class _HomeViewState extends State<HomeView> {
                                     }
                                   : null,
                               splashRadius: 16,
-                              tooltip: "Save pipeline as default",
+                              tooltip: "Save pipeline settings",
                               icon: const Icon(Icons.save),
                             )
                           ],
                         ),
-                        if (!hidePipeline) const SizedBox(height: 16),
-                        if (!hidePipeline)
-                          Wrap(
-                            runSpacing: 8,
-                            children: [
-                              Row(
-                                children: [
-                                  const Icon(Icons.looks_one, color: uniBlue),
-                                  Flexible(
-                                    child: DropdownButtonFormField<String>(
-                                      key: _trModelKey,
-                                      value: model.trModel,
-                                      decoration: const InputDecoration(
-                                          labelText:
-                                              "Tokenization repair model"),
-                                      icon: const Icon(
-                                          Icons.arrow_drop_down_rounded),
-                                      items: model
-                                          .getModels("tokenization repair")
-                                          .map<DropdownMenuItem<String>>(
-                                        (modelInfo) {
-                                          return DropdownMenuItem(
-                                            value: modelInfo["name"],
-                                            child: Text(modelInfo["name"]),
-                                          );
-                                        },
-                                      ).toList(),
-                                      onChanged: (String? modelName) {
-                                        setState(
-                                          () {
-                                            model.trModel = modelName!;
-                                          },
-                                        );
-                                      },
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 200),
+                          child: model.hidePipeline
+                              ? const SizedBox.shrink()
+                              : Column(
+                                  children: [
+                                    const SizedBox(height: 16),
+                                    Row(
+                                      children: [
+                                        const Icon(Icons.looks_one,
+                                            color: uniBlue),
+                                        Flexible(
+                                          child:
+                                              DropdownButtonFormField<String>(
+                                            key: _trModelKey,
+                                            value: model.trModel,
+                                            decoration: const InputDecoration(
+                                                labelText:
+                                                    "Tokenization repair model"),
+                                            icon: const Icon(
+                                                Icons.arrow_drop_down_rounded),
+                                            items: model
+                                                .getModels(
+                                                    "tokenization repair")
+                                                .map<DropdownMenuItem<String>>(
+                                              (modelInfo) {
+                                                return DropdownMenuItem(
+                                                  value: modelInfo["name"],
+                                                  child:
+                                                      Text(modelInfo["name"]),
+                                                );
+                                              },
+                                            ).toList(),
+                                            onChanged: (String? modelName) {
+                                              setState(
+                                                () {
+                                                  model.trModel = modelName!;
+                                                },
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                        if (model.trModel != null)
+                                          IconButton(
+                                            splashRadius: 16,
+                                            tooltip:
+                                                "Clear tokenization repair model",
+                                            color: uniRed,
+                                            icon: const Icon(Icons.clear),
+                                            onPressed: () {
+                                              setState(() {
+                                                _trModelKey.currentState!
+                                                    .reset();
+                                                model.trModel = null;
+                                              });
+                                            },
+                                          )
+                                      ],
                                     ),
-                                  ),
-                                  if (model.trModel != null)
-                                    IconButton(
-                                      splashRadius: 16,
-                                      tooltip:
-                                          "Clear tokenization repair model",
-                                      color: uniRed,
-                                      icon: const Icon(Icons.clear),
-                                      onPressed: () {
-                                        setState(() {
-                                          _trModelKey.currentState!.reset();
-                                          model.trModel = null;
-                                        });
-                                      },
-                                    )
-                                ],
-                              ),
-                              Row(
-                                children: [
-                                  const Icon(Icons.looks_two, color: uniBlue),
-                                  Flexible(
-                                    child: DropdownButtonFormField<String>(
-                                      key: _sedwModelKey,
-                                      value: model.sedwModel,
-                                      decoration: const InputDecoration(
-                                          labelText:
-                                              "Word-level spelling error detection model"),
-                                      icon: const Icon(
-                                          Icons.arrow_drop_down_rounded),
-                                      items: model
-                                          .getModels("sed words")
-                                          .map<DropdownMenuItem<String>>(
-                                        (modelInfo) {
-                                          return DropdownMenuItem(
-                                            value: modelInfo["name"],
-                                            child: Text(modelInfo["name"]),
-                                          );
-                                        },
-                                      ).toList(),
-                                      onChanged: (String? modelName) {
-                                        setState(
-                                          () {
-                                            model.sedwModel = modelName!;
-                                          },
-                                        );
-                                      },
+                                    const SizedBox(height: 8),
+                                    Row(
+                                      children: [
+                                        const Icon(Icons.looks_two,
+                                            color: uniBlue),
+                                        Flexible(
+                                          child:
+                                              DropdownButtonFormField<String>(
+                                            key: _sedwModelKey,
+                                            value: model.sedwModel,
+                                            decoration: const InputDecoration(
+                                                labelText:
+                                                    "Word-level spelling error detection model"),
+                                            icon: const Icon(
+                                                Icons.arrow_drop_down_rounded),
+                                            items: model
+                                                .getModels("sed words")
+                                                .map<DropdownMenuItem<String>>(
+                                              (modelInfo) {
+                                                return DropdownMenuItem(
+                                                  value: modelInfo["name"],
+                                                  child:
+                                                      Text(modelInfo["name"]),
+                                                );
+                                              },
+                                            ).toList(),
+                                            onChanged: (String? modelName) {
+                                              setState(
+                                                () {
+                                                  model.sedwModel = modelName!;
+                                                },
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                        if (model.sedwModel != null)
+                                          IconButton(
+                                            splashRadius: 16,
+                                            tooltip:
+                                                "Clear word-level spelling error detection model",
+                                            color: uniRed,
+                                            icon: const Icon(Icons.clear),
+                                            onPressed: () {
+                                              setState(() {
+                                                _sedwModelKey.currentState!
+                                                    .reset();
+                                                model.sedwModel = null;
+                                              });
+                                            },
+                                          )
+                                      ],
                                     ),
-                                  ),
-                                  if (model.sedwModel != null)
-                                    IconButton(
-                                      splashRadius: 16,
-                                      tooltip:
-                                          "Clear word-level spelling error detection model",
-                                      color: uniRed,
-                                      icon: const Icon(Icons.clear),
-                                      onPressed: () {
-                                        setState(() {
-                                          _sedwModelKey.currentState!.reset();
-                                          model.sedwModel = null;
-                                        });
-                                      },
-                                    )
-                                ],
-                              ),
-                              Row(
-                                children: [
-                                  const Icon(Icons.looks_3, color: uniBlue),
-                                  Flexible(
-                                    child: DropdownButtonFormField<String>(
-                                      key: _secModelKey,
-                                      value: model.secModel,
-                                      decoration: const InputDecoration(
-                                          labelText:
-                                              "Spelling error correction model"),
-                                      icon: const Icon(
-                                          Icons.arrow_drop_down_rounded),
-                                      items: model
-                                          .getModels("sec")
-                                          .map<DropdownMenuItem<String>>(
-                                        (modelInfo) {
-                                          return DropdownMenuItem(
-                                            value: modelInfo["name"],
-                                            child: Text(modelInfo["name"]),
-                                          );
-                                        },
-                                      ).toList(),
-                                      onChanged: (String? modelName) {
-                                        setState(() {
-                                          model.secModel = modelName!;
-                                        });
-                                      },
+                                    const SizedBox(height: 8),
+                                    Row(
+                                      children: [
+                                        const Icon(Icons.looks_3,
+                                            color: uniBlue),
+                                        Flexible(
+                                          child:
+                                              DropdownButtonFormField<String>(
+                                            key: _secModelKey,
+                                            value: model.secModel,
+                                            decoration: const InputDecoration(
+                                                labelText:
+                                                    "Spelling error correction model"),
+                                            icon: const Icon(
+                                                Icons.arrow_drop_down_rounded),
+                                            items: model
+                                                .getModels("sec")
+                                                .map<DropdownMenuItem<String>>(
+                                              (modelInfo) {
+                                                return DropdownMenuItem(
+                                                  value: modelInfo["name"],
+                                                  child:
+                                                      Text(modelInfo["name"]),
+                                                );
+                                              },
+                                            ).toList(),
+                                            onChanged: (String? modelName) {
+                                              setState(() {
+                                                model.secModel = modelName!;
+                                              });
+                                            },
+                                          ),
+                                        ),
+                                        if (model.secModel != null)
+                                          IconButton(
+                                            splashRadius: 16,
+                                            tooltip:
+                                                "Clear spelling error correction model",
+                                            color: uniRed,
+                                            icon: const Icon(Icons.clear),
+                                            onPressed: () {
+                                              setState(() {
+                                                _secModelKey.currentState!
+                                                    .reset();
+                                                model.secModel = null;
+                                              });
+                                            },
+                                          )
+                                      ],
                                     ),
-                                  ),
-                                  if (model.secModel != null)
-                                    IconButton(
-                                      splashRadius: 16,
-                                      tooltip:
-                                          "Clear spelling error correction model",
-                                      color: uniRed,
-                                      icon: const Icon(Icons.clear),
-                                      onPressed: () {
-                                        setState(() {
-                                          _secModelKey.currentState!.reset();
-                                          model.secModel = null;
-                                        });
-                                      },
-                                    )
-                                ],
-                              ),
-                            ],
-                          ),
+                                  ],
+                                ),
+                        ),
                         const Divider(height: 32),
                         Row(
                           children: [
@@ -494,35 +526,23 @@ class _HomeViewState extends State<HomeView> {
                         const SizedBox(height: 16),
                         if (model.waiting && !model.live) ...[
                           const Flexible(
-                              fit: FlexFit.loose,
-                              child: Center(child: CircularProgressIndicator()))
-                        ] else ...[
-                          if (model.trResults != null)
-                            TrResultView(
-                                input: model.input,
-                                result: model.trResults,
-                                onDownload: (fileName) {
-                                  setState(() {
-                                    if (fileName != null) {
-                                      if (!kIsWeb) {
-                                        model.addMessage(
-                                          Message(
-                                              "Downloaded tokenization repair outputs to $fileName",
-                                              Status.info),
-                                        );
-                                      }
-                                    } else {
-                                      model.addMessage(Message(
-                                          "Unexpected error downloading tokenization repair outputs",
-                                          Status.error));
-                                    }
-                                  });
-                                }),
-                          if (model.sedwResults != null)
-                            Text(
-                                model.sedwResults["output"]["text"].join("\n")),
-                          if (model.secResults != null)
-                            Text(model.secResults["output"]["text"].join("\n"))
+                            fit: FlexFit.loose,
+                            child: Center(
+                              child: CircularProgressIndicator(),
+                            ),
+                          )
+                        ] else if (model.hasResults) ...[
+                          Text(
+                            "Running pipeline took ${model.runtimes["total"]["s"].toStringAsFixed(2)}s "
+                            "(${model.runtimes["total"]["bps"].toStringAsFixed(2)}b/s)",
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 8),
+                          ResultView(
+                              input: model.input,
+                              output: model.outputs,
+                              runtimes: model.runtimes,
+                              onDownload: model.onDownload),
                         ],
                       ],
                     ),

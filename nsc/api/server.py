@@ -3,9 +3,11 @@ import dataclasses
 import logging
 import os
 import pprint
+import sys
 import threading
 import time
-from typing import Dict, Generator, List, Optional, Any
+import traceback
+from typing import Dict, Generator, List, Optional, Any, Tuple, Set
 
 import omegaconf
 from flask import Flask, Response, abort, cli, jsonify, request
@@ -54,23 +56,24 @@ class Models:
     def __init__(self) -> None:
         self.timeout = 1.0
         self.precision = "fp32"
-        self.locks: Dict[str, threading.Lock] = {}
-        self.streams: Dict[str, torch.cuda.Stream] = {}
+        self.lock: threading.Lock = threading.Lock()
+        self.streams: Dict[str, Optional[torch.cuda.Stream]] = {}
         self.model_to_device: Dict[str, str] = {}
-        self.models_on_gpu: Dict[str, int] = {}
+        self.models_on_gpu: Dict[str, Set[str]] = {}
         self.loaded = False
         self.max_models_per_device = 3
+        self.available_models = []
+        self.num_devices = torch.cuda.device_count()
 
     def init(self, model_infos: List[ModelInfo], timeout: float, precision: str, max_models_per_gpu: int) -> None:
-        num_devices = torch.cuda.device_count()
-        logger.info(f"found {num_devices} GPUs")
+        self.available_models = model_infos
+        logger.info(f"found {self.num_devices} GPUs")
         self.precision = precision
         self.timeout = timeout
         self.max_models_per_device = max_models_per_gpu
         for i, model_info in enumerate(model_infos):
             logger.info(f"loading model {model_info.name} for task {model_info.task}")
             name = _full_name(model_info)
-            self.locks[name] = threading.Lock()
 
             if model_info.task == "sed words" or model_info.task == "sed sequence":
                 cls = SpellingErrorDetector
@@ -81,14 +84,14 @@ class Models:
             else:
                 raise RuntimeError("should not happen")
 
-            if num_devices > 0:
+            if self.num_devices > 0:
                 self.streams[name] = torch.cuda.Stream()
-                device_name = f"cuda:{i % num_devices}"
+                device_name = f"cuda:{i % self.num_devices}"
                 self.model_to_device[name] = device_name
                 if device_name not in self.models_on_gpu:
-                    self.models_on_gpu[device_name] = 1
-                elif self.models_on_gpu[device_name] < self.max_models_per_device:
-                    self.models_on_gpu[device_name] += 1
+                    self.models_on_gpu[device_name] = {name}
+                elif len(self.models_on_gpu[device_name]) < self.max_models_per_device:
+                    self.models_on_gpu[device_name].add(name)
                 else:
                     device_name = "cpu"
                 spell_checker = cls.from_pretrained(
@@ -97,6 +100,7 @@ class Models:
                     device=device_name
                 )
             else:
+                self.streams[name] = None
                 spell_checker = cls.from_pretrained(
                     task=model_info.task,
                     model=model_info.name,
@@ -110,33 +114,63 @@ class Models:
         self.loaded = True
 
     @property
-    def available_models(self) -> List[ModelInfo]:
-        return [model for model in _all_models() if _full_name(model) in self.locks]
+    def pipeline_tasks(self) -> List[str]:
+        return ["tokenization repair", "sed words", "sec"]
 
-    @contextlib.contextmanager
-    def get_model(self, task: str, model_name: str) -> Generator:
-        if not self.loaded:
-            yield "models were not loaded", 500  # internal error, need to load models before using them
-            return
-
-        name = f"{task}:{model_name}"
-
-        # yield either the tokenization repair model or a message + http status code indicating why this did not work
-        if not hasattr(self, name):
-            yield f"model '{name}' is not available", 400  # user error, cant request a model that does not exist
+    def is_valid_pipeline(self, pipeline_models: Tuple[Optional[str], ...]) -> bool:
+        if (
+                len(pipeline_models) != 3
+                or all(m is None for m in pipeline_models)
+                or any(not hasattr(self, f"{task}:{model_name}")
+                       for task, model_name
+                       in zip(self.pipeline_tasks, pipeline_models) if model_name is not None)
+        ):
+            return False
         else:
-            acquired = self.locks[name].acquire(timeout=self.timeout)
+            return True
+
+    def get_lock(self) -> bool:
+        return self.lock.acquire(blocking=True, timeout=self.timeout)
+
+    def release_lock(self) -> None:
+        if self.lock.locked():
+            self.lock.release()
+
+    def get_pipeline(self, pipeline_models: Tuple[Optional[str], ...]) -> Generator:
+        try:
+            acquired = self.get_lock()
             if not acquired:
-                # server capacity is maxed out when acquiring the model did not work within timeout range
-                yield f"server is overloaded with too many requests, failed to reserve model " \
-                      f"within the {self.timeout:.2f}s timeout limit", 503
-            else:
-                if name in self.streams:
-                    with torch.cuda.stream(self.streams[name]):
-                        yield self.__getattribute__(name)
-                else:
+                raise RuntimeError("could not acquire lock within timeout")
+            pipeline = tuple(
+                f"{task}:{model_name}"
+                for task, model_name in zip(self.pipeline_tasks, pipeline_models)
+                if model_name is not None
+            )
+            for name in pipeline:
+                device = self.model_to_device[name]
+                logger.info(f"model {name}, {self.model_to_device[name]}, {self.models_on_gpu[device]}")
+                if device != "cpu" and name not in self.models_on_gpu[device]:
+                    if len(self.models_on_gpu[device]) >= self.max_models_per_device:
+                        model_to_move = None
+                        # determine the model to move to cpu to make space for our pipeline models,
+                        # should ideally be none of the other pipeline models
+                        for model_on_gpu in self.models_on_gpu[device]:
+                            if model_on_gpu not in pipeline:
+                                model_to_move = model_on_gpu
+                                break
+                        # should only be true if self.max_models_per_device < 3 (max number of pipeline steps)
+                        if model_to_move is None:
+                            model_to_move = next(iter(self.models_on_gpu[device]))
+                        logger.info(f"moving '{model_to_move}' to CPU to make space for '{name}' on {device}")
+                        self.models_on_gpu[device].remove(model_to_move)
+                        self.__getattribute__(model_to_move).to("cpu")
+                    self.__getattribute__(name).to(device)
+                    self.models_on_gpu[device].add(name)
+                with torch.cuda.stream(self.streams[name]):
+                    logger.info(f"yielding {name}")
                     yield self.__getattribute__(name)
-                self.locks[name].release()
+        finally:
+            self.release_lock()
 
 
 models = Models()
@@ -173,57 +207,92 @@ def get_models() -> Response:
 
 
 @server.route(f"{server_base_url}/process_text", methods=["POST"])
-def repair_text() -> Response:
-    start = time.perf_counter()
+def process_text() -> Response:
+    start_total = time.perf_counter()
+
     text = request.form.get("text")
     if text is None:
         return abort(Response("request missing required 'text' field in form data", status=400))
     text = [line.strip() for line in text.splitlines()]
-    if "task" not in request.args:
-        return abort(Response("request missing required 'task' query parameter", status=400))
-    task = request.args["task"]
-    if "model" not in request.args:
-        return abort(Response("request missing required 'model' query parameter", status=400))
-    model = request.args["model"]
-    output: Dict[str, Any] = {}
-    with models.get_model(task, model) as spell_checker:
-        if isinstance(spell_checker, tuple):
-            message, status_code = spell_checker
-            logger.warning(f"Repairing text aborted with status {status_code}: {message}")
-            return abort(Response(message, status=status_code))
-        elif isinstance(spell_checker, TokenizationRepairer):
-            repaired = spell_checker.repair_text(text, show_progress=False)
-            output["text"] = repaired
-            if request.args.get("edited", "false") == "true":
-                edited = [get_whitespace_operations(ipt, rep) for ipt, rep in zip(text, repaired)]
-                output["edited"] = edited
-        elif isinstance(spell_checker, SpellingErrorDetector):
-            detections, repaired = spell_checker.detect_text(text, show_progress=False)
-            output["text"] = repaired
-            output["detections"] = detections
-        elif isinstance(spell_checker, SpellingErrorCorrector):
-            corrected = spell_checker.correct_text(text, show_progress=False)
-            output["text"] = corrected
-            if request.args.get("edited", "false") == "true":
-                edited_in_input, edited_in_correction = get_edited_words(text, corrected)
-                output["edited"] = {
-                    "input": [sorted(list(e)) for e in edited_in_input],
-                    "text": [sorted(list(e)) for e in edited_in_correction]
-                }
-        else:
-            raise RuntimeError("should not happen")
+    org_text_bytes = sum(len(line.encode("utf8")) for line in text)
 
-    end = time.perf_counter()
-    runtime = end - start
-    text_bytes = sum(len(line.encode("utf8")) for line in text)
-    logger.info(f"processing text with {text_bytes} bytes for task {task} with model {model} took {runtime:.2f}s")
+    if "pipeline" not in request.args:
+        return abort(Response("request missing required 'pipeline' query parameter", status=400))
+    pipeline = [m.strip() for m in request.args["pipeline"].split(",")]
+    pipeline = tuple(m or None for m in pipeline)
+    if not models.is_valid_pipeline(pipeline):
+        return abort(
+            Response(f"invalid pipeline specification, expected exactly 3 models for tokenization repair, "
+                     f"word-level spelling error detection and sec respectively, but got {pipeline}", status=400)
+        )
+
+    # success = models.get_lock()
+    # # server capacity is maxed out when acquiring the model did not work within timeout range
+    # if not success:
+    #     return abort(
+    #         Response(f"server is overloaded with too many requests, failed to reserve pipeline "
+    #                  f"within the {models.timeout:.2f}s timeout limit", status=503)
+    #     )
+
+    output: Dict[str, Any] = {}
+    runtimes: Dict[str, Any] = {}
+    try:
+        for spell_checker in models.get_pipeline(pipeline):
+            if isinstance(spell_checker, TokenizationRepairer):
+                start = time.perf_counter()
+                repaired = spell_checker.repair_text(text, show_progress=False)
+                output["tokenization repair"] = {"text": repaired}
+                if request.args.get("edited", "false") == "true":
+                    edited = [get_whitespace_operations(ipt, rep) for ipt, rep in zip(text, repaired)]
+                    output["tokenization repair"]["edited"] = edited
+                end = time.perf_counter()
+                runtime = end - start
+                text_bytes = sum(len(line.encode("utf8")) for line in text)
+                runtimes["tokenization repair"] = {"s": runtime, "bps": text_bytes / runtime}
+                text = repaired
+            elif isinstance(spell_checker, SpellingErrorDetector):
+                start = time.perf_counter()
+                detections, repaired = spell_checker.detect_text(text, show_progress=False)
+                output["sed words"] = {"text": repaired, "detections": detections}
+                end = time.perf_counter()
+                runtime = end - start
+                text_bytes = sum(len(line.encode("utf8")) for line in text)
+                runtimes["sed words"] = {"s": runtime, "bps": text_bytes / runtime}
+                text = repaired
+            elif isinstance(spell_checker, SpellingErrorCorrector):
+                start = time.perf_counter()
+                corrected = spell_checker.correct_text(
+                    text,
+                    detections=output.get("sed words", {}).get("detections"),
+                    show_progress=False
+                )
+                output["sec"] = {"text": corrected}
+                if request.args.get("edited", "false") == "true":
+                    edited_in_input, edited_in_correction = get_edited_words(text, corrected)
+                    output["sec"]["edited"] = {
+                        "input": [sorted(list(e)) for e in edited_in_input],
+                        "text": [sorted(list(e)) for e in edited_in_correction]
+                    }
+                end = time.perf_counter()
+                runtime = end - start
+                text_bytes = sum(len(line.encode("utf8")) for line in text)
+                runtimes["sec"] = {"s": runtime, "bps": text_bytes / runtime}
+            else:
+                raise RuntimeError("should not happen")
+    except RuntimeError as e:
+        return abort(Response(str(e), status=503))
+    except Exception as e:
+        logger.error(f"got exception: {e}")
+        return abort(Response(str(e), status=503))
+
+    end_total = time.perf_counter()
+    total_runtime = end_total - start_total
+    logger.info(f"processing text with {org_text_bytes} bytes with pipeline {pipeline} took {total_runtime:.2f}s")
+    runtimes["total"] = {"s": total_runtime, "bps": org_text_bytes / total_runtime}
     response = jsonify(
         {
             "output": output,
-            "runtime": {
-                "total": runtime,
-                "bps": text_bytes / runtime
-            }
+            "runtimes": runtimes
         }
     )
     return response
@@ -248,15 +317,17 @@ def run_flask_server(config_path: str) -> None:
 
     logger.info(f"loaded config for server:\n{pprint.pformat(config)}")
 
-    model_infos = [model_info for model_info in _all_models()
-                   if model_info.task in config.models and model_info.name in config.models[model_info.task]]
+    model_infos = [
+        model_info for model_info in _all_models()
+        if model_info.task in config.models and model_info.name in config.models[model_info.task]
+    ]
     logger.info(f"found {len(model_infos)} valid model specifications, loading the following models:\n"
                 f"{pprint.pformat(model_infos)}")
     models.init(
         model_infos=model_infos,
         timeout=config.timeout,
         precision=config.precision,
-        max_models_per_gpu=config.max_models_per_gpu
+        max_models_per_gpu=max(1, config.max_models_per_gpu)
     )
 
     logger.info(f"starting server on {config.host}:{config.port}...")

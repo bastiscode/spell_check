@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:webapp/colors.dart';
 import 'package:webapp/home_view.dart';
 import 'package:webapp/locator.dart';
@@ -24,7 +23,7 @@ class SpellCheckApp extends StatelessWidget {
           inputDecorationTheme:
               const InputDecorationTheme(border: OutlineInputBorder()),
           fontFamily: "Georgia"),
-      home: const HomeView(),
+      home: const HomeView()
     );
   }
 }

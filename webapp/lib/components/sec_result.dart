@@ -1,19 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import 'package:webapp/colors.dart';
-
 import 'package:webapp/platforms/file_download_interface.dart';
 
 typedef OnDownload = Function(String?);
 
-class TrResultView extends StatefulWidget {
+class SecResultView extends StatefulWidget {
   final List<String> input;
   final dynamic result;
   final dynamic runtime;
   final OnDownload onDownload;
 
-  const TrResultView(
+  const SecResultView(
       {required this.input,
       required this.result,
       required this.runtime,
@@ -21,21 +19,21 @@ class TrResultView extends StatefulWidget {
       super.key});
 
   @override
-  State<TrResultView> createState() => _TrResultViewState();
+  State<SecResultView> createState() => _SecResultViewState();
 }
 
-class _TrResultViewState extends State<TrResultView> {
+class _SecResultViewState extends State<SecResultView> {
   bool _showRaw = false;
 
   @override
   Widget build(BuildContext context) {
-    final List repaired = widget.result["text"];
-    final List? edited =
+    final List corrected = widget.result["text"];
+    final Map? edited =
         widget.result.containsKey("edited") ? widget.result["edited"] : null;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Text("Tokenization repair results",
+        const Text("Spelling error correction results",
             style: TextStyle(fontWeight: FontWeight.bold)),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -53,7 +51,7 @@ class _TrResultViewState extends State<TrResultView> {
             IconButton(
               onPressed: () {
                 Clipboard.setData(
-                    ClipboardData(text: "${repaired.join("\n")}\n"));
+                    ClipboardData(text: "${corrected.join("\n")}\n"));
               },
               tooltip: "Copy raw outputs",
               splashRadius: 16,
@@ -63,7 +61,7 @@ class _TrResultViewState extends State<TrResultView> {
               onPressed: () async {
                 final downloader = FileDownloader();
                 final fileName = await downloader.downloadFile(
-                    "${repaired.join("\n")}\n", "tr_result");
+                    "${corrected.join("\n")}\n", "sec_result");
                 widget.onDownload(fileName);
               },
               tooltip: "Download raw outputs",
@@ -80,19 +78,21 @@ class _TrResultViewState extends State<TrResultView> {
             itemBuilder: (buildContext, idx) {
               final input = widget.input[idx];
               if (_showRaw) {
-                return Text(repaired[idx]);
+                return Text(corrected[idx]);
+              } else if (edited == null) {
+                return Row(
+                  children: [
+                    Flexible(child: Text(input)),
+                    const Icon(Icons.arrow_right_alt),
+                    Flexible(child: Text(corrected[idx]))
+                  ],
+                );
               } else {
                 return Row(
                   children: [
-                    Flexible(
-                        child: edited == null
-                            ? Text(input)
-                            : buildDeletionsText(input, edited[idx])),
+                    Flexible(child: Text(input)),
                     const Icon(Icons.arrow_right_alt),
-                    Flexible(
-                        child: edited == null
-                            ? Text(repaired[idx])
-                            : Text(repaired[idx]))
+                    Flexible(child: Text(corrected[idx]))
                   ],
                 );
               }
@@ -102,20 +102,4 @@ class _TrResultViewState extends State<TrResultView> {
       ],
     );
   }
-}
-
-Widget buildDeletionsText(String s, List<dynamic> edits) {
-  if (s.isEmpty) {
-    return Text(s);
-  }
-  final chars = s.characters.toList();
-  List<InlineSpan>? children = [];
-  for (int idx = 1; idx < chars.length; idx += 1) {
-    final char = chars[idx];
-    final edit = edits[idx];
-    children.add(TextSpan(
-        text: char,
-        style: edit == 2 ? const TextStyle(backgroundColor: uniRed) : null));
-  }
-  return Text.rich(TextSpan(text: chars.first, children: children));
 }

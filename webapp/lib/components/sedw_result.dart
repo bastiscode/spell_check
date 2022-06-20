@@ -7,36 +7,46 @@ import 'package:webapp/platforms/file_download_interface.dart';
 
 typedef OnDownload = Function(String?);
 
-class TrResultView extends StatefulWidget {
+class SedwResultView extends StatefulWidget {
   final List<String> input;
   final dynamic result;
   final dynamic runtime;
   final OnDownload onDownload;
 
-  const TrResultView(
+  const SedwResultView(
       {required this.input,
       required this.result,
-      required this.runtime,
+  required this.runtime,
       required this.onDownload,
       super.key});
 
   @override
-  State<TrResultView> createState() => _TrResultViewState();
+  State<SedwResultView> createState() => _SedwResultViewState();
 }
 
-class _TrResultViewState extends State<TrResultView> {
+class _SedwResultViewState extends State<SedwResultView> {
   bool _showRaw = false;
+  final List<String> _rawDetections = [];
+
+  @override
+  void initState() {
+    super.initState();
+    for (final detection in widget.result["detections"]) {
+      _rawDetections.add(detection.join(" "));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final List repaired = widget.result["text"];
-    final List? edited =
-        widget.result.containsKey("edited") ? widget.result["edited"] : null;
+    final List text = widget.result["text"];
+    final List detections = widget.result["detections"];
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Text("Tokenization repair results",
-            style: TextStyle(fontWeight: FontWeight.bold)),
+        const Text("Word-level spelling error detection results",
+            style: TextStyle(fontWeight: FontWeight.bold),
+        textAlign: TextAlign.center,),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -53,7 +63,7 @@ class _TrResultViewState extends State<TrResultView> {
             IconButton(
               onPressed: () {
                 Clipboard.setData(
-                    ClipboardData(text: "${repaired.join("\n")}\n"));
+                    ClipboardData(text: "${_rawDetections.join("\n")}\n"));
               },
               tooltip: "Copy raw outputs",
               splashRadius: 16,
@@ -63,7 +73,7 @@ class _TrResultViewState extends State<TrResultView> {
               onPressed: () async {
                 final downloader = FileDownloader();
                 final fileName = await downloader.downloadFile(
-                    "${repaired.join("\n")}\n", "tr_result");
+                    "${_rawDetections.join("\n")}\n", "sedw_result");
                 widget.onDownload(fileName);
               },
               tooltip: "Download raw outputs",
@@ -74,28 +84,17 @@ class _TrResultViewState extends State<TrResultView> {
         ),
         Flexible(
           child: ListView.builder(
-            itemCount: widget.input.length,
+            itemCount: text.length,
             physics: const NeverScrollableScrollPhysics(),
             shrinkWrap: true,
             itemBuilder: (buildContext, idx) {
-              final input = widget.input[idx];
+              List<Widget> children = [];
               if (_showRaw) {
-                return Text(repaired[idx]);
+                children.add(Text(_rawDetections[idx]));
               } else {
-                return Row(
-                  children: [
-                    Flexible(
-                        child: edited == null
-                            ? Text(input)
-                            : buildDeletionsText(input, edited[idx])),
-                    const Icon(Icons.arrow_right_alt),
-                    Flexible(
-                        child: edited == null
-                            ? Text(repaired[idx])
-                            : Text(repaired[idx]))
-                  ],
-                );
+                children.addAll([]);
               }
+              return Row(children: children);
             },
           ),
         )

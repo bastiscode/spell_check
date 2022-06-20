@@ -49,47 +49,16 @@ class API {
     }
   }
 
-  Future<APIResult> repair(String text, String model,
-      [bool edited = true]) async {
+  Future<APIResult> runPipeline(String text, String? tokenizationRepairModel,
+      String? sedWordsModel, String? secModel,
+      {bool edited = true}) async {
     try {
+      final pipeline =
+          "${tokenizationRepairModel ?? ""},${sedWordsModel ?? ""},${secModel ?? ""}";
       final res = await http.post(
           Uri.parse(
-              "$_baseURL/process_text?task=${Uri.encodeComponent("tokenization repair")}&model=${Uri.encodeComponent(model)}&edited=${edited ? "true" : "false"}"),
+              "$_baseURL/process_text?pipeline=${Uri.encodeComponent(pipeline)}&edited=${edited ? "true" : "false"}"),
           body: {"text": text});
-      if (res.statusCode != 200) {
-        return APIResult(res.statusCode, res.body, null);
-      } else {
-        return APIResult(res.statusCode, "ok", jsonDecode(res.body));
-      }
-    } catch (e) {
-      return APIResult(-1, "could not reach backend", null);
-    }
-  }
-
-  Future<APIResult> detect(String text, String model) async {
-    try {
-      final res = await http.post(
-          Uri.parse(
-              "$_baseURL/process_text?task=${Uri.encodeComponent("sed words")}&model=${Uri.encodeComponent(model)}"),
-          body: {"text": text});
-      if (res.statusCode != 200) {
-        return APIResult(res.statusCode, res.body, null);
-      } else {
-        return APIResult(res.statusCode, "ok", jsonDecode(res.body));
-      }
-    } catch (e) {
-      return APIResult(-1, "could not reach backend", null);
-    }
-  }
-
-  Future<APIResult> correct(String text, String model,
-      [bool edited = true, String? detections]) async {
-    try {
-      final res = await http.post(
-          Uri.parse(
-              "$_baseURL/process_text?task=sec&model=${Uri.encodeComponent(model)}&edited=${edited ? "true" : "false"}"),
-          body: {"text": text});
-
       if (res.statusCode != 200) {
         return APIResult(res.statusCode, res.body, null);
       } else {
