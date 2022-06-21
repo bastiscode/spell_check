@@ -206,6 +206,7 @@ def get_models() -> Response:
 
 @server.route(f"{server_base_url}/eval", methods=["POST"])
 def evaluate() -> Response:
+    start = time.perf_counter()
     ipt = request.form.get("input")
     if ipt is None:
         return abort(Response("request missing required 'input' field in form data", status=400))
@@ -215,34 +216,43 @@ def evaluate() -> Response:
     gt = request.form.get("groundtruth")
     if gt is None:
         return abort(Response("request missing required 'groundtruth' field in form data", status=400))
-    typ = request.args.get("type")
-    if typ is None:
-        return abort(Response("request missing required 'type' query parameter", status=400))
-    elif typ not in {"tokenization repair", "sed words", "sec"}:
+    task = request.args.get("task")
+    if task is None:
+        return abort(Response("request missing required 'task' query parameter", status=400))
+    elif task not in {"tokenization repair", "sed words", "sec"}:
         return abort(
-            Response(f"invalid value for query parameter 'type', must be one of tokenization repair, "
-                     f"sed words, or sec, but got {typ}", status=400)
+            Response(f"invalid value for query parameter 'task', must be one of tokenization repair, "
+                     f"sed words, or sec, but got {task}", status=400)
         )
 
+    # clean inputs, predictions and groundtruths, strip potentially empty sequences at the end that
+    # might come from bad formatting
     ipt = [clean_sequence(p) for p in ipt.split("\n")]
+    if len(ipt) > 1 and ipt[-1] == "":
+        ipt = ipt[:-1]
     pred = [clean_sequence(p) for p in pred.split("\n")]
+    if len(ipt) > 1 and ipt[-1] == "":
+        pred = pred[:-1]
     gt = [clean_sequence(p) for p in gt.split("\n")]
-    if typ == "tokenization repair":
+    if len(ipt) > 1 and ipt[-1] == "":
+        gt = gt[:-1]
+    print(f"input: {ipt}\npred: {pred}\ngt: {gt}")
+    if task == "tokenization repair":
         try:
-            (f1, prec, rec), _ = metrics.tok_rep_f1_prec_rec(ipt, pred, gt)
+            _, (f1, prec, rec) = metrics.tok_rep_f1_prec_rec(ipt, pred, gt)
             seq_acc = metrics.accuracy(pred, gt)
-            return jsonify({
+            output = {
                 "f1": f1,
                 "prec": prec,
                 "rec": rec,
                 "seq_acc": seq_acc
-            })
-        except Exception:
+            }
+        except Exception as e:
             return abort(
                 Response(f"error evaluating tokenization repair outputs, make sure "
-                         f"that you pass them in the right format"), status=400
+                         f"that you pass them in the right format: {e}", status=400)
             )
-    elif typ == "sed words":
+    elif task == "sed words":
         try:
             pred = flatten([[int(d) for d in p.split()] for p in pred])
             gt = flatten([[int(d) for d in g.split()] for g in gt])
@@ -258,7 +268,7 @@ def evaluate() -> Response:
                     rw_detections.append(p)
                 else:
                     nw_detections.append(p)
-            return jsonify({
+            output = {
                 "f1": f1,
                 "prec": prec,
                 "rec": rec,
@@ -267,27 +277,32 @@ def evaluate() -> Response:
                 "rw_detections": sum(rw_detections),
                 "nw_errors": len(nw_detections),
                 "nw_detections": sum(nw_detections)
-            })
-        except Exception:
+            }
+        except Exception as e:
             return abort(
                 Response(f"error evaluating tokenization repair outputs, make sure "
-                         f"that you pass them in the right format"), status=400
+                         f"that you pass them in the right format: {e}"), status=400
             )
     else:
         try:
             mned = metrics.mean_normalized_sequence_edit_distance(pred, gt)
             (f1, prec, rec), _ = metrics.correction_f1_prec_rec(ipt, pred, gt)
-            return jsonify({
+            output = {
                 "f1": f1,
                 "prec": prec,
                 "rec": rec,
                 "mned": mned
-            })
-        except Exception:
+            }
+        except Exception as e:
             return abort(
                 Response(f"error evaluating tokenization repair outputs, make sure "
-                         f"that you pass them in the right format"), status=400
+                         f"that you pass them in the right format: {e}"), status=400
             )
+    end = time.perf_counter()
+    logger.info(f"evaluating text with {sum(len(i.encode('utf8')) for i in ipt)} bytes "
+                f"for task {task} took {end - start:.2f}s")
+    print(output)
+    return jsonify(output)
 
 
 @server.route(f"{server_base_url}/run", methods=["POST"])

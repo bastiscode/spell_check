@@ -1,13 +1,10 @@
 import 'dart:convert';
-import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:webapp/api.dart';
 
 import 'package:webapp/colors.dart';
-import 'package:webapp/components/file_upload.dart';
-import 'package:webapp/components/input_or_upload.dart';
+import 'package:webapp/components/message.dart';
 import 'package:webapp/utils.dart';
 
 import 'package:webapp/platforms/file_download_interface.dart';
@@ -35,21 +32,38 @@ class ResultView extends StatefulWidget {
 }
 
 class _ResultViewState extends State<ResultView> {
-  bool showTrRaw = false;
-  bool showSedwRaw = false;
-  bool showSecRaw = false;
-
-  String? trGroundtruth;
-  String? sedwGroundtruth;
-  String? secGroundtruth;
-
-  dynamic trEvaluation;
-  dynamic sedwEvaluation;
-  dynamic secEvaluation;
-
-  int numShow = 10;
-
   final List<String> _rawDetections = [];
+  List<int> _indices = [0];
+  final TextEditingController _filterController = TextEditingController();
+
+  List<int> getIndices(String filter) {
+    List<int> indices = [];
+    for (var pattern in filter.split(",")) {
+      pattern = pattern.trim().replaceAll(r"\s+", "");
+      if (pattern == "") {
+        continue;
+      } else if (RegExp(r"^\d+$").hasMatch(pattern)) {
+        indices.add(int.parse(pattern) - 1);
+      } else if (RegExp(r"^\d+-\d+$").hasMatch(pattern)) {
+        final split = pattern.split("-");
+        final first = int.parse(split[0]);
+        final second = int.parse(split[1]);
+        for (var i = first - 1; i < second; i++) {
+          indices.add(i);
+        }
+      } else {
+        showMessage(context,
+            Message("got invalid pattern '$pattern' in filter", Status.warn));
+      }
+    }
+    if (indices.isEmpty) {
+      indices.add(0);
+    }
+    indices =
+        indices.where((idx) => idx >= 0 && idx < widget.input.length).toList();
+    indices.sort();
+    return indices;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -57,10 +71,6 @@ class _ResultViewState extends State<ResultView> {
     bool hasTr = false;
     bool hasSedw = false;
     bool hasSec = false;
-
-    List<String> trInput = widget.input;
-    List<String> sedwInput = widget.input;
-    List<String> secInput = widget.input;
 
     dynamic trResults;
     dynamic sedwResults;
@@ -74,14 +84,11 @@ class _ResultViewState extends State<ResultView> {
       hasTr = true;
       trResults = widget.output["tokenization repair"];
       trRuntimes = widget.runtimes["tokenization repair"];
-      sedwInput = trResults["text"].cast<String>();
-      secInput = trResults["text"].cast<String>();
     }
     if (widget.output.containsKey("sed words")) {
       hasSedw = true;
       sedwResults = widget.output["sed words"];
       sedwRuntimes = widget.runtimes["sed words"];
-      secInput = sedwResults["text"].cast<String>();
       for (final detection in sedwResults["detections"]) {
         _rawDetections.add(detection.join(" "));
       }
@@ -97,139 +104,96 @@ class _ResultViewState extends State<ResultView> {
       mainAxisSize: MainAxisSize.min,
       children: [
         Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: TextField(
+                decoration: const InputDecoration(
+                    prefixIcon: Icon(Icons.filter_alt),
+                    border: OutlineInputBorder(),
+                    hintText:
+                        "Filter results by specifying indices like 4, 5, 6, or ranges like 10-20, 40-50. By default or if no valid filter pattern is found only the first result is shown."),
+                controller: _filterController,
+                onSubmitted: (filter) {
+                  setState(() {
+                    _indices = getIndices(filter);
+                  });
+                },
+              ),
+            ),
+          ],
+        ),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
-            if (hasTr)
-              Flexible(
-                child: ExpansionTile(
-                  expandedCrossAxisAlignment: CrossAxisAlignment.start,
-                  tilePadding: EdgeInsets.zero,
+            Flexible(
+              child: Card(
+                child: ListTile(
                   title: const Text(
-                    "Tokenization repair results",
+                    "Input",
                     style: TextStyle(fontWeight: FontWeight.bold),
                   ),
-                  controlAffinity: ListTileControlAffinity.leading,
                   subtitle: Text(
-                      "${formatS(trRuntimes["s"])}, ${formatB(trRuntimes["bps"])}/s"),
-                  trailing: resultActions(
-                      "tokenization repair",
-                      showTrRaw,
-                      () {
-                        setState(() {
-                          showTrRaw = !showTrRaw;
-                        });
-                      },
-                      trResults["text"].join("\n") + "\n",
-                      "tr_results",
-                      () {
-                        widget.onClipboard("tokenization repair");
-                      },
-                      (fileName) {
-                        widget.onDownload(fileName, "tokenization repair");
-                      },
-                      () {}),
-                  childrenPadding: const EdgeInsets.symmetric(vertical: 8),
-                  children: [
-                    trGroundtruth == null
-                        ? ElevatedButton.icon(
-                            onPressed: () async {
-                              trGroundtruth = await showInputOrUploadDialog(
-                                  context,
-                                  "Get tokenization repair groundtruth");
-                              setState(() {});
-                            },
-                            label: const Text(
-                                "Set tokenization repair groundtruth"),
-                            icon: const Icon(Icons.text_snippet))
-                        : Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Expanded(
-                                child: Uploaded(
-                                  title: "Got groundtruth",
-                                  name: "Tokenization repair groundtruth",
-                                  bytes: utf8.encode(trGroundtruth!).length,
-                                  lines: trGroundtruth!.split("\n").length,
-                                  onDelete: () {
-                                    setState(() {
-                                      trGroundtruth = null;
-                                    });
-                                  },
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Flexible(
-                                child: ElevatedButton.icon(
-                                  onPressed: () {},
-                                  icon: const Icon(Icons.analytics),
-                                  label: const Text("Evaluate"),
-                                ),
-                              )
-                            ],
-                          ),
-                    if (trEvaluation != null) Text("$trEvaluation")
-                  ],
+                      "${widget.input.length} line${widget.input.length > 1 ? "s" : ""}"),
+                ),
+              ),
+            ),
+            if (hasTr)
+              Flexible(
+                flex: 1,
+                child: Card(
+                  child: ListTile(
+                    title: const Text(
+                      "Tokenization repair",
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: Text(
+                        "${formatS(trRuntimes["s"])}, ${formatB(trRuntimes["bps"])}/s"),
+                    trailing: resultActions("tokenization repair",
+                        trResults["text"].join("\n") + "\n", "tr_results", () {
+                      widget.onClipboard("tokenization repair");
+                    }, (fileName) {
+                      widget.onDownload(fileName, "tokenization repair");
+                    }),
+                  ),
                 ),
               ),
             if (hasSedw)
               Flexible(
-                child: ExpansionTile(
-                    tilePadding: EdgeInsets.zero,
-                    controlAffinity: ListTileControlAffinity.leading,
-                    title: const Text(
-                        "Word-level spelling error detection results",
+                flex: 1,
+                child: Card(
+                  child: ListTile(
+                    title: const Text("Word-level spelling error detection",
                         style: TextStyle(fontWeight: FontWeight.bold)),
                     subtitle: Text(
                         "${formatS(sedwRuntimes["s"])}, ${formatB(sedwRuntimes["bps"])}/s"),
-                    trailing: resultActions(
-                        "spelling error detection",
-                        showSedwRaw,
-                        () {
-                          setState(() {
-                            showSedwRaw = !showSedwRaw;
-                          });
-                        },
-                        "${_rawDetections.join("\n")}\n",
-                        "sedw_results",
-                        () {
-                          widget.onClipboard("spelling error detection");
-                        },
-                        (fileName) {
-                          widget.onDownload(
-                              fileName, "spelling error detection");
-                        },
-                        () {})),
+                    trailing: resultActions("spelling error detection",
+                        "${_rawDetections.join("\n")}\n", "sedw_results", () {
+                      widget.onClipboard("spelling error detection");
+                    }, (fileName) {
+                      widget.onDownload(fileName, "spelling error detection");
+                    }),
+                  ),
+                ),
               ),
             if (hasSec)
               Flexible(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Text(
-                      "Spelling error correction results (${formatS(secRuntimes["s"])}, ${formatB(secRuntimes["bps"])}/s)",
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                      textAlign: TextAlign.center,
-                    ),
-                    resultActions(
+                flex: 1,
+                child: Card(
+                  child: ListTile(
+                    title: const Text("Spelling error correction",
+                        style: TextStyle(fontWeight: FontWeight.bold)),
+                    subtitle: Text(
+                        "${formatS(secRuntimes["s"])}, ${formatB(secRuntimes["bps"])}/s"),
+                    trailing: resultActions(
                         "spelling error correction",
-                        showSecRaw,
-                        () {
-                          setState(() {
-                            showSecRaw = !showSecRaw;
-                          });
-                        },
-                        secResults["text"].join("\n") + "\n",
-                        "sec_results",
-                        () {
-                          widget.onClipboard("spelling error correction");
-                        },
-                        (fileName) {
-                          widget.onDownload(
-                              fileName, "spelling error correction");
-                        },
-                        () {})
-                  ],
+                        "${secResults["text"].join("\n")}\n",
+                        "sec_results", () {
+                      widget.onClipboard("spelling error correction");
+                    }, (fileName) {
+                      widget.onDownload(fileName, "spelling error correction");
+                    }),
+                  ),
                 ),
               ),
           ],
@@ -237,14 +201,28 @@ class _ResultViewState extends State<ResultView> {
         Flexible(
           child: ListView.builder(
             padding: EdgeInsets.zero,
-            itemCount: min(numShow, widget.input.length),
+            itemCount: _indices.length,
             physics: const NeverScrollableScrollPhysics(),
             shrinkWrap: true,
-            itemBuilder: (buildContext, idx) {
-              List<Widget> children = [];
+            itemBuilder: (buildContext, i) {
+              final idx = _indices[i];
+              List<Widget> children = [
+                Flexible(
+                  child: Card(
+                    child: ListTile(
+                      title: Text(
+                        widget.input[idx],
+                        textAlign: TextAlign.center,
+                      ),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
+                )
+              ];
               if (hasTr) {
                 children.add(
                   Flexible(
+                    flex: 1,
                     child: Card(
                       child: ListTile(
                         title: Text(
@@ -258,8 +236,9 @@ class _ResultViewState extends State<ResultView> {
                 );
               }
               if (hasSedw) {
-                children.add(
+                children.addAll([
                   Flexible(
+                    flex: 1,
                     child: Card(
                       child: ListTile(
                         title: Text(
@@ -270,11 +249,12 @@ class _ResultViewState extends State<ResultView> {
                       ),
                     ),
                   ),
-                );
+                ]);
               }
               if (hasSec) {
-                children.add(
+                children.addAll([
                   Flexible(
+                    flex: 1,
                     child: Card(
                       child: ListTile(
                         title: Text(
@@ -285,51 +265,36 @@ class _ResultViewState extends State<ResultView> {
                       ),
                     ),
                   ),
-                );
+                ]);
               }
-              return Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: children);
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      const SizedBox(
+                          width: 16,
+                          child: Divider(
+                            thickness: 1,
+                          )),
+                      const SizedBox(width: 8),
+                      Text("${idx + 1}"),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: Divider(
+                          thickness: 1,
+                        ),
+                      )
+                    ],
+                  ),
+                  Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: children),
+                ],
+              );
             },
           ),
         ),
-        if (widget.input.length > numShow)
-          Flexible(
-            child: ListTile(
-              title: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  if (widget.input.length > numShow + 10) ...[
-                    ElevatedButton.icon(
-                      onPressed: numShow < widget.input.length
-                          ? () {
-                              setState(() {
-                                numShow = numShow + 10;
-                              });
-                            }
-                          : null,
-                      icon: const Icon(Icons.expand_more),
-                      label: const Text("Show 10 more results"),
-                    ),
-                    const SizedBox(
-                      width: 8,
-                    ),
-                  ],
-                  ElevatedButton.icon(
-                    onPressed: numShow < widget.input.length
-                        ? () {
-                            setState(() {
-                              numShow = widget.input.length;
-                            });
-                          }
-                        : null,
-                    icon: const Icon(Icons.list),
-                    label: Text("Show all ${widget.input.length} results"),
-                  )
-                ],
-              ),
-            ),
-          )
       ],
     );
   }
@@ -337,23 +302,14 @@ class _ResultViewState extends State<ResultView> {
 
 Widget resultActions(
     String tooltipName,
-    bool showRaw,
-    VoidCallback onRawChanged,
     String rawOutput,
     String downloadFileName,
     VoidCallback onClipboard,
-    Function(String?) onDownload,
-    VoidCallback onEvaluate) {
+    Function(String?) onDownload) {
   return Row(
     mainAxisSize: MainAxisSize.min,
     mainAxisAlignment: MainAxisAlignment.center,
     children: [
-      IconButton(
-        onPressed: onRawChanged,
-        tooltip: "Toggle between raw and formatted $tooltipName output",
-        splashRadius: 16,
-        icon: Icon(showRaw ? Icons.raw_on : Icons.raw_off),
-      ),
       IconButton(
         onPressed: () async {
           await Clipboard.setData(ClipboardData(text: rawOutput));
@@ -373,12 +329,7 @@ Widget resultActions(
         tooltip: "Download raw $tooltipName outputs",
         splashRadius: 16,
         icon: const Icon(Icons.file_download),
-      ),
-      IconButton(
-          onPressed: onEvaluate,
-          tooltip: "Evaluate $tooltipName outputs",
-          splashRadius: 16,
-          icon: const Icon(Icons.analytics))
+      )
     ],
   );
 }

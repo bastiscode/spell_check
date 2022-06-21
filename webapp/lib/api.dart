@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
+import 'package:webapp/components/message.dart';
+
 class APIResult {
   int statusCode;
   String message;
@@ -86,10 +88,10 @@ class API {
   }
 
   Future<APIResult> _evaluate(
-      String type, String input, String prediction, String groundtruth) async {
+      String task, String input, String prediction, String groundtruth) async {
     try {
       final res = await http.post(
-          Uri.parse("$_baseURL/evaluate?type=${Uri.encodeComponent(type)}"),
+          Uri.parse("$_baseURL/eval?task=${Uri.encodeComponent(task)}"),
           body: {
             "input": input,
             "prediction": prediction,
@@ -107,3 +109,13 @@ class API {
 }
 
 final api = API.instance;
+
+
+Message? errorMessageFromAPIResult(APIResult result, String messagePrefix) {
+  if (result.statusCode == -1) {
+    return Message("$messagePrefix: unable to reach server", Status.error);
+  } else if (result.statusCode != 200) {
+    return Message("$messagePrefix: ${result.message}", Status.warn);
+  }
+  return null;
+}

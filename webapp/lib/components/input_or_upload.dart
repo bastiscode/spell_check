@@ -29,7 +29,6 @@ class _InputOrUploadState extends State<InputOrUpload> {
       actionsAlignment: MainAxisAlignment.center,
       title: Text(
         widget.title,
-        textAlign: TextAlign.center,
       ),
       content: Column(
         mainAxisSize: MainAxisSize.min,
@@ -40,47 +39,51 @@ class _InputOrUploadState extends State<InputOrUpload> {
             children: [
               Expanded(
                 child: TextFormField(
-                    key: _textKey,
-                    maxLines: 10,
-                    decoration: InputDecoration(
-                      border: const OutlineInputBorder(),
-                      hintText: "Enter text here...",
-                      suffixIcon: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.clear),
-                            tooltip: "Clear text",
-                            splashRadius: 16,
-                            color: uniRed,
-                            onPressed: (_textKey.currentState?.value ?? "") !=
-                                    ""
-                                ? () {
-                                    setState(() {
-                                      _textKey.currentState!.didChange(null);
-                                      inputString = null;
-                                    });
-                                  }
-                                : null,
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.paste),
-                            tooltip: "Paste text from clipboard",
-                            splashRadius: 16,
-                            onPressed: () async {
-                              final data =
-                                  await Clipboard.getData("text/plain");
-                              if (data != null) {
-                                setState(() {
-                                  inputString = data.text!;
-                                  _textKey.currentState!.didChange(inputString);
-                                });
-                              }
-                            },
-                          )
-                        ],
-                      ),
-                    )),
+                  key: _textKey,
+                  maxLines: 5,
+                  decoration: InputDecoration(
+                    border: const OutlineInputBorder(),
+                    hintText: "Enter text here...",
+                    suffixIcon: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.clear),
+                          tooltip: "Clear text",
+                          splashRadius: 16,
+                          color: uniRed,
+                          onPressed: (_textKey.currentState?.value ?? "") != ""
+                              ? () {
+                                  setState(() {
+                                    _textKey.currentState!.didChange(null);
+                                    inputString = null;
+                                  });
+                                }
+                              : null,
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.paste),
+                          tooltip: "Paste text from clipboard",
+                          splashRadius: 16,
+                          onPressed: () async {
+                            final data = await Clipboard.getData("text/plain");
+                            if (data != null) {
+                              setState(() {
+                                inputString = data.text!;
+                                _textKey.currentState!.didChange(inputString);
+                              });
+                            }
+                          },
+                        )
+                      ],
+                    ),
+                  ),
+                  onChanged: (value) {
+                    setState(() {
+                      inputString = value;
+                    });
+                  },
+                ),
               ),
               const SizedBox(
                 width: 32,

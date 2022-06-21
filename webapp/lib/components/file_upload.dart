@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:webapp/colors.dart';
+import 'package:webapp/utils.dart';
 
 typedef OnUploadCallback = Function(PlatformFile?);
 typedef OnErrorCallback = Function(String);
@@ -94,7 +95,7 @@ class _UploadedState extends State<Uploaded> {
       child: ListTile(
         title: Text(widget.title),
         subtitle: Text(
-            "${widget.name} contains ${widget.bytes / 1000}kB of text in ${widget.lines} lines."),
+            "${widget.name} contains ${formatB(widget.bytes.toDouble())} of text in ${widget.lines} lines."),
         trailing: IconButton(
           tooltip: "Delete uploaded file",
           onPressed: widget.onDelete,

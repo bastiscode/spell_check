@@ -12,5 +12,3 @@ models:
     - gnn+
   sec:
     - transformer nmt
-    - transformer words nmt
-    - transformer with tokenization repair nmt

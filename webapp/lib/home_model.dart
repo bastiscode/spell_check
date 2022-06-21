@@ -53,8 +53,6 @@ class HomeModel extends BaseModel {
 
   bool hidePipeline = false;
 
-  final Queue<Message> _messages = Queue<Message>();
-
   Future<void> init() async {
     _models = await api.models();
     final prefs = await SharedPreferences.getInstance();
@@ -89,14 +87,6 @@ class HomeModel extends BaseModel {
     _info = await api.info();
     _ready = true;
     notifyListeners();
-  }
-
-  Message? _checkApiResult(APIResult result, String messagePrefix) {
-    if (result.statusCode == -1) {
-      return Message("$messagePrefix: unable to reach server", Status.error);
-    } else if (result.statusCode != 200) {
-      return Message("$messagePrefix: ${result.message}", Status.warn);
-    }
   }
 
   savePipeline() async {
@@ -137,7 +127,7 @@ class HomeModel extends BaseModel {
     var inputText = "${inputLines.join("\n")}\n";
     final result =
         await api.runPipeline(inputText, trModel, sedwModel, secModel);
-    final error = _checkApiResult(result, "error running pipeline");
+    final error = errorMessageFromAPIResult(result, "error running pipeline");
     if (error == null) {
       outputs = result.value["output"];
       runtimes = result.value["runtimes"];
