@@ -1,18 +1,14 @@
-import contextlib
 import dataclasses
 import logging
 import os
 import pprint
-import sys
 import threading
 import time
-import traceback
 from typing import Dict, Generator, List, Optional, Any, Tuple, Set
 
 import omegaconf
-from flask import Flask, Response, abort, cli, jsonify, request
-
 import torch.cuda
+from flask import Flask, Response, abort, cli, jsonify, request
 from omegaconf import MISSING
 
 from nsc import (
@@ -25,7 +21,6 @@ from nsc import (
 )
 from nsc.api.utils import ModelInfo, get_cpu_info, get_gpu_info
 from nsc.utils import common
-
 # disable flask startup message and set flask mode to development
 from nsc.utils.edit import get_edited_words
 from nsc.utils.tokenization_repair import get_whitespace_operations
@@ -85,7 +80,7 @@ class Models:
                 raise RuntimeError("should not happen")
 
             if self.num_devices > 0:
-                self.streams[name] = torch.cuda.Stream()
+                # self.streams[name] = torch.cuda.Stream()
                 device_name = f"cuda:{i % self.num_devices}"
                 self.model_to_device[name] = device_name
                 if device_name not in self.models_on_gpu:
@@ -137,40 +132,31 @@ class Models:
             self.lock.release()
 
     def get_pipeline(self, pipeline_models: Tuple[Optional[str], ...]) -> Generator:
-        try:
-            acquired = self.get_lock()
-            if not acquired:
-                raise RuntimeError("could not acquire lock within timeout")
-            pipeline = tuple(
-                f"{task}:{model_name}"
-                for task, model_name in zip(self.pipeline_tasks, pipeline_models)
-                if model_name is not None
-            )
-            for name in pipeline:
-                device = self.model_to_device[name]
-                logger.info(f"model {name}, {self.model_to_device[name]}, {self.models_on_gpu[device]}")
-                if device != "cpu" and name not in self.models_on_gpu[device]:
-                    if len(self.models_on_gpu[device]) >= self.max_models_per_device:
-                        model_to_move = None
-                        # determine the model to move to cpu to make space for our pipeline models,
-                        # should ideally be none of the other pipeline models
-                        for model_on_gpu in self.models_on_gpu[device]:
-                            if model_on_gpu not in pipeline:
-                                model_to_move = model_on_gpu
-                                break
-                        # should only be true if self.max_models_per_device < 3 (max number of pipeline steps)
-                        if model_to_move is None:
-                            model_to_move = next(iter(self.models_on_gpu[device]))
-                        logger.info(f"moving '{model_to_move}' to CPU to make space for '{name}' on {device}")
-                        self.models_on_gpu[device].remove(model_to_move)
-                        self.__getattribute__(model_to_move).to("cpu")
-                    self.__getattribute__(name).to(device)
-                    self.models_on_gpu[device].add(name)
-                with torch.cuda.stream(self.streams[name]):
-                    logger.info(f"yielding {name}")
-                    yield self.__getattribute__(name)
-        finally:
-            self.release_lock()
+        pipeline = tuple(
+            f"{task}:{model_name}"
+            for task, model_name in zip(self.pipeline_tasks, pipeline_models)
+            if model_name is not None
+        )
+        for name in pipeline:
+            device = self.model_to_device[name]
+            if device != "cpu" and name not in self.models_on_gpu[device]:
+                if len(self.models_on_gpu[device]) >= self.max_models_per_device:
+                    model_to_move = None
+                    # determine the model to move to cpu to make space for our pipeline models,
+                    # should ideally be none of the other pipeline models
+                    for model_on_gpu in self.models_on_gpu[device]:
+                        if model_on_gpu not in pipeline:
+                            model_to_move = model_on_gpu
+                            break
+                    # should only be true if self.max_models_per_device < 3 (max number of pipeline steps)
+                    if model_to_move is None:
+                        model_to_move = next(iter(self.models_on_gpu[device]))
+                    logger.info(f"moving '{model_to_move}' to CPU to make space for '{name}' on {device}")
+                    self.models_on_gpu[device].remove(model_to_move)
+                    self.__getattribute__(model_to_move).to("cpu")
+                self.__getattribute__(name).to(device)
+                self.models_on_gpu[device].add(name)
+            yield self.__getattribute__(name)
 
 
 models = Models()
@@ -206,8 +192,29 @@ def get_models() -> Response:
     return response
 
 
-@server.route(f"{server_base_url}/process_text", methods=["POST"])
-def process_text() -> Response:
+@server.route(f"{server_base_url}/eval", methods=["POST"])
+def evaluate() -> Response:
+    ipt = request.form.get("input")
+    if ipt is None:
+        return abort(Response("request missing required 'input' field in form data", status=400))
+    pred = request.form.get("prediction")
+    if pred is None:
+        return abort(Response("request missing required 'prediction' field in form data", status=400))
+    gt = request.form.get("groundtruth")
+    if gt is None:
+        return abort(Response("request missing required 'groundtruth' field in form data", status=400))
+    typ = request.args.get("type")
+    if typ is None:
+        return abort(Response("request missing required 'type' query parameter", status=400))
+    elif typ not in {"tokenization repair", "sed words", "sec"}:
+        return abort(
+            Response(f"invalid value for query parameter 'type', must be one of tokenization repair, "
+                     f"sed words, or sec, but got {typ}", status=400)
+        )
+
+
+@server.route(f"{server_base_url}/run", methods=["POST"])
+def run() -> Response:
     start_total = time.perf_counter()
 
     text = request.form.get("text")
@@ -223,16 +230,17 @@ def process_text() -> Response:
     if not models.is_valid_pipeline(pipeline):
         return abort(
             Response(f"invalid pipeline specification, expected exactly 3 models for tokenization repair, "
-                     f"word-level spelling error detection and sec respectively, but got {pipeline}", status=400)
+                     f"word-level spelling error detection and spelling error correction respectively, "
+                     f"but got {pipeline}", status=400)
         )
 
-    # success = models.get_lock()
-    # # server capacity is maxed out when acquiring the model did not work within timeout range
-    # if not success:
-    #     return abort(
-    #         Response(f"server is overloaded with too many requests, failed to reserve pipeline "
-    #                  f"within the {models.timeout:.2f}s timeout limit", status=503)
-    #     )
+    success = models.get_lock()
+    # server capacity is maxed out when acquiring the model did not work within timeout range
+    if not success:
+        return abort(
+            Response(f"server is overloaded with too many requests, failed to reserve pipeline "
+                     f"within the {models.timeout:.2f}s timeout limit", status=503)
+        )
 
     output: Dict[str, Any] = {}
     runtimes: Dict[str, Any] = {}
@@ -279,11 +287,10 @@ def process_text() -> Response:
                 runtimes["sec"] = {"s": runtime, "bps": text_bytes / runtime}
             else:
                 raise RuntimeError("should not happen")
-    except RuntimeError as e:
-        return abort(Response(str(e), status=503))
     except Exception as e:
-        logger.error(f"got exception: {e}")
-        return abort(Response(str(e), status=503))
+        return abort(Response("unexpected server failure", status=503))
+    finally:
+        models.release_lock()
 
     end_total = time.perf_counter()
     total_runtime = end_total - start_total

@@ -262,6 +262,7 @@ class _APIBase:
 
         """
         self.device = torch.device(device)
+        self.model.device = self.device
         self.model.to(self.device)
         return self
 

@@ -1,16 +1,13 @@
 import 'dart:convert' show utf8;
 import 'package:collection/collection.dart';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:webapp/base_view.dart';
 import 'package:webapp/colors.dart';
 import 'package:webapp/components/file_upload.dart';
 import 'package:webapp/components/result.dart';
-import 'package:webapp/components/sec_result.dart';
-import 'package:webapp/components/sedw_result.dart';
-import 'package:webapp/components/tr_result.dart';
 import 'package:webapp/home_model.dart';
+import 'package:webapp/utils.dart';
 
 Widget wrapScaffold(Widget widget) {
   return SafeArea(child: Scaffold(body: widget));
@@ -139,7 +136,7 @@ class _HomeViewState extends State<HomeView> {
                   Duration.zero,
                   () {
                     while (model.messageAvailable) {
-                      showModalBottomSheetMessage(context, model.popMessage());
+                      showMessage(context, model.popMessage());
                     }
                   },
                 );
@@ -153,223 +150,192 @@ class _HomeViewState extends State<HomeView> {
                           "Detect and correct spelling errors in text with or without space errors.",
                           style: TextStyle(fontSize: 22),
                         ),
-                        const Divider(height: 32),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.start,
+                        const SizedBox(height: 16),
+                        ExpansionTile(
+                          tilePadding: EdgeInsets.zero,
+                          initiallyExpanded: !model.validPipeline,
+                          controlAffinity: ListTileControlAffinity.leading,
+                          title: const Text(
+                            "Select a model pipeline",
+                            style: TextStyle(fontSize: 20),
+                          ),
+                          trailing: IconButton(
+                            onPressed: model.validPipeline
+                                ? () async {
+                                    await model.savePipeline();
+                                    setState(() {
+                                      model.addMessage(Message(
+                                          "Saved pipeline settings",
+                                          Status.info));
+                                    });
+                                  }
+                                : null,
+                            splashRadius: 16,
+                            tooltip: "Save pipeline settings",
+                            icon: const Icon(Icons.save),
+                          ),
                           children: [
-                            const Text(
-                              "Select a model pipeline",
-                              style: TextStyle(fontSize: 20),
-                            ),
-                            const Spacer(),
-                            IconButton(
-                              onPressed: model.validPipeline
-                                  ? () {
+                            const SizedBox(height: 16),
+                            Row(
+                              children: [
+                                const Icon(Icons.looks_one, color: uniBlue),
+                                Flexible(
+                                  child: DropdownButtonFormField<String>(
+                                    key: _trModelKey,
+                                    value: model.trModel,
+                                    decoration: const InputDecoration(
+                                        labelText: "Tokenization repair model"),
+                                    icon: const Icon(
+                                        Icons.arrow_drop_down_rounded),
+                                    items: model
+                                        .getModels("tokenization repair")
+                                        .map<DropdownMenuItem<String>>(
+                                      (modelInfo) {
+                                        return DropdownMenuItem(
+                                          value: modelInfo["name"],
+                                          child: Text(modelInfo["name"]),
+                                        );
+                                      },
+                                    ).toList(),
+                                    onChanged: (String? modelName) {
+                                      setState(
+                                        () {
+                                          model.trModel = modelName!;
+                                          model.lastInputString = "";
+                                        },
+                                      );
+                                    },
+                                  ),
+                                ),
+                                if (model.trModel != null)
+                                  IconButton(
+                                    splashRadius: 16,
+                                    tooltip: "Clear tokenization repair model",
+                                    color: uniRed,
+                                    icon: const Icon(Icons.clear),
+                                    onPressed: () {
                                       setState(() {
-                                        model.hidePipeline =
-                                            !model.hidePipeline;
+                                        _trModelKey.currentState!.reset();
+                                        model.trModel = null;
+                                        model.lastInputString = "";
                                       });
-                                    }
-                                  : null,
-                              splashRadius: 16,
-                              tooltip: model.hidePipeline
-                                  ? "Show pipeline"
-                                  : "Hide pipeline",
-                              icon: AnimatedSwitcher(
-                                duration: const Duration(milliseconds: 200),
-                                child: model.hidePipeline
-                                    ? Icon(key: Key("eye"), Icons.visibility)
-                                    : Icon(
-                                        key: Key("eyeClosed"),
-                                        Icons.visibility_off),
-                              ),
+                                    },
+                                  )
+                              ],
                             ),
-                            IconButton(
-                              onPressed: model.validPipeline
-                                  ? () {
-                                      model.savePipeline();
-                                    }
-                                  : null,
-                              splashRadius: 16,
-                              tooltip: "Save pipeline settings",
-                              icon: const Icon(Icons.save),
-                            )
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                const Icon(Icons.looks_two, color: uniBlue),
+                                Flexible(
+                                  child: DropdownButtonFormField<String>(
+                                    key: _sedwModelKey,
+                                    value: model.sedwModel,
+                                    decoration: const InputDecoration(
+                                        labelText:
+                                            "Word-level spelling error detection model"),
+                                    icon: const Icon(
+                                        Icons.arrow_drop_down_rounded),
+                                    items: model
+                                        .getModels("sed words")
+                                        .map<DropdownMenuItem<String>>(
+                                      (modelInfo) {
+                                        return DropdownMenuItem(
+                                          value: modelInfo["name"],
+                                          child: Text(modelInfo["name"]),
+                                        );
+                                      },
+                                    ).toList(),
+                                    onChanged: (String? modelName) {
+                                      setState(
+                                        () {
+                                          model.sedwModel = modelName!;
+                                          model.lastInputString = "";
+                                        },
+                                      );
+                                    },
+                                  ),
+                                ),
+                                if (model.sedwModel != null)
+                                  IconButton(
+                                    splashRadius: 16,
+                                    tooltip:
+                                        "Clear word-level spelling error detection model",
+                                    color: uniRed,
+                                    icon: const Icon(Icons.clear),
+                                    onPressed: () {
+                                      setState(() {
+                                        _sedwModelKey.currentState!.reset();
+                                        model.sedwModel = null;
+                                        model.lastInputString = "";
+                                      });
+                                    },
+                                  )
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                const Icon(Icons.looks_3, color: uniBlue),
+                                Flexible(
+                                  child: DropdownButtonFormField<String>(
+                                    key: _secModelKey,
+                                    value: model.secModel,
+                                    decoration: const InputDecoration(
+                                        labelText:
+                                            "Spelling error correction model"),
+                                    icon: const Icon(
+                                        Icons.arrow_drop_down_rounded),
+                                    items: model
+                                        .getModels("sec")
+                                        .map<DropdownMenuItem<String>>(
+                                      (modelInfo) {
+                                        return DropdownMenuItem(
+                                          value: modelInfo["name"],
+                                          child: Text(modelInfo["name"]),
+                                        );
+                                      },
+                                    ).toList(),
+                                    onChanged: (String? modelName) {
+                                      setState(() {
+                                        model.secModel = modelName!;
+                                        model.lastInputString = "";
+                                      });
+                                    },
+                                  ),
+                                ),
+                                if (model.secModel != null)
+                                  IconButton(
+                                    splashRadius: 16,
+                                    tooltip:
+                                        "Clear spelling error correction model",
+                                    color: uniRed,
+                                    icon: const Icon(Icons.clear),
+                                    onPressed: () {
+                                      setState(() {
+                                        _secModelKey.currentState!.reset();
+                                        model.secModel = null;
+                                        model.lastInputString = "";
+                                      });
+                                    },
+                                  )
+                              ],
+                            ),
+                            const SizedBox(height: 16),
                           ],
                         ),
-                        AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 200),
-                          child: model.hidePipeline
-                              ? const SizedBox.shrink()
-                              : Column(
-                                  children: [
-                                    const SizedBox(height: 16),
-                                    Row(
-                                      children: [
-                                        const Icon(Icons.looks_one,
-                                            color: uniBlue),
-                                        Flexible(
-                                          child:
-                                              DropdownButtonFormField<String>(
-                                            key: _trModelKey,
-                                            value: model.trModel,
-                                            decoration: const InputDecoration(
-                                                labelText:
-                                                    "Tokenization repair model"),
-                                            icon: const Icon(
-                                                Icons.arrow_drop_down_rounded),
-                                            items: model
-                                                .getModels(
-                                                    "tokenization repair")
-                                                .map<DropdownMenuItem<String>>(
-                                              (modelInfo) {
-                                                return DropdownMenuItem(
-                                                  value: modelInfo["name"],
-                                                  child:
-                                                      Text(modelInfo["name"]),
-                                                );
-                                              },
-                                            ).toList(),
-                                            onChanged: (String? modelName) {
-                                              setState(
-                                                () {
-                                                  model.trModel = modelName!;
-                                                },
-                                              );
-                                            },
-                                          ),
-                                        ),
-                                        if (model.trModel != null)
-                                          IconButton(
-                                            splashRadius: 16,
-                                            tooltip:
-                                                "Clear tokenization repair model",
-                                            color: uniRed,
-                                            icon: const Icon(Icons.clear),
-                                            onPressed: () {
-                                              setState(() {
-                                                _trModelKey.currentState!
-                                                    .reset();
-                                                model.trModel = null;
-                                              });
-                                            },
-                                          )
-                                      ],
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Row(
-                                      children: [
-                                        const Icon(Icons.looks_two,
-                                            color: uniBlue),
-                                        Flexible(
-                                          child:
-                                              DropdownButtonFormField<String>(
-                                            key: _sedwModelKey,
-                                            value: model.sedwModel,
-                                            decoration: const InputDecoration(
-                                                labelText:
-                                                    "Word-level spelling error detection model"),
-                                            icon: const Icon(
-                                                Icons.arrow_drop_down_rounded),
-                                            items: model
-                                                .getModels("sed words")
-                                                .map<DropdownMenuItem<String>>(
-                                              (modelInfo) {
-                                                return DropdownMenuItem(
-                                                  value: modelInfo["name"],
-                                                  child:
-                                                      Text(modelInfo["name"]),
-                                                );
-                                              },
-                                            ).toList(),
-                                            onChanged: (String? modelName) {
-                                              setState(
-                                                () {
-                                                  model.sedwModel = modelName!;
-                                                },
-                                              );
-                                            },
-                                          ),
-                                        ),
-                                        if (model.sedwModel != null)
-                                          IconButton(
-                                            splashRadius: 16,
-                                            tooltip:
-                                                "Clear word-level spelling error detection model",
-                                            color: uniRed,
-                                            icon: const Icon(Icons.clear),
-                                            onPressed: () {
-                                              setState(() {
-                                                _sedwModelKey.currentState!
-                                                    .reset();
-                                                model.sedwModel = null;
-                                              });
-                                            },
-                                          )
-                                      ],
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Row(
-                                      children: [
-                                        const Icon(Icons.looks_3,
-                                            color: uniBlue),
-                                        Flexible(
-                                          child:
-                                              DropdownButtonFormField<String>(
-                                            key: _secModelKey,
-                                            value: model.secModel,
-                                            decoration: const InputDecoration(
-                                                labelText:
-                                                    "Spelling error correction model"),
-                                            icon: const Icon(
-                                                Icons.arrow_drop_down_rounded),
-                                            items: model
-                                                .getModels("sec")
-                                                .map<DropdownMenuItem<String>>(
-                                              (modelInfo) {
-                                                return DropdownMenuItem(
-                                                  value: modelInfo["name"],
-                                                  child:
-                                                      Text(modelInfo["name"]),
-                                                );
-                                              },
-                                            ).toList(),
-                                            onChanged: (String? modelName) {
-                                              setState(() {
-                                                model.secModel = modelName!;
-                                              });
-                                            },
-                                          ),
-                                        ),
-                                        if (model.secModel != null)
-                                          IconButton(
-                                            splashRadius: 16,
-                                            tooltip:
-                                                "Clear spelling error correction model",
-                                            color: uniRed,
-                                            icon: const Icon(Icons.clear),
-                                            onPressed: () {
-                                              setState(() {
-                                                _secModelKey.currentState!
-                                                    .reset();
-                                                model.secModel = null;
-                                              });
-                                            },
-                                          )
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                        ),
-                        const Divider(height: 32),
+                        const SizedBox(height: 16),
                         Row(
                           children: [
                             Expanded(
                               child: TextFormField(
                                 key: _textKey,
-                                maxLines: 10,
+                                maxLines: model.live ? 1 : 10,
                                 decoration: InputDecoration(
                                   border: const OutlineInputBorder(),
-                                  hintText: "Enter some text to spell check",
+                                  hintText: model.live
+                                      ? "Enter some text to spell check while typing..."
+                                      : "Enter some text to spell check...",
                                   suffixIcon: Column(
                                     children: [
                                       IconButton(
@@ -378,14 +344,14 @@ class _HomeViewState extends State<HomeView> {
                                         splashRadius: 16,
                                         color: uniRed,
                                         onPressed: model.validPipeline &&
-                                                _textKey.currentState?.value !=
-                                                    null &&
-                                                _textKey.currentState?.value !=
+                                                (_textKey.currentState?.value ??
+                                                        "") !=
                                                     ""
                                             ? () {
                                                 setState(() {
                                                   _textKey.currentState!
-                                                      .reset();
+                                                      .didChange("");
+                                                  model.inputString = "";
                                                 });
                                               }
                                             : null,
@@ -398,10 +364,25 @@ class _HomeViewState extends State<HomeView> {
                                             "${!model.live ? "Enable" : "Disable"} live spell checking",
                                         splashRadius: 16,
                                         onPressed: model.validPipeline
-                                            ? () {
-                                                setState(() {
-                                                  model.live = !model.live;
-                                                });
+                                            ? () async {
+                                                setState(
+                                                  () {
+                                                    model.live = !model.live;
+                                                  },
+                                                );
+                                                if (model.live) {
+                                                  String currentText = _textKey
+                                                          .currentState!
+                                                          .value ??
+                                                      "";
+                                                  currentText = currentText
+                                                      .split("\n")[0];
+                                                  _textKey.currentState!
+                                                      .didChange(currentText);
+                                                  model.inputString =
+                                                      currentText;
+                                                  await model.runPipelineLive();
+                                                }
                                               }
                                             : null,
                                       )
@@ -410,25 +391,19 @@ class _HomeViewState extends State<HomeView> {
                                 ),
                                 enabled: model.validPipeline,
                                 onChanged: (String? input) async {
-                                  setState(
-                                    () {
-                                      if (model.live &&
-                                          !model.waiting &&
-                                          input != null) {
-                                        model.inputString = input;
-                                        model.runPipeline();
-                                      }
-                                    },
-                                  );
+                                  if (model.live) {
+                                    model.inputString = input ?? "";
+                                  }
                                 },
                               ),
                             ),
                             const SizedBox(
-                                width: 32,
-                                child: Text(
-                                  "or",
-                                  textAlign: TextAlign.center,
-                                )),
+                              width: 32,
+                              child: Text(
+                                "or",
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
                             Expanded(
                               child: Center(
                                 child: FileUpload(
@@ -474,14 +449,10 @@ class _HomeViewState extends State<HomeView> {
                                       onPressed: model.validPipeline &&
                                               !model.waiting &&
                                               !model.live
-                                          ? () {
-                                              setState(
-                                                () {
-                                                  model.inputString = _textKey
-                                                      .currentState?.value;
-                                                  model.runPipeline();
-                                                },
-                                              );
+                                          ? () async {
+                                              model.inputString =
+                                                  _textKey.currentState?.value;
+                                              await model.runPipeline();
                                             }
                                           : null,
                                       icon: const Icon(Icons.edit_note),
@@ -504,14 +475,10 @@ class _HomeViewState extends State<HomeView> {
                                               !model.waiting &&
                                               !model.live &&
                                               model.fileString != null
-                                          ? () {
-                                              setState(
-                                                () {
-                                                  model.inputString =
-                                                      model.fileString!;
-                                                  model.runPipeline();
-                                                },
-                                              );
+                                          ? () async {
+                                              model.inputString =
+                                                  model.fileString!;
+                                              await model.runPipeline();
                                             }
                                           : null,
                                       icon: const Icon(Icons.edit_note),
@@ -533,8 +500,8 @@ class _HomeViewState extends State<HomeView> {
                           )
                         ] else if (model.hasResults) ...[
                           Text(
-                            "Running pipeline took ${model.runtimes["total"]["s"].toStringAsFixed(2)}s "
-                            "(${model.runtimes["total"]["bps"].toStringAsFixed(2)}b/s)",
+                            "Running pipeline took ${formatS(model.runtimes["total"]["s"])} "
+                            "(${formatBps(model.runtimes["total"]["bps"])})",
                             textAlign: TextAlign.center,
                           ),
                           const SizedBox(height: 8),
@@ -542,6 +509,7 @@ class _HomeViewState extends State<HomeView> {
                               input: model.input,
                               output: model.outputs,
                               runtimes: model.runtimes,
+                              onClipboard: model.onClipboard,
                               onDownload: model.onDownload),
                         ],
                       ],
@@ -556,47 +524,38 @@ class _HomeViewState extends State<HomeView> {
     );
   }
 
-  void showModalBottomSheetMessage(BuildContext context, Message message) {
-    bool popped = false;
-    Scaffold.of(context).showBottomSheet(
-      (context) {
-        Future.delayed(const Duration(seconds: 3), () {
-          if (!popped) {
-            Navigator.of(context).pop(true);
-          }
-        });
-        return Container(
-          margin: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            borderRadius: const BorderRadius.all(Radius.circular(5)),
-            color: message.status == Status.info
-                ? uniGreen
-                : message.status == Status.warn
-                    ? uniOrange
-                    : uniRed,
-          ),
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () {
-              popped = true;
-              Navigator.of(context).pop();
-            },
-            child: Padding(
-              padding: const EdgeInsets.all(15),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    message.message,
-                    style: const TextStyle(color: Colors.white),
-                  ),
-                ],
+  void showMessage(BuildContext context, Message message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(
+              message.status == Status.info
+                  ? Icons.info_outline
+                  : message.status == Status.warn
+                      ? Icons.warning_amber
+                      : Icons.error_outline,
+              color: Colors.white,
+            ),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                message.message,
+                style: const TextStyle(color: Colors.white),
               ),
             ),
-          ),
-        );
-      },
+          ],
+        ),
+        backgroundColor: message.status == Status.info
+            ? uniDarkGray
+            : message.status == Status.warn
+                ? uniOrange
+                : uniRed,
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(8),
+        padding: const EdgeInsets.all(8),
+        duration: const Duration(seconds: 3),
+      ),
     );
   }
 }

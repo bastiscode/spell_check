@@ -57,8 +57,44 @@ class API {
           "${tokenizationRepairModel ?? ""},${sedWordsModel ?? ""},${secModel ?? ""}";
       final res = await http.post(
           Uri.parse(
-              "$_baseURL/process_text?pipeline=${Uri.encodeComponent(pipeline)}&edited=${edited ? "true" : "false"}"),
+              "$_baseURL/run?pipeline=${Uri.encodeComponent(pipeline)}&edited=${edited ? "true" : "false"}"),
           body: {"text": text});
+      if (res.statusCode != 200) {
+        return APIResult(res.statusCode, res.body, null);
+      } else {
+        return APIResult(res.statusCode, "ok", jsonDecode(res.body));
+      }
+    } catch (e) {
+      return APIResult(-1, "could not reach backend", null);
+    }
+  }
+
+  Future<APIResult> evaluateSec(
+      String input, String prediction, String groundtruth) async {
+    return await _evaluate("sec", input, prediction, groundtruth);
+  }
+
+  Future<APIResult> evaluateSedw(
+      String input, String prediction, String groundtruth) async {
+    return await _evaluate("sed words", input, prediction, groundtruth);
+  }
+
+  Future<APIResult> evaluateTr(
+      String input, String prediction, String groundtruth) async {
+    return await _evaluate(
+        "tokenization repair", input, prediction, groundtruth);
+  }
+
+  Future<APIResult> _evaluate(
+      String type, String input, String prediction, String groundtruth) async {
+    try {
+      final res = await http.post(
+          Uri.parse("$_baseURL/evaluate?type=${Uri.encodeComponent(type)}"),
+          body: {
+            "input": input,
+            "prediction": prediction,
+            "groundtruth": groundtruth
+          });
       if (res.statusCode != 200) {
         return APIResult(res.statusCode, res.body, null);
       } else {

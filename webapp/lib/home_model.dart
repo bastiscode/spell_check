@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:collection';
 
 import 'package:flutter/foundation.dart';
@@ -32,6 +33,7 @@ class HomeModel extends BaseModel {
 
   String? fileString;
 
+  String lastInputString = "";
   String inputString = "";
 
   bool get validPipeline =>
@@ -52,6 +54,7 @@ class HomeModel extends BaseModel {
   bool get waiting => _waiting;
 
   bool _hasResults = false;
+
   bool get hasResults => _hasResults;
 
   bool live = false;
@@ -130,7 +133,22 @@ class HomeModel extends BaseModel {
     prefs.setBool("hidePipeline", hidePipeline);
   }
 
-  Future<void> runPipeline() async {
+  runPipelineLive() async {
+    while (live) {
+      final inputString = this.inputString;
+      if (lastInputString != inputString && !waiting) {
+        final success = await runPipeline();
+        if (success) {
+          lastInputString = inputString;
+        }
+      } else {
+        // wait for some time
+        await Future.delayed(const Duration(milliseconds: 10), () => {});
+      }
+    }
+  }
+
+  Future<bool> runPipeline() async {
     _waiting = true;
     if (!live) {
       outputs = null;
@@ -149,27 +167,28 @@ class HomeModel extends BaseModel {
       outputs = result.value["output"];
       runtimes = result.value["runtimes"];
       input = inputLines;
-      _hasResults = true;
-    } else {
-      _hasResults = false;
     }
+    _hasResults = success;
     _waiting = false;
+    notifyListeners();
+    return _hasResults;
+  }
+
+  onClipboard(String name) {
+    addMessage(
+      Message("Copied $name outputs to clipboard", Status.info),
+    );
     notifyListeners();
   }
 
   onDownload(String? fileName, String name) {
-      if (fileName != null) {
-          if (!kIsWeb) {
-            addMessage(
-              Message(
-                  "Downloaded $name outputs to $fileName",
-                  Status.info),
-            );
-          }
-        } else {
-          addMessage(Message(
-              "Unexpected error downloading $name outputs",
-              Status.error));
-        }
+    if (fileName != null) {
+      addMessage(
+        Message("Downloaded $name outputs to $fileName", Status.info),
+      );
+    } else {
+      addMessage(Message("Unexpected error downloading $name outputs", Status.error));
+    }
+    notifyListeners();
   }
 }

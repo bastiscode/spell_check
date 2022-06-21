@@ -1,11 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:webapp/colors.dart';
 import 'package:webapp/home_view.dart';
 import 'package:webapp/locator.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
   setupLocator();
-  runApp(const SpellCheckApp());
+  SystemChrome.setPreferredOrientations([
+    DeviceOrientation.landscapeRight,
+    DeviceOrientation.landscapeLeft,
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown
+  ]).then((_) => runApp(const SpellCheckApp()));
 }
 
 class SpellCheckApp extends StatelessWidget {
@@ -23,7 +30,7 @@ class SpellCheckApp extends StatelessWidget {
           inputDecorationTheme:
               const InputDecorationTheme(border: OutlineInputBorder()),
           fontFamily: "Georgia"),
-      home: const HomeView()
+      home: const HomeView(),
     );
   }
 }
