@@ -1,19 +1,11 @@
 import 'dart:async';
 import 'dart:collection';
 
-import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:webapp/api.dart';
 import 'package:webapp/base_model.dart';
+import 'package:webapp/components/message.dart';
 
-enum Status { error, warn, info }
-
-class Message {
-  String message;
-  Status status;
-
-  Message(this.message, this.status);
-}
 
 class HomeModel extends BaseModel {
   dynamic _models;
@@ -99,28 +91,11 @@ class HomeModel extends BaseModel {
     notifyListeners();
   }
 
-  bool get messageAvailable {
-    return _messages.isNotEmpty;
-  }
-
-  void addMessage(Message message) {
-    _messages.add(message);
-  }
-
-  Message popMessage() {
-    return _messages.removeFirst();
-  }
-
-  bool _checkApiResult(APIResult result, String messagePrefix) {
+  Message? _checkApiResult(APIResult result, String messagePrefix) {
     if (result.statusCode == -1) {
-      addMessage(
-          Message("$messagePrefix: unable to reach server", Status.error));
-      return false;
+      return Message("$messagePrefix: unable to reach server", Status.error);
     } else if (result.statusCode != 200) {
-      addMessage(Message("$messagePrefix: ${result.message}", Status.warn));
-      return false;
-    } else {
-      return true;
+      return Message("$messagePrefix: ${result.message}", Status.warn);
     }
   }
 
@@ -137,8 +112,8 @@ class HomeModel extends BaseModel {
     while (live) {
       final inputString = this.inputString;
       if (lastInputString != inputString && !waiting) {
-        final success = await runPipeline();
-        if (success) {
+        final error = await runPipeline();
+        if (error == null) {
           lastInputString = inputString;
         }
       } else {
@@ -148,7 +123,7 @@ class HomeModel extends BaseModel {
     }
   }
 
-  Future<bool> runPipeline() async {
+  Future<Message?> runPipeline() async {
     _waiting = true;
     if (!live) {
       outputs = null;
@@ -162,33 +137,15 @@ class HomeModel extends BaseModel {
     var inputText = "${inputLines.join("\n")}\n";
     final result =
         await api.runPipeline(inputText, trModel, sedwModel, secModel);
-    final success = _checkApiResult(result, "error running pipeline");
-    if (success) {
+    final error = _checkApiResult(result, "error running pipeline");
+    if (error == null) {
       outputs = result.value["output"];
       runtimes = result.value["runtimes"];
       input = inputLines;
     }
-    _hasResults = success;
+    _hasResults = error == null;
     _waiting = false;
     notifyListeners();
-    return _hasResults;
-  }
-
-  onClipboard(String name) {
-    addMessage(
-      Message("Copied $name outputs to clipboard", Status.info),
-    );
-    notifyListeners();
-  }
-
-  onDownload(String? fileName, String name) {
-    if (fileName != null) {
-      addMessage(
-        Message("Downloaded $name outputs to $fileName", Status.info),
-      );
-    } else {
-      addMessage(Message("Unexpected error downloading $name outputs", Status.error));
-    }
-    notifyListeners();
+    return error;
   }
 }

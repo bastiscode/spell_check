@@ -1,9 +1,13 @@
+import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:webapp/api.dart';
 
 import 'package:webapp/colors.dart';
+import 'package:webapp/components/file_upload.dart';
+import 'package:webapp/components/input_or_upload.dart';
 import 'package:webapp/utils.dart';
 
 import 'package:webapp/platforms/file_download_interface.dart';
@@ -34,6 +38,14 @@ class _ResultViewState extends State<ResultView> {
   bool showTrRaw = false;
   bool showSedwRaw = false;
   bool showSecRaw = false;
+
+  String? trGroundtruth;
+  String? sedwGroundtruth;
+  String? secGroundtruth;
+
+  dynamic trEvaluation;
+  dynamic sedwEvaluation;
+  dynamic secEvaluation;
 
   int numShow = 10;
 
@@ -85,19 +97,22 @@ class _ResultViewState extends State<ResultView> {
       mainAxisSize: MainAxisSize.min,
       children: [
         Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
             if (hasTr)
               Flexible(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Text(
-                      "Tokenization repair results (${formatS(trRuntimes["s"])}, ${formatBps(trRuntimes["bps"])})",
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                      textAlign: TextAlign.center,
-                    ),
-                    resultActions(
+                child: ExpansionTile(
+                  expandedCrossAxisAlignment: CrossAxisAlignment.start,
+                  tilePadding: EdgeInsets.zero,
+                  title: const Text(
+                    "Tokenization repair results",
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  controlAffinity: ListTileControlAffinity.leading,
+                  subtitle: Text(
+                      "${formatS(trRuntimes["s"])}, ${formatB(trRuntimes["bps"])}/s"),
+                  trailing: resultActions(
                       "tokenization repair",
                       showTrRaw,
                       () {
@@ -113,39 +128,78 @@ class _ResultViewState extends State<ResultView> {
                       (fileName) {
                         widget.onDownload(fileName, "tokenization repair");
                       },
-                    )
+                      () {}),
+                  childrenPadding: const EdgeInsets.symmetric(vertical: 8),
+                  children: [
+                    trGroundtruth == null
+                        ? ElevatedButton.icon(
+                            onPressed: () async {
+                              trGroundtruth = await showInputOrUploadDialog(
+                                  context,
+                                  "Get tokenization repair groundtruth");
+                              setState(() {});
+                            },
+                            label: const Text(
+                                "Set tokenization repair groundtruth"),
+                            icon: const Icon(Icons.text_snippet))
+                        : Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Expanded(
+                                child: Uploaded(
+                                  title: "Got groundtruth",
+                                  name: "Tokenization repair groundtruth",
+                                  bytes: utf8.encode(trGroundtruth!).length,
+                                  lines: trGroundtruth!.split("\n").length,
+                                  onDelete: () {
+                                    setState(() {
+                                      trGroundtruth = null;
+                                    });
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Flexible(
+                                child: ElevatedButton.icon(
+                                  onPressed: () {},
+                                  icon: const Icon(Icons.analytics),
+                                  label: const Text("Evaluate"),
+                                ),
+                              )
+                            ],
+                          ),
+                    if (trEvaluation != null) Text("$trEvaluation")
                   ],
                 ),
               ),
             if (hasSedw)
               Flexible(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Text(
-                      "Word-level spelling error detection results (${formatS(sedwRuntimes["s"])}, ${formatBps(sedwRuntimes["bps"])})",
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                      textAlign: TextAlign.center,
-                    ),
-                    resultActions(
-                      "spelling error detection",
-                      showSedwRaw,
-                      () {
-                        setState(() {
-                          showSedwRaw = !showSedwRaw;
-                        });
-                      },
-                      "${_rawDetections.join("\n")}\n",
-                      "sedw_results",
-                      () {
-                        widget.onClipboard("spelling error detection");
-                      },
-                      (fileName) {
-                        widget.onDownload(fileName, "spelling error detection");
-                      },
-                    )
-                  ],
-                ),
+                child: ExpansionTile(
+                    tilePadding: EdgeInsets.zero,
+                    controlAffinity: ListTileControlAffinity.leading,
+                    title: const Text(
+                        "Word-level spelling error detection results",
+                        style: TextStyle(fontWeight: FontWeight.bold)),
+                    subtitle: Text(
+                        "${formatS(sedwRuntimes["s"])}, ${formatB(sedwRuntimes["bps"])}/s"),
+                    trailing: resultActions(
+                        "spelling error detection",
+                        showSedwRaw,
+                        () {
+                          setState(() {
+                            showSedwRaw = !showSedwRaw;
+                          });
+                        },
+                        "${_rawDetections.join("\n")}\n",
+                        "sedw_results",
+                        () {
+                          widget.onClipboard("spelling error detection");
+                        },
+                        (fileName) {
+                          widget.onDownload(
+                              fileName, "spelling error detection");
+                        },
+                        () {})),
               ),
             if (hasSec)
               Flexible(
@@ -153,28 +207,28 @@ class _ResultViewState extends State<ResultView> {
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     Text(
-                      "Spelling error correction results (${formatS(secRuntimes["s"])}, ${formatBps(secRuntimes["bps"])})",
+                      "Spelling error correction results (${formatS(secRuntimes["s"])}, ${formatB(secRuntimes["bps"])}/s)",
                       style: const TextStyle(fontWeight: FontWeight.bold),
                       textAlign: TextAlign.center,
                     ),
                     resultActions(
-                      "spelling error correction",
-                      showSecRaw,
-                      () {
-                        setState(() {
-                          showSecRaw = !showSecRaw;
-                        });
-                      },
-                      secResults["text"].join("\n") + "\n",
-                      "sec_results",
-                      () {
-                        widget.onClipboard("spelling error correction");
-                      },
-                      (fileName) {
-                        widget.onDownload(
-                            fileName, "spelling error correction");
-                      },
-                    )
+                        "spelling error correction",
+                        showSecRaw,
+                        () {
+                          setState(() {
+                            showSecRaw = !showSecRaw;
+                          });
+                        },
+                        secResults["text"].join("\n") + "\n",
+                        "sec_results",
+                        () {
+                          widget.onClipboard("spelling error correction");
+                        },
+                        (fileName) {
+                          widget.onDownload(
+                              fileName, "spelling error correction");
+                        },
+                        () {})
                   ],
                 ),
               ),
@@ -288,8 +342,10 @@ Widget resultActions(
     String rawOutput,
     String downloadFileName,
     VoidCallback onClipboard,
-    Function(String?) onDownload) {
+    Function(String?) onDownload,
+    VoidCallback onEvaluate) {
   return Row(
+    mainAxisSize: MainAxisSize.min,
     mainAxisAlignment: MainAxisAlignment.center,
     children: [
       IconButton(
@@ -319,7 +375,7 @@ Widget resultActions(
         icon: const Icon(Icons.file_download),
       ),
       IconButton(
-          onPressed: () {},
+          onPressed: onEvaluate,
           tooltip: "Evaluate $tooltipName outputs",
           splashRadius: 16,
           icon: const Icon(Icons.analytics))

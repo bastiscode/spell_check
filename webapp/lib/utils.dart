@@ -7,11 +7,11 @@ String formatS(double s) {
   }
 }
 
-String formatBps(double bps) {
-  if (bps > 1000) {
-    bps /= 1000;
-    return "${bps.toStringAsFixed(2)}kB/s";
+String formatB(double b) {
+  if (b > 1000) {
+    b /= 1000;
+    return "${b.toStringAsFixed(2)}kB";
   } else {
-    return "${bps.round()}b/s";
+    return "${b.round()}b";
   }
 }

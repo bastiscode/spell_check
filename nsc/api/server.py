@@ -20,9 +20,11 @@ from nsc import (
     get_available_spelling_error_correction_models, version
 )
 from nsc.api.utils import ModelInfo, get_cpu_info, get_gpu_info
-from nsc.utils import common
+from nsc.data.utils import clean_sequence, flatten
+from nsc.utils import common, metrics
 # disable flask startup message and set flask mode to development
 from nsc.utils.edit import get_edited_words
+from nsc.utils.io import dictionary_from_file
 from nsc.utils.tokenization_repair import get_whitespace_operations
 
 cli.show_server_banner = lambda *_: None
@@ -59,13 +61,23 @@ class Models:
         self.max_models_per_device = 3
         self.available_models = []
         self.num_devices = torch.cuda.device_count()
+        self.dictionary = {}
 
-    def init(self, model_infos: List[ModelInfo], timeout: float, precision: str, max_models_per_gpu: int) -> None:
+    def init(
+            self,
+            model_infos: List[ModelInfo],
+            timeout: float,
+            precision: str,
+            max_models_per_gpu: int,
+            dictionary_path: str
+    ) -> None:
         self.available_models = model_infos
         logger.info(f"found {self.num_devices} GPUs")
         self.precision = precision
         self.timeout = timeout
         self.max_models_per_device = max_models_per_gpu
+        self.dictionary = dictionary_from_file(dictionary_path)
+
         for i, model_info in enumerate(model_infos):
             logger.info(f"loading model {model_info.name} for task {model_info.task}")
             name = _full_name(model_info)
@@ -212,6 +224,71 @@ def evaluate() -> Response:
                      f"sed words, or sec, but got {typ}", status=400)
         )
 
+    ipt = [clean_sequence(p) for p in ipt.split("\n")]
+    pred = [clean_sequence(p) for p in pred.split("\n")]
+    gt = [clean_sequence(p) for p in gt.split("\n")]
+    if typ == "tokenization repair":
+        try:
+            (f1, prec, rec), _ = metrics.tok_rep_f1_prec_rec(ipt, pred, gt)
+            seq_acc = metrics.accuracy(pred, gt)
+            return jsonify({
+                "f1": f1,
+                "prec": prec,
+                "rec": rec,
+                "seq_acc": seq_acc
+            })
+        except Exception:
+            return abort(
+                Response(f"error evaluating tokenization repair outputs, make sure "
+                         f"that you pass them in the right format"), status=400
+            )
+    elif typ == "sed words":
+        try:
+            pred = flatten([[int(d) for d in p.split()] for p in pred])
+            gt = flatten([[int(d) for d in g.split()] for g in gt])
+            f1, prec, rec = metrics.binary_f1_prec_rec(pred, gt)
+            word_acc = metrics.accuracy(pred, gt)
+            words = flatten([i.split() for i in ipt])
+            rw_detections = []
+            nw_detections = []
+            for p, g, w in zip(pred, gt, words):
+                if g == 0:
+                    continue
+                if metrics.is_real_word(w, models.dictionary):
+                    rw_detections.append(p)
+                else:
+                    nw_detections.append(p)
+            return jsonify({
+                "f1": f1,
+                "prec": prec,
+                "rec": rec,
+                "word_acc": word_acc,
+                "rw_errors": len(rw_detections),
+                "rw_detections": sum(rw_detections),
+                "nw_errors": len(nw_detections),
+                "nw_detections": sum(nw_detections)
+            })
+        except Exception:
+            return abort(
+                Response(f"error evaluating tokenization repair outputs, make sure "
+                         f"that you pass them in the right format"), status=400
+            )
+    else:
+        try:
+            mned = metrics.mean_normalized_sequence_edit_distance(pred, gt)
+            (f1, prec, rec), _ = metrics.correction_f1_prec_rec(ipt, pred, gt)
+            return jsonify({
+                "f1": f1,
+                "prec": prec,
+                "rec": rec,
+                "mned": mned
+            })
+        except Exception:
+            return abort(
+                Response(f"error evaluating tokenization repair outputs, make sure "
+                         f"that you pass them in the right format"), status=400
+            )
+
 
 @server.route(f"{server_base_url}/run", methods=["POST"])
 def run() -> Response:
@@ -296,13 +373,12 @@ def run() -> Response:
     total_runtime = end_total - start_total
     logger.info(f"processing text with {org_text_bytes} bytes with pipeline {pipeline} took {total_runtime:.2f}s")
     runtimes["total"] = {"s": total_runtime, "bps": org_text_bytes / total_runtime}
-    response = jsonify(
+    return jsonify(
         {
             "output": output,
             "runtimes": runtimes
         }
     )
-    return response
 
 
 @dataclasses.dataclass
@@ -313,6 +389,7 @@ class ServerConfig:
     timeout: float = 10.0
     models: Dict[str, List[str]] = MISSING
     max_models_per_gpu: int = 3
+    dictionary: str = MISSING
 
 
 def run_flask_server(config_path: str) -> None:
@@ -334,7 +411,8 @@ def run_flask_server(config_path: str) -> None:
         model_infos=model_infos,
         timeout=config.timeout,
         precision=config.precision,
-        max_models_per_gpu=max(1, config.max_models_per_gpu)
+        max_models_per_gpu=max(1, config.max_models_per_gpu),
+        dictionary_path=config.dictionary
     )
 
     logger.info(f"starting server on {config.host}:{config.port}...")
