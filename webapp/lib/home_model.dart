@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:collection';
 
+import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:webapp/api.dart';
 import 'package:webapp/base_model.dart';
@@ -31,9 +32,9 @@ class HomeModel extends BaseModel {
   dynamic sedwEvaluation;
   dynamic secEvaluation;
 
-  String? fileString;
   String lastInputString = "";
-  String inputString = "";
+  late TextEditingController inputController;
+  late TextEditingController outputController;
 
   bool get validPipeline =>
       trModel != null || sedwModel != null || secModel != null;
@@ -60,11 +61,16 @@ class HomeModel extends BaseModel {
 
   bool get hasResults => _hasResults;
 
+  bool get hasInput => inputController.text.isNotEmpty;
+
   bool live = false;
 
   bool hidePipeline = false;
 
-  Future<void> init() async {
+  Future<void> init(TextEditingController inputController, TextEditingController outputController) async {
+    this.inputController = inputController;
+    this.outputController = outputController;
+
     _models = await api.models();
     final prefs = await SharedPreferences.getInstance();
     final hidePipeline = prefs.getBool("hidePipeline");
@@ -111,9 +117,9 @@ class HomeModel extends BaseModel {
 
   runPipelineLive() async {
     while (live) {
-      final inputString = this.inputString;
+      final inputString = inputController.text;
       if (lastInputString != inputString && !waiting) {
-        final error = await runPipeline();
+        final error = await runPipeline(inputString);
         if (error == null) {
           lastInputString = inputString;
         }
@@ -124,18 +130,21 @@ class HomeModel extends BaseModel {
     }
   }
 
-  Future<Message?> runPipeline() async {
+  Future<Message?> runPipeline(String inputString) async {
     _waiting = true;
     if (!live) {
+      _hasResults = false;
       outputs = null;
       runtimes = null;
+      input.clear();
     }
     notifyListeners();
     final inputLines = inputString
         .split("\n")
         .map((s) => s.trim().replaceAll(RegExp(r"\s+"), " "))
         .toList();
-    var inputText = "${inputLines.join("\n")}\n";
+    debugPrint("input lines: $inputLines, ${inputLines.length}");
+    var inputText = inputLines.join("\n");
     final result =
         await api.runPipeline(inputText, trModel, sedwModel, secModel);
     final error = errorMessageFromAPIResult(result, "error running pipeline");
@@ -143,6 +152,13 @@ class HomeModel extends BaseModel {
       outputs = result.value["output"];
       runtimes = result.value["runtimes"];
       input = inputLines;
+      if (secModel != null) {
+        outputController.text = outputs["sec"]["text"].join("\n");
+      } else if (sedwModel != null) {
+        outputController.text = outputs["sed words"]["detections"].map((detection) => detection.join(" ")).join("\n");
+      } else {
+        outputController.text = outputs["tokenization repair"]["text"].join("\n");
+      }
     }
     _hasResults = error == null;
     _waiting = false;

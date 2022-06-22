@@ -93,34 +93,36 @@ class _ResultViewState extends State<ResultView> {
     final indices =
         _indices.where((idx) => idx >= 0 && idx < widget.input.length).toList();
     indices.sort();
+    debugPrint("valid indices $indices ${indices.length} ${widget.input} ${widget.input.length}, ${widget.input}, $trResults, $sedwResults, $secResults");
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: TextField(
-                  decoration: const InputDecoration(
-                      prefixIcon: Icon(Icons.filter_alt),
-                      border: OutlineInputBorder(),
-                      hintText:
-                          "Filter results by specifying indices like 4, 5, 6, or ranges like 10-20, 40-50. "
-                          "By default or if no valid filter pattern is found the first 10 results are shown."),
-                  controller: _filterController,
-                  onSubmitted: (filter) {
-                    setState(() {
-                      _indices = getIndices(filter);
-                    });
-                  },
+        if (widget.input.length > 1)
+          Row(
+            children: [
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: TextField(
+                    decoration: const InputDecoration(
+                        prefixIcon: Icon(Icons.filter_alt),
+                        border: OutlineInputBorder(),
+                        hintText:
+                            "Filter results by specifying indices like 4, 5, 6, or ranges like 10-20, 40-50. "
+                            "By default or if no valid filter pattern is found the first 10 results are shown."),
+                    controller: _filterController,
+                    onSubmitted: (filter) {
+                      setState(() {
+                        _indices = getIndices(filter);
+                      });
+                    },
+                  ),
                 ),
               ),
-            ),
-          ],
-        ),
+            ],
+          ),
         Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
