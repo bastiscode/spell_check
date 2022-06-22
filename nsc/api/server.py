@@ -30,7 +30,8 @@ from nsc.utils.tokenization_repair import get_whitespace_operations
 cli.show_server_banner = lambda *_: None
 os.environ["FLASK_ENV"] = "development"
 server = Flask(__name__)
-server.config["MAX_CONTENT_LENGTH"] = 1 * 1000 * 1000  # 1MB max file size
+# 6MB max content size --> 2MB for input, prediction, and groundtruth respectively for evaluation
+server.config["MAX_CONTENT_LENGTH"] = 6 * 1000 * 1000
 server_base_url = os.environ.get("BASE_URL", "")
 flask_logger = logging.getLogger("werkzeug")
 flask_logger.disabled = True
