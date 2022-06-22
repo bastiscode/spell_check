@@ -8,9 +8,3 @@ matthias-thesis:
 	-v $(shell pwd)/third_party/matthias-master/thesis:/external \
 	-v $(shell pwd)/spell_checking/benchmarks/test/sec:/sec \
 	-p 1234:1234 matthias-hertel-thesis
-
-.PHONY: env
-env:
-	export CUDA_VISIBLE_DEVICES=1
-	export NSC_DATA_DIR=data
-	export NSC_CONFIG_DIR=spell_checking/configs

@@ -19,7 +19,8 @@ setup(
     scripts=[
         "bin/nsec",
         "bin/nsed",
-        "bin/ntr"
+        "bin/ntr",
+        "bin/nserver"
     ],
     install_requires=[
         "torch==1.11.0",
@@ -30,7 +31,8 @@ setup(
         "omegaconf==2.1.2",
         "spacy==3.2.4",
         "tqdm==4.62.3",
-        "requests==2.27.1"
+        "requests==2.27.1",
+        "flask>=2.0.0"
     ],
     extras_require={
         "train": [

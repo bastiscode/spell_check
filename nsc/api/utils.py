@@ -513,7 +513,6 @@ def load_experiment_config(
         env_vars.update(override_env_vars)
 
     config.set_nsc_env_vars(env_vars, keep_existing_env_vars)
-    print({k: v for k, v in os.environ.items() if k.startswith("NSC")})
     OmegaConf.resolve(cfg)
     schema = OmegaConf.structured(config.TrainConfig)
     cfg = OmegaConf.merge(schema, cfg)

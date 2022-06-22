@@ -26,7 +26,7 @@ RUN make install
 COPY server_config server_config
 COPY webapp webapp
 
-ENV NSC_DOWNLOAD_DIR=/zipped
+ENV NSC_DOWNLOAD_DIR=/download
 ENV NSC_CACHE_DIR=/cache
 WORKDIR /spell_check/docker
 CMD make help && bash

@@ -16,6 +16,7 @@ dist
 /experiments
 /data
 /zipped
+/cache
 /third_party/*
 !/third_party/gector
 !/third_party/gpt3

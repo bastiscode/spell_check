@@ -20,14 +20,24 @@ build_docker:
 .PHONY: run_docker_gpu
 run_docker_gpu:
 	@echo "Running nsc image with GPU support"
-	@$(DOCKER_CMD) run $(DOCKER_ARGS) -e NSC_CACHE_DIR=/nsc_cache -e NSC_DOWNLOAD_DIR=/nsc_download \
-	--rm -it --gpus all --name nsc_gpu nsc
+	@$(DOCKER_CMD) run $(DOCKER_ARGS) --rm -it --gpus all --name nsc_gpu nsc
 
 .PHONY: run_docker_cpu
 run_docker_cpu:
-	@echo "Running nsc image with GPU support"
-	@$(DOCKER_CMD) run $(DOCKER_ARGS) -e NSC_CACHE_DIR=/nsc_cache -e NSC_DOWNLOAD_DIR=/nsc_download \
-	--rm -it --name nsc_cpu nsc
+	@echo "Running nsc image with CPU support"
+	@$(DOCKER_CMD) run $(DOCKER_ARGS) --rm -it --name nsc_cpu nsc
+
+.PHONY: run_docker_server
+run_docker_server:
+	@echo "Running nsc server"
+	@$(DOCKER_CMD) run $(DOCKER_ARGS) --rm -it --gpus all --name nsc_server --entrypoint bash nsc \
+ 	-c "nserver -c server_config/server.yaml"
+
+.PHONY: run_docker_webapp
+run_docker_webapp:
+	@echo "Running nsc webapp"
+	@$(DOCKER_CMD) run $(DOCKER_ARGS) --rm -it --gpus all --name nsc_webapp --entrypoint bash nsc \
+	-c "make -C docker/"
 
 .PHONY: docs
 docs:
