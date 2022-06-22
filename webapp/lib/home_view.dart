@@ -37,7 +37,6 @@ class _HomeViewState extends State<HomeView> {
 
   final TextEditingController inputController = TextEditingController();
   final TextEditingController outputController = TextEditingController();
-  final ScrollController inputOutputScrollController = ScrollController();
 
   @override
   Widget build(BuildContext homeContext) {
@@ -402,7 +401,6 @@ class _HomeViewState extends State<HomeView> {
                                 Expanded(
                                   child: TextField(
                                       controller: model.inputController,
-                                      scrollController: inputOutputScrollController,
                                       maxLines: model.live ? 1 : 10,
                                       decoration: InputDecoration(
                                         border: const OutlineInputBorder(),
@@ -419,19 +417,16 @@ class _HomeViewState extends State<HomeView> {
                                                     tooltip: "Clear text",
                                                     splashRadius: 16,
                                                     color: uniRed,
-                                                    onPressed:
-                                                        model.validPipeline &&
-                                                                !model
-                                                                    .waiting &&
-                                                                model.hasInput
-                                                            ? () {
-                                                                setState(() {
-                                                                  model
-                                                                      .inputController
-                                                                      .text = "";
-                                                                });
-                                                              }
-                                                            : null,
+                                                    onPressed: !model.waiting &&
+                                                            model.hasInput
+                                                        ? () {
+                                                            setState(() {
+                                                              model
+                                                                  .inputController
+                                                                  .text = "";
+                                                            });
+                                                          }
+                                                        : null,
                                                   ),
                                                   IconButton(
                                                     icon:
@@ -439,80 +434,75 @@ class _HomeViewState extends State<HomeView> {
                                                     tooltip:
                                                         "Paste text from clipboard",
                                                     splashRadius: 16,
-                                                    onPressed:
-                                                        model.validPipeline &&
-                                                                !model.waiting
-                                                            ? () async {
-                                                                final data =
-                                                                    await Clipboard
-                                                                        .getData(
-                                                                            "text/plain");
-                                                                setState(() {
-                                                                  if (data !=
-                                                                      null) {
-                                                                    model.inputController
-                                                                            .text =
-                                                                        data.text!;
-                                                                  } else {
-                                                                    showMessage(
-                                                                      context,
-                                                                      Message(
-                                                                          "could not paste text from clipboard",
-                                                                          Status
-                                                                              .error),
-                                                                    );
-                                                                  }
-                                                                });
+                                                    onPressed: !model.waiting
+                                                        ? () async {
+                                                            final data =
+                                                                await Clipboard
+                                                                    .getData(
+                                                                        "text/plain");
+                                                            setState(() {
+                                                              if (data !=
+                                                                  null) {
+                                                                model.inputController
+                                                                        .text =
+                                                                    data.text!;
+                                                              } else {
+                                                                showMessage(
+                                                                  context,
+                                                                  Message(
+                                                                      "could not paste text from clipboard",
+                                                                      Status
+                                                                          .error),
+                                                                );
                                                               }
-                                                            : null,
+                                                            });
+                                                          }
+                                                        : null,
                                                   ),
                                                   IconButton(
-                                                    onPressed:
-                                                        model.validPipeline &&
-                                                                !model
-                                                                    .waiting &&
-                                                                !model.live
-                                                            ? () async {
-                                                                try {
-                                                                  final files = await FilePicker.platform.pickFiles(
+                                                    onPressed: !model.waiting
+                                                        ? () async {
+                                                            try {
+                                                              final files = await FilePicker
+                                                                  .platform
+                                                                  .pickFiles(
                                                                       dialogTitle:
                                                                           "Pick a text file",
                                                                       type: FileType.custom,
                                                                       allowedExtensions: [
-                                                                        "txt"
-                                                                      ]);
-                                                                  if (files !=
-                                                                      null) {
-                                                                    final file = files
-                                                                        .files
+                                                                    "txt"
+                                                                  ]);
+                                                              if (files !=
+                                                                  null) {
+                                                                final file =
+                                                                    files.files
                                                                         .single;
-                                                                    final content =
-                                                                        utf8.decode(
-                                                                            file.bytes!);
-                                                                    setState(
-                                                                        () {
-                                                                      model.inputController
-                                                                              .text =
-                                                                          content;
-                                                                    });
-                                                                  }
-                                                                } on FormatException catch (e) {
-                                                                  showMessage(
-                                                                      context,
-                                                                      Message(
-                                                                          "error decoding file, make sure that it contains valid utf8 bytes",
-                                                                          Status
-                                                                              .error));
-                                                                } on PlatformException catch (e) {
-                                                                  showMessage(
-                                                                      context,
-                                                                      Message(
-                                                                          "error uploading file: ${e.message}",
-                                                                          Status
-                                                                              .error));
-                                                                }
+                                                                final content =
+                                                                    utf8.decode(
+                                                                        file.bytes!);
+                                                                setState(() {
+                                                                  model.inputController
+                                                                          .text =
+                                                                      content;
+                                                                });
                                                               }
-                                                            : null,
+                                                            } on FormatException catch (e) {
+                                                              showMessage(
+                                                                  context,
+                                                                  Message(
+                                                                      "error decoding file, make sure that it contains valid utf8 bytes",
+                                                                      Status
+                                                                          .error));
+                                                            } on PlatformException catch (e) {
+                                                              showMessage(
+                                                                  context,
+                                                                  Message(
+                                                                      "error uploading file: ${e.message}",
+                                                                      Status
+                                                                          .error));
+                                                            }
+                                                          }
+                                                        : null,
                                                     icon: const Icon(
                                                         Icons.upload_file),
                                                     tooltip:
@@ -522,7 +512,7 @@ class _HomeViewState extends State<HomeView> {
                                                 ],
                                               ),
                                       ),
-                                      enabled: model.validPipeline),
+                                      enabled: !model.waiting),
                                 ),
                                 SizedBox(
                                   width: 64,
@@ -531,8 +521,10 @@ class _HomeViewState extends State<HomeView> {
                                       if (!model.live)
                                         Card(
                                           color: model.validPipeline &&
-                                              !model.waiting &&
-                                              !model.live ? uniBlue : uniGray,
+                                                  !model.waiting &&
+                                                  !model.live
+                                              ? uniBlue
+                                              : uniGray,
                                           shape: RoundedRectangleBorder(
                                               borderRadius:
                                                   BorderRadius.circular(20)),
@@ -590,22 +582,47 @@ class _HomeViewState extends State<HomeView> {
                                 Expanded(
                                     child: TextField(
                                   controller: model.outputController,
-                                  scrollController: inputOutputScrollController,
                                   maxLines: model.live ? 1 : 10,
                                   readOnly: true,
                                   decoration: InputDecoration(
-                                    suffixIcon: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                                      if (!model.waiting || model.live) IconButton(
-                                        splashRadius: 16,
-                                        tooltip: "Copy text to clipboard",
-                                        onPressed: () async {
-                                          await Clipboard.setData(ClipboardData(
-                                              text:
-                                                  model.outputController.text));
-                                        },
-                                        icon: const Icon(Icons.copy),
-                                      ) else const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2,))
-                                    ]),
+                                    hintText: "...",
+                                    label: outputController.text.isEmpty ? null : Icon(Icons.phone),
+                                    suffixIcon: Column(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          if (!model.waiting || model.live) ...[
+                                            IconButton(
+                                              onPressed: () {},
+                                              icon: const Icon(Icons.chevron_left),
+                                              splashRadius: 16,
+                                            ),
+                                            IconButton(
+                                              onPressed: () {},
+                                              icon: const Icon(Icons.chevron_right),
+                                              splashRadius: 16,
+                                            ),
+                                            IconButton(
+                                              splashRadius: 16,
+                                              tooltip: "Copy output to clipboard",
+                                              onPressed: () async {
+                                                await Clipboard.setData(
+                                                    ClipboardData(
+                                                        text: model
+                                                            .outputController
+                                                            .text));
+                                              },
+                                              icon: const Icon(Icons.copy),
+                                            )
+                                          ] else
+                                            const SizedBox(
+                                                height: 16,
+                                                width: 16,
+                                                child:
+                                                    CircularProgressIndicator(
+                                                  strokeWidth: 2,
+                                                ))
+                                        ]),
                                   ),
                                 ))
                               ],
@@ -614,14 +631,21 @@ class _HomeViewState extends State<HomeView> {
                             Row(
                               children: [
                                 Expanded(
-                                    child: Text(
-                                        "$numInputLines line${numInputLines > 1 ? "s" : ""} with ${formatB(numInputBytes.toDouble())} of text",
-                                      style: const TextStyle(fontSize: 12, color: uniDarkGray),),),
+                                  child: Text(
+                                    "$numInputLines line${numInputLines > 1 ? "s" : ""} with ${formatB(numInputBytes.toDouble())} of text",
+                                    style: const TextStyle(
+                                        fontSize: 12, color: uniDarkGray),
+                                  ),
+                                ),
                                 const SizedBox(width: 64),
                                 Expanded(
-                                  child: Text(model.hasResults
-                                      ? "${formatS(model.runtimes["total"]["s"])}, ${formatB(model.runtimes["total"]["bps"])}/s"
-                                      : "", style: const TextStyle(fontSize: 12, color: uniDarkGray),),
+                                  child: Text(
+                                    model.hasResults
+                                        ? "${formatS(model.runtimes["total"]["s"])}, ${formatB(model.runtimes["total"]["bps"])}/s"
+                                        : "",
+                                    style: const TextStyle(
+                                        fontSize: 12, color: uniDarkGray),
+                                  ),
                                 ),
                               ],
                             ),
