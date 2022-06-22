@@ -591,7 +591,6 @@ class _HomeViewState extends State<HomeView> {
                                     child: TextField(
                                   controller: model.outputController,
                                   scrollController: inputOutputScrollController,
-                                  toolbarOptions: ,
                                   maxLines: model.live ? 1 : 10,
                                   readOnly: true,
                                   decoration: InputDecoration(
