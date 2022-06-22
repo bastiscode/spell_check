@@ -90,7 +90,8 @@ class _ResultViewState extends State<ResultView> {
       secRuntimes = widget.runtimes["sec"];
     }
 
-    final indices = _indices.where((idx) => idx >= 0 && idx < widget.input.length).toList();
+    final indices =
+        _indices.where((idx) => idx >= 0 && idx < widget.input.length).toList();
     indices.sort();
 
     return Column(
@@ -108,7 +109,7 @@ class _ResultViewState extends State<ResultView> {
                       border: OutlineInputBorder(),
                       hintText:
                           "Filter results by specifying indices like 4, 5, 6, or ranges like 10-20, 40-50. "
-                              "By default or if no valid filter pattern is found the first 10 results are shown."),
+                          "By default or if no valid filter pattern is found the first 10 results are shown."),
                   controller: _filterController,
                   onSubmitted: (filter) {
                     setState(() {
@@ -119,7 +120,8 @@ class _ResultViewState extends State<ResultView> {
               ),
             ),
           ],
-        ),Row(
+        ),
+        Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
@@ -215,10 +217,8 @@ class _ResultViewState extends State<ResultView> {
                   Flexible(
                     flex: 1,
                     child: ListTile(
-                      title: Text(
-                        sedwResults["text"][idx],
-                        textAlign: TextAlign.center,
-                      ),
+                      title: buildSedwText(sedwResults["text"][idx],
+                          sedwResults["detections"][idx]),
                       visualDensity: VisualDensity.compact,
                     ),
                   ),
@@ -241,23 +241,26 @@ class _ResultViewState extends State<ResultView> {
               return Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: Row(
-                    children: [
-                      const SizedBox(
-                          width: 16,
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      children: [
+                        const SizedBox(
+                            width: 16,
+                            child: Divider(
+                              thickness: 1,
+                            )),
+                        const SizedBox(width: 8),
+                        Text("${idx + 1}"),
+                        const SizedBox(width: 8),
+                        const Expanded(
                           child: Divider(
                             thickness: 1,
-                          )),
-                      const SizedBox(width: 8),
-                      Text("${idx + 1}"),
-                      const SizedBox(width: 8),
-                      const Expanded(
-                        child: Divider(
-                          thickness: 1,
-                        ),
-                      )
-                    ],
-                  ),),
+                          ),
+                        )
+                      ],
+                    ),
+                  ),
                   Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: children),
@@ -267,6 +270,27 @@ class _ResultViewState extends State<ResultView> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget buildSedwText(String text, List<dynamic> detections) {
+    final words = text.trim().split(" ");
+    List<TextSpan> children = [];
+    for (int i = 0; i < words.length; i++) {
+      int isError = i < detections.length ? detections[i] : 0;
+      final word = (i > 0 ? " " : "") + words[i].trim();
+      if (isError == 1) {
+        children.add(TextSpan(
+            text: word,
+            style:
+                const TextStyle(color: uniRed, fontWeight: FontWeight.bold)));
+      } else {
+        children.add(TextSpan(text: word));
+      }
+    }
+    return RichText(
+      text: TextSpan(children: children),
+      textAlign: TextAlign.center,
     );
   }
 

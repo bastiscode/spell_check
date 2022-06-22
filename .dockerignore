@@ -3,6 +3,7 @@ experiments
 zipped
 third_party
 .git
+cache
 
 spell_checking/baselines
 spell_checking/benchmarks/dev

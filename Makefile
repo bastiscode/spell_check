@@ -37,7 +37,7 @@ run_docker_server:
 run_docker_webapp:
 	@echo "Running nsc webapp"
 	@$(DOCKER_CMD) run $(DOCKER_ARGS) --rm -it --gpus all --name nsc_webapp --entrypoint bash nsc \
-	-c "make -C docker/"
+	-c "python -m http.server --directory web_app/build/web 8080 & nserver -c server_config/server.yaml && fg"
 
 .PHONY: docs
 docs:
