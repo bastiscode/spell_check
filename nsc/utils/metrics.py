@@ -30,7 +30,7 @@ def _ed(l1: List, l2: List) -> float:
 
 def _ned(l1: List, l2: List) -> float:
     eds = batch_edit_distance(l1, l2)
-    neds = [ed / max(len(s), len(t)) for ed, s, t in zip(eds, l1, l2)]
+    neds = [ed / max(1, len(s), len(t)) for ed, s, t in zip(eds, l1, l2)]
     return sum(neds) / max(1, len(neds))
 
 

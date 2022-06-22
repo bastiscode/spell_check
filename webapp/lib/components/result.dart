@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -16,15 +14,11 @@ class ResultView extends StatefulWidget {
   final List<String> input;
   final dynamic output;
   final dynamic runtimes;
-  final OnDownload onDownload;
-  final OnClipboard onClipboard;
 
   const ResultView(
       {required this.input,
       required this.output,
       required this.runtimes,
-      required this.onDownload,
-      required this.onClipboard,
       super.key});
 
   @override
@@ -33,7 +27,7 @@ class ResultView extends StatefulWidget {
 
 class _ResultViewState extends State<ResultView> {
   final List<String> _rawDetections = [];
-  List<int> _indices = [0];
+  List<int> _indices = List.generate(10, (i) => i);
   final TextEditingController _filterController = TextEditingController();
 
   List<int> getIndices(String filter) {
@@ -57,11 +51,8 @@ class _ResultViewState extends State<ResultView> {
       }
     }
     if (indices.isEmpty) {
-      indices.add(0);
+      indices.addAll(List.generate(10, (i) => i));
     }
-    indices =
-        indices.where((idx) => idx >= 0 && idx < widget.input.length).toList();
-    indices.sort();
     return indices;
   }
 
@@ -99,6 +90,9 @@ class _ResultViewState extends State<ResultView> {
       secRuntimes = widget.runtimes["sec"];
     }
 
+    final indices = _indices.where((idx) => idx >= 0 && idx < widget.input.length).toList();
+    indices.sort();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
       mainAxisSize: MainAxisSize.min,
@@ -106,94 +100,79 @@ class _ResultViewState extends State<ResultView> {
         Row(
           children: [
             Expanded(
-              child: TextField(
-                decoration: const InputDecoration(
-                    prefixIcon: Icon(Icons.filter_alt),
-                    border: OutlineInputBorder(),
-                    hintText:
-                        "Filter results by specifying indices like 4, 5, 6, or ranges like 10-20, 40-50. By default or if no valid filter pattern is found only the first result is shown."),
-                controller: _filterController,
-                onSubmitted: (filter) {
-                  setState(() {
-                    _indices = getIndices(filter);
-                  });
-                },
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: TextField(
+                  decoration: const InputDecoration(
+                      prefixIcon: Icon(Icons.filter_alt),
+                      border: OutlineInputBorder(),
+                      hintText:
+                          "Filter results by specifying indices like 4, 5, 6, or ranges like 10-20, 40-50. "
+                              "By default or if no valid filter pattern is found the first 10 results are shown."),
+                  controller: _filterController,
+                  onSubmitted: (filter) {
+                    setState(() {
+                      _indices = getIndices(filter);
+                    });
+                  },
+                ),
               ),
             ),
           ],
-        ),
-        Row(
+        ),Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
             Flexible(
-              child: Card(
-                child: ListTile(
-                  title: const Text(
-                    "Input",
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  subtitle: Text(
-                      "${widget.input.length} line${widget.input.length > 1 ? "s" : ""}"),
+              child: ListTile(
+                visualDensity: VisualDensity.compact,
+                title: const Text(
+                  "Input",
+                  style: TextStyle(fontWeight: FontWeight.bold),
                 ),
+                subtitle: Text(
+                    "${widget.input.length} line${widget.input.length > 1 ? "s" : ""}"),
               ),
             ),
             if (hasTr)
               Flexible(
                 flex: 1,
-                child: Card(
-                  child: ListTile(
-                    title: const Text(
-                      "Tokenization repair",
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    subtitle: Text(
-                        "${formatS(trRuntimes["s"])}, ${formatB(trRuntimes["bps"])}/s"),
-                    trailing: resultActions("tokenization repair",
-                        trResults["text"].join("\n") + "\n", "tr_results", () {
-                      widget.onClipboard("tokenization repair");
-                    }, (fileName) {
-                      widget.onDownload(fileName, "tokenization repair");
-                    }),
+                child: ListTile(
+                  visualDensity: VisualDensity.compact,
+                  title: const Text(
+                    "Tokenization repair",
+                    style: TextStyle(fontWeight: FontWeight.bold),
                   ),
+                  subtitle: Text(
+                      "${formatS(trRuntimes["s"])}, ${formatB(trRuntimes["bps"])}/s"),
+                  trailing: resultActions(context, "tokenization repair",
+                      trResults["text"].join("\n") + "\n", "tr_results"),
                 ),
               ),
             if (hasSedw)
               Flexible(
                 flex: 1,
-                child: Card(
-                  child: ListTile(
-                    title: const Text("Word-level spelling error detection",
-                        style: TextStyle(fontWeight: FontWeight.bold)),
-                    subtitle: Text(
-                        "${formatS(sedwRuntimes["s"])}, ${formatB(sedwRuntimes["bps"])}/s"),
-                    trailing: resultActions("spelling error detection",
-                        "${_rawDetections.join("\n")}\n", "sedw_results", () {
-                      widget.onClipboard("spelling error detection");
-                    }, (fileName) {
-                      widget.onDownload(fileName, "spelling error detection");
-                    }),
-                  ),
+                child: ListTile(
+                  visualDensity: VisualDensity.compact,
+                  title: const Text("Word-level spelling error detection",
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Text(
+                      "${formatS(sedwRuntimes["s"])}, ${formatB(sedwRuntimes["bps"])}/s"),
+                  trailing: resultActions(context, "spelling error detection",
+                      "${_rawDetections.join("\n")}\n", "sedw_results"),
                 ),
               ),
             if (hasSec)
               Flexible(
                 flex: 1,
-                child: Card(
-                  child: ListTile(
-                    title: const Text("Spelling error correction",
-                        style: TextStyle(fontWeight: FontWeight.bold)),
-                    subtitle: Text(
-                        "${formatS(secRuntimes["s"])}, ${formatB(secRuntimes["bps"])}/s"),
-                    trailing: resultActions(
-                        "spelling error correction",
-                        "${secResults["text"].join("\n")}\n",
-                        "sec_results", () {
-                      widget.onClipboard("spelling error correction");
-                    }, (fileName) {
-                      widget.onDownload(fileName, "spelling error correction");
-                    }),
-                  ),
+                child: ListTile(
+                  visualDensity: VisualDensity.compact,
+                  title: const Text("Spelling error correction",
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Text(
+                      "${formatS(secRuntimes["s"])}, ${formatB(secRuntimes["bps"])}/s"),
+                  trailing: resultActions(context, "spelling error correction",
+                      "${secResults["text"].join("\n")}\n", "sec_results"),
                 ),
               ),
           ],
@@ -201,21 +180,19 @@ class _ResultViewState extends State<ResultView> {
         Flexible(
           child: ListView.builder(
             padding: EdgeInsets.zero,
-            itemCount: _indices.length,
+            itemCount: indices.length,
             physics: const NeverScrollableScrollPhysics(),
             shrinkWrap: true,
             itemBuilder: (buildContext, i) {
-              final idx = _indices[i];
+              final idx = indices[i];
               List<Widget> children = [
                 Flexible(
-                  child: Card(
-                    child: ListTile(
-                      title: Text(
-                        widget.input[idx],
-                        textAlign: TextAlign.center,
-                      ),
-                      visualDensity: VisualDensity.compact,
+                  child: ListTile(
+                    title: Text(
+                      widget.input[idx],
+                      textAlign: TextAlign.center,
                     ),
+                    visualDensity: VisualDensity.compact,
                   ),
                 )
               ];
@@ -223,14 +200,12 @@ class _ResultViewState extends State<ResultView> {
                 children.add(
                   Flexible(
                     flex: 1,
-                    child: Card(
-                      child: ListTile(
-                        title: Text(
-                          trResults["text"][idx],
-                          textAlign: TextAlign.center,
-                        ),
-                        visualDensity: VisualDensity.compact,
+                    child: ListTile(
+                      title: Text(
+                        trResults["text"][idx],
+                        textAlign: TextAlign.center,
                       ),
+                      visualDensity: VisualDensity.compact,
                     ),
                   ),
                 );
@@ -239,14 +214,12 @@ class _ResultViewState extends State<ResultView> {
                 children.addAll([
                   Flexible(
                     flex: 1,
-                    child: Card(
-                      child: ListTile(
-                        title: Text(
-                          sedwResults["text"][idx],
-                          textAlign: TextAlign.center,
-                        ),
-                        visualDensity: VisualDensity.compact,
+                    child: ListTile(
+                      title: Text(
+                        sedwResults["text"][idx],
+                        textAlign: TextAlign.center,
                       ),
+                      visualDensity: VisualDensity.compact,
                     ),
                   ),
                 ]);
@@ -255,14 +228,12 @@ class _ResultViewState extends State<ResultView> {
                 children.addAll([
                   Flexible(
                     flex: 1,
-                    child: Card(
-                      child: ListTile(
-                        title: Text(
-                          secResults["text"][idx],
-                          textAlign: TextAlign.center,
-                        ),
-                        visualDensity: VisualDensity.compact,
+                    child: ListTile(
+                      title: Text(
+                        secResults["text"][idx],
+                        textAlign: TextAlign.center,
                       ),
+                      visualDensity: VisualDensity.compact,
                     ),
                   ),
                 ]);
@@ -270,7 +241,7 @@ class _ResultViewState extends State<ResultView> {
               return Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Row(
+                  Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: Row(
                     children: [
                       const SizedBox(
                           width: 16,
@@ -286,7 +257,7 @@ class _ResultViewState extends State<ResultView> {
                         ),
                       )
                     ],
-                  ),
+                  ),),
                   Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: children),
@@ -298,40 +269,54 @@ class _ResultViewState extends State<ResultView> {
       ],
     );
   }
-}
 
-Widget resultActions(
-    String tooltipName,
-    String rawOutput,
-    String downloadFileName,
-    VoidCallback onClipboard,
-    Function(String?) onDownload) {
-  return Row(
-    mainAxisSize: MainAxisSize.min,
-    mainAxisAlignment: MainAxisAlignment.center,
-    children: [
-      IconButton(
-        onPressed: () async {
-          await Clipboard.setData(ClipboardData(text: rawOutput));
-          onClipboard();
-        },
-        tooltip: "Copy raw $tooltipName outputs",
-        splashRadius: 16,
-        icon: const Icon(Icons.content_copy),
-      ),
-      IconButton(
-        onPressed: () async {
-          final downloader = FileDownloader();
-          final fileName =
-              await downloader.downloadFile(rawOutput, downloadFileName);
-          onDownload(fileName);
-        },
-        tooltip: "Download raw $tooltipName outputs",
-        splashRadius: 16,
-        icon: const Icon(Icons.file_download),
-      )
-    ],
-  );
+  Widget resultActions(BuildContext context, String taskName, String rawOutput,
+      String downloadFileName) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        IconButton(
+          onPressed: () async {
+            await Clipboard.setData(ClipboardData(text: rawOutput));
+            if (mounted) {
+              showMessage(
+                  context,
+                  Message(
+                      "Copied $taskName outputs to clipboard", Status.info));
+            }
+          },
+          tooltip: "Copy raw $taskName outputs",
+          splashRadius: 16,
+          icon: const Icon(Icons.content_copy),
+        ),
+        IconButton(
+          onPressed: () async {
+            final downloader = FileDownloader();
+            final fileName =
+                await downloader.downloadFile(rawOutput, downloadFileName);
+            if (mounted) {
+              if (fileName != null) {
+                showMessage(
+                  context,
+                  Message(
+                      "Downloaded $taskName outputs to $fileName", Status.info),
+                );
+              } else {
+                showMessage(
+                    context,
+                    Message("Unexpected error downloading $taskName outputs",
+                        Status.error));
+              }
+            }
+          },
+          tooltip: "Download raw $taskName outputs",
+          splashRadius: 16,
+          icon: const Icon(Icons.file_download),
+        )
+      ],
+    );
+  }
 }
 
 Widget buildDeletionsText(String s, List<dynamic> edits) {

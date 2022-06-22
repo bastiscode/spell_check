@@ -231,12 +231,11 @@ def evaluate() -> Response:
     if len(ipt) > 1 and ipt[-1] == "":
         ipt = ipt[:-1]
     pred = [clean_sequence(p) for p in pred.split("\n")]
-    if len(ipt) > 1 and ipt[-1] == "":
+    if len(pred) > 1 and pred[-1] == "":
         pred = pred[:-1]
     gt = [clean_sequence(p) for p in gt.split("\n")]
-    if len(ipt) > 1 and ipt[-1] == "":
+    if len(gt) > 1 and gt[-1] == "":
         gt = gt[:-1]
-    print(f"input: {ipt}\npred: {pred}\ngt: {gt}")
     if task == "tokenization repair":
         try:
             _, (f1, prec, rec) = metrics.tok_rep_f1_prec_rec(ipt, pred, gt)
@@ -249,8 +248,7 @@ def evaluate() -> Response:
             }
         except Exception as e:
             return abort(
-                Response(f"error evaluating tokenization repair outputs, make sure "
-                         f"that you pass them in the right format: {e}", status=400)
+                Response(f"data does not have the right format: {e}", status=400)
             )
     elif task == "sed words":
         try:
@@ -280,8 +278,7 @@ def evaluate() -> Response:
             }
         except Exception as e:
             return abort(
-                Response(f"error evaluating tokenization repair outputs, make sure "
-                         f"that you pass them in the right format: {e}"), status=400
+                Response(f"data does not have the right format: {e}", status=400)
             )
     else:
         try:
@@ -295,13 +292,11 @@ def evaluate() -> Response:
             }
         except Exception as e:
             return abort(
-                Response(f"error evaluating tokenization repair outputs, make sure "
-                         f"that you pass them in the right format: {e}"), status=400
+                Response(f"data does not have the right format: {e}", status=400)
             )
     end = time.perf_counter()
     logger.info(f"evaluating text with {sum(len(i.encode('utf8')) for i in ipt)} bytes "
                 f"for task {task} took {end - start:.2f}s")
-    print(output)
     return jsonify(output)
 
 
@@ -418,7 +413,8 @@ def run_flask_server(config_path: str) -> None:
 
     model_infos = [
         model_info for model_info in _all_models()
-        if model_info.task in config.models and model_info.name in config.models[model_info.task]
+        if (model_info.task in config.models and
+            (model_info.name in config.models[model_info.task] or config.models[model_info.task] == ["all"]))
     ]
     logger.info(f"found {len(model_infos)} valid model specifications, loading the following models:\n"
                 f"{pprint.pformat(model_infos)}")
@@ -427,7 +423,7 @@ def run_flask_server(config_path: str) -> None:
         timeout=config.timeout,
         precision=config.precision,
         max_models_per_gpu=max(1, config.max_models_per_gpu),
-        dictionary_path=config.dictionary
+        dictionary_path=os.path.join(os.path.dirname(config_path), config.dictionary)
     )
 
     logger.info(f"starting server on {config.host}:{config.port}...")

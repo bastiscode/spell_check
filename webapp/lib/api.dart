@@ -21,6 +21,7 @@ class API {
     if (kIsWeb) {
       _baseURL = "http://${Uri.base.host}:12345";
     } else if (Platform.isAndroid) {
+      // for testing on an android emulator
       _baseURL = "http://10.0.2.2:12345";
     } else {
       throw UnsupportedError("unknown platform");

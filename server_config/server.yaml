@@ -1,0 +1,23 @@
+# hostname
+host: "0.0.0.0"
+# port to run server on
+port: 12345
+# inference precision for running the models (setting fp16 here might give you faster runtimes
+# if your hardware supports it)
+precision: "fp32"
+# max time in seconds to wait to reserve the server resources for a request
+timeout: 10.0
+# the server uses all GPUs in the environment, specify how many models are allowed to be loaded in GPU memory
+# at the same time
+# >= 3 is recommended such that at least a full pipeline can be run on one GPU without moving models
+max_models_per_gpu: 3
+# relative path to a dictionary to load (used in evaluation endpoint)
+dictionary: dictionary.txt
+# which models to load for which tasks (use all as a special tag to load all models for a task)
+models:
+  tokenization repair:
+    -
+  sed words:
+    -
+  sec:
+    - tokenization repair++

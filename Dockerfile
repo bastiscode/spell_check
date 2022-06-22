@@ -23,5 +23,10 @@ RUN echo "alias evaluate_sec='python /spell_check/evaluate.py sec'" >> ~/.bashrc
 
 RUN make install
 
+COPY server_config server_config
+COPY webapp webapp
+
+ENV NSC_DOWNLOAD_DIR=/zipped
+ENV NSC_CACHE_DIR=/cache
 WORKDIR /spell_check/docker
 CMD make help && bash

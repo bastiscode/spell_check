@@ -23,8 +23,15 @@ class HomeModel extends BaseModel {
   dynamic runtimes;
   List<String> input = [];
 
-  String? fileString;
+  String? trGroundtruth;
+  String? sedwGroundtruth;
+  String? secGroundtruth;
 
+  dynamic trEvaluation;
+  dynamic sedwEvaluation;
+  dynamic secEvaluation;
+
+  String? fileString;
   String lastInputString = "";
   String inputString = "";
 
@@ -44,6 +51,10 @@ class HomeModel extends BaseModel {
   bool _waiting = false;
 
   bool get waiting => _waiting;
+
+  bool _evaluating = false;
+
+  bool get evaluating => _evaluating;
 
   bool _hasResults = false;
 
@@ -135,6 +146,63 @@ class HomeModel extends BaseModel {
     }
     _hasResults = error == null;
     _waiting = false;
+    notifyListeners();
+    return error;
+  }
+
+  Future<Message?> evaluateTr() async {
+    _evaluating = true;
+    notifyListeners();
+    final result = await api.evaluateTr(input.join("\n"), outputs["tokenization repair"]["text"].join("\n"), trGroundtruth!);
+    final error = errorMessageFromAPIResult(result, "error evaluating tokenization repair");
+    if (error == null) {
+      trEvaluation = result.value;
+    }
+    _evaluating = false;
+    notifyListeners();
+    return error;
+  }
+
+  Future<Message?> evaluateSedw() async {
+    _evaluating = true;
+    notifyListeners();
+    String inputString;
+    if (outputs.containsKey("tokenization repair")) {
+      inputString = outputs["tokenization repair"]["text"].join("\n");
+    } else {
+      inputString = input.join("\n");
+    }
+    List<String> rawDetections = [];
+    for (final detection in outputs["sed words"]["detections"]) {
+      rawDetections.add(detection.join(" "));
+    }
+    final result = await api.evaluateSedw(inputString, rawDetections.join("\n"), sedwGroundtruth!);
+    final error = errorMessageFromAPIResult(result, "error evaluating spelling error detection");
+    if (error == null) {
+      sedwEvaluation = result.value;
+    }
+    _evaluating = false;
+    notifyListeners();
+    return error;
+  }
+
+  Future<Message?> evaluateSec() async {
+    _evaluating = true;
+    notifyListeners();
+    String inputString;
+    if (outputs.containsKey("sed words")) {
+      inputString = outputs["sed words"]["text"].join("\n");
+    } else if (outputs.containsKey("tokenization repair")) {
+      inputString = outputs["tokenization repair"]["text"].join("\n");
+    } else {
+      inputString = input.join("\n");
+    }
+    final result = await api.evaluateSec(inputString, outputs["sec"]["text"].join("\n"), secGroundtruth!);
+    final error = errorMessageFromAPIResult(result, "error evaluating spelling error correction");
+    if (error == null) {
+      secEvaluation = result.value;
+    }
+    _evaluating = false;
     notifyListeners();
     return error;
   }

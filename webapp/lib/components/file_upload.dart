@@ -93,6 +93,7 @@ class _UploadedState extends State<Uploaded> {
   Widget build(BuildContext context) {
     return Card(
       child: ListTile(
+        visualDensity: VisualDensity.compact,
         title: Text(widget.title),
         subtitle: Text(
             "${widget.name} contains ${formatB(widget.bytes.toDouble())} of text in ${widget.lines} lines."),

@@ -16,6 +16,12 @@ You can now use the NSC command line tools. As a starting point, try out the fol
 
 You can do many more things using these three command line tools. Execute ntr -h, nsed -h or nsec -h to see all available options.
 
+You can start a spell checking server that gives you access to a JSON Api (see server_config/server.yaml for configuration options)
+
+  nserver -c server_config/server.yaml
+
+You
+
 You can also evaluate the predictions of a model run with one of the ntr, nsed or nsec commands. To do that, use
 the following commands and specify the paths of the input, groundtruth and prediction file you want to evaluate:
 
