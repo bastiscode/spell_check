@@ -93,7 +93,6 @@ class _ResultViewState extends State<ResultView> {
     final indices =
         _indices.where((idx) => idx >= 0 && idx < widget.input.length).toList();
     indices.sort();
-    debugPrint("valid indices $indices ${indices.length} ${widget.input} ${widget.input.length}, ${widget.input}, $trResults, $sedwResults, $secResults");
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,

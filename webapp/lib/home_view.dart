@@ -172,6 +172,7 @@ class _HomeViewState extends State<HomeView> {
       elevation: 2,
       clipBehavior: Clip.antiAlias,
       child: ExpansionTile(
+        maintainState: true,
         initiallyExpanded: !model.validPipeline,
         controlAffinity: ListTileControlAffinity.leading,
         title: const Text(
@@ -186,17 +187,35 @@ class _HomeViewState extends State<HomeView> {
           const SizedBox(height: 8),
           const Text(
               "Select at least one model for any of the three tasks below to form a valid pipeline. Once you selected a valid pipeline you can run it on "
-              "some text. Alternatively choose one of the suggested presets below depending on your use case. "
-              "You can also save the current pipeline settings such that you do not need to specify them each time you visit this site."),
+              "some text. Alternatively choose one of the presets below depending on your use case. "
+              "You can also save the current pipeline settings to avoid specifying them each time you visit this site."),
           const SizedBox(height: 16),
           Presets(
-              presets: const [
-                Preset(Icons.bolt, "Fast whitespace correction",
-                    trModel: "eo large arxiv with errors")
-              ],
-              models: model.models,
-              onSelected: (preset) {
-                setState(() {
+            presets: const [
+              Preset("Best full pipeline",
+                  trModel: "eo large arxiv with errors",
+                  sedwModel: "gnn+",
+                  secModel: "transformer nmt"),
+              Preset("Fast full pipeline",
+                  trModel: "eo large arxiv with errors",
+                  sedwModel: "transformer+",
+                  secModel: "transformer words nmt"),
+              Preset("Best all in one", secModel: "tokenization repair++"),
+              Preset("Best for highly corrupted text",
+                  secModel: "transformer with tokenization repair nmt"),
+              Preset("Whitespace correction only",
+                  trModel: "eo large arxiv with errors"),
+              Preset("Error detection only", sedwModel: "gnn+"),
+              Preset("Error correction only", secModel: "transformer words nmt")
+            ],
+            models: model.models,
+            trModel: model.trModel,
+              sedwModel: model.sedwModel,
+            secModel: model.secModel,
+            onSelected: (preset) {
+              setState(
+                () {
+                  model.lastInputString = null;
                   if (preset == null) {
                     model.trModel = null;
                     model.sedwModel = null;
@@ -206,8 +225,10 @@ class _HomeViewState extends State<HomeView> {
                     model.sedwModel = preset.sedwModel;
                     model.secModel = preset.secModel;
                   }
-                });
-              }),
+                },
+              );
+            },
+          ),
           const SizedBox(height: 16),
           DropdownButtonFormField<String>(
             value: model.trModel,
@@ -223,7 +244,7 @@ class _HomeViewState extends State<HomeView> {
                       ? () {
                           setState(() {
                             model.trModel = null;
-                            model.lastInputString = "";
+                            model.lastInputString = null;
                           });
                         }
                       : null,
@@ -249,7 +270,7 @@ class _HomeViewState extends State<HomeView> {
               setState(
                 () {
                   model.trModel = modelName!;
-                  model.lastInputString = "";
+                  model.lastInputString = null;
                 },
               );
             },
@@ -269,7 +290,7 @@ class _HomeViewState extends State<HomeView> {
                       ? () {
                           setState(() {
                             model.sedwModel = null;
-                            model.lastInputString = "";
+                            model.lastInputString = null;
                           });
                         }
                       : null,
@@ -293,7 +314,7 @@ class _HomeViewState extends State<HomeView> {
               setState(
                 () {
                   model.sedwModel = modelName!;
-                  model.lastInputString = "";
+                  model.lastInputString = null;
                 },
               );
             },
@@ -313,7 +334,7 @@ class _HomeViewState extends State<HomeView> {
                       ? () {
                           setState(() {
                             model.secModel = null;
-                            model.lastInputString = "";
+                            model.lastInputString = null;
                           });
                         }
                       : null,
@@ -335,7 +356,7 @@ class _HomeViewState extends State<HomeView> {
             onChanged: (String? modelName) {
               setState(() {
                 model.secModel = modelName!;
-                model.lastInputString = "";
+                model.lastInputString = null;
               });
             },
           ),
@@ -440,97 +461,96 @@ class _HomeViewState extends State<HomeView> {
               children: [
                 Expanded(
                   child: TextField(
-                      controller: model.inputController,
-                      maxLines: model.live ? 1 : 10,
-                      decoration: InputDecoration(
-                        border: const OutlineInputBorder(),
-                        hintText: model.live
-                            ? "Enter some text to spell check while typing..."
-                            : "Enter some text to spell check...",
-                        suffixIcon: Column(
-                          children: [
+                    controller: model.inputController,
+                    maxLines: model.live ? 1 : 10,
+                    decoration: InputDecoration(
+                      border: const OutlineInputBorder(),
+                      hintText: model.live
+                          ? "Enter some text to spell check while typing..."
+                          : "Enter some text to spell check...",
+                      suffixIcon: Column(
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.clear),
+                            tooltip: "Clear text",
+                            splashRadius: 16,
+                            color: uniRed,
+                            onPressed: !model.waiting && model.hasInput
+                                ? () {
+                                    setState(() {
+                                      model.lastInputString = null;
+                                      model.inputController.text = "";
+                                    });
+                                  }
+                                : null,
+                          ),
+                          if (!model.live) ...[
                             IconButton(
-                              icon: const Icon(Icons.clear),
-                              tooltip: "Clear text",
+                              icon: const Icon(Icons.paste),
+                              tooltip: "Paste text from clipboard",
                               splashRadius: 16,
-                              color: uniRed,
-                              onPressed: !model.waiting && model.hasInput
-                                  ? () {
+                              onPressed: !model.waiting
+                                  ? () async {
+                                      final data =
+                                          await Clipboard.getData("text/plain");
                                       setState(() {
-                                        model.inputController.text = "";
-                                      });
+                                        if (data != null) {
+                                          model.inputController.text =
+                                              data.text!;
+                                        } else {
+                                          showMessage(
+                                            context,
+                                            Message(
+                                                "could not paste text from clipboard",
+                                                Status.error),
+                                          );
+                                        }
+                                      },);
                                     }
                                   : null,
                             ),
-                            if (!model.live) ...[
-                              IconButton(
-                                icon: const Icon(Icons.paste),
-                                tooltip: "Paste text from clipboard",
-                                splashRadius: 16,
-                                onPressed: !model.waiting
-                                    ? () async {
-                                        final data = await Clipboard.getData(
-                                            "text/plain");
-                                        setState(() {
-                                          if (data != null) {
+                            IconButton(
+                              onPressed: !model.waiting
+                                  ? () async {
+                                      try {
+                                        final files = await FilePicker.platform
+                                            .pickFiles(
+                                                dialogTitle: "Pick a text file",
+                                                type: FileType.custom,
+                                                allowedExtensions: ["txt"]);
+                                        if (files != null) {
+                                          final file = files.files.single;
+                                          final content =
+                                              utf8.decode(file.bytes!);
+                                          setState(() {
                                             model.inputController.text =
-                                                data.text!;
-                                          } else {
-                                            showMessage(
-                                              context,
-                                              Message(
-                                                  "could not paste text from clipboard",
-                                                  Status.error),
-                                            );
-                                          }
-                                        });
-                                      }
-                                    : null,
-                              ),
-                              IconButton(
-                                onPressed: !model.waiting
-                                    ? () async {
-                                        try {
-                                          final files = await FilePicker
-                                              .platform
-                                              .pickFiles(
-                                                  dialogTitle:
-                                                      "Pick a text file",
-                                                  type: FileType.custom,
-                                                  allowedExtensions: ["txt"]);
-                                          if (files != null) {
-                                            final file = files.files.single;
-                                            final content =
-                                                utf8.decode(file.bytes!);
-                                            setState(() {
-                                              model.inputController.text =
-                                                  content;
-                                            });
-                                          }
-                                        } on FormatException catch (_) {
-                                          showMessage(
-                                              context,
-                                              Message(
-                                                  "error decoding file, make sure that it contains valid utf8 bytes",
-                                                  Status.error));
-                                        } on PlatformException catch (e) {
-                                          showMessage(
-                                              context,
-                                              Message(
-                                                  "error uploading file: ${e.message}",
-                                                  Status.error));
+                                                content;
+                                          });
                                         }
+                                      } on FormatException catch (_) {
+                                        showMessage(
+                                            context,
+                                            Message(
+                                                "error decoding file, make sure that it contains valid utf8 bytes",
+                                                Status.error));
+                                      } on PlatformException catch (e) {
+                                        showMessage(
+                                            context,
+                                            Message(
+                                                "error uploading file: ${e.message}",
+                                                Status.error));
                                       }
-                                    : null,
-                                icon: const Icon(Icons.upload_file),
-                                tooltip: "Upload a text file",
-                                splashRadius: 16,
-                              ),
-                            ],
+                                    }
+                                  : null,
+                              icon: const Icon(Icons.upload_file),
+                              tooltip: "Upload a text file",
+                              splashRadius: 16,
+                            ),
                           ],
-                        ),
+                        ],
                       ),
-                      enabled: !model.waiting),
+                    ),
+                  ),
                 ),
                 SizedBox(
                   width: 64,
@@ -580,6 +600,7 @@ class _HomeViewState extends State<HomeView> {
                                   },
                                 );
                                 if (model.live) {
+                                  model.lastInputString = null;
                                   model.inputController.text =
                                       model.inputController.text.split("\n")[0];
                                   await model.runPipelineLive();

@@ -34,7 +34,7 @@ class HomeModel extends BaseModel {
   dynamic sedwEvaluation;
   dynamic secEvaluation;
 
-  String lastInputString = "";
+  String? lastInputString;
   late TextEditingController inputController;
   late TextEditingController outputController;
 
@@ -122,7 +122,7 @@ class HomeModel extends BaseModel {
   runPipelineLive() async {
     while (live) {
       final inputString = inputController.text;
-      if (lastInputString != inputString && !waiting) {
+      if (lastInputString != inputString && !waiting && validPipeline) {
         final error = await runPipeline(inputString);
         if (error == null) {
           lastInputString = inputString;
