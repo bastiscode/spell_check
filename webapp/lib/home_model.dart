@@ -13,6 +13,10 @@ class HomeModel extends BaseModel {
 
   dynamic get models => _models;
 
+  dynamic _examples;
+
+  dynamic get examples => _examples;
+
   dynamic get available => _models != null;
 
   dynamic _info;
@@ -108,6 +112,7 @@ class HomeModel extends BaseModel {
       }
     }
     _info = await api.info();
+    _examples = await api.examples();
     _ready = true;
     notifyListeners();
   }

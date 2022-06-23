@@ -568,6 +568,29 @@ class _HomeViewState extends State<HomeView> {
                             tooltip: "Upload a text file",
                             splashRadius: 16,
                           ),
+                          IconButton(
+                            onPressed: !model.waiting
+                                ? () async {
+                                    final example = await showExamplesDialog(
+                                        model.examples);
+                                    if (example != null) {
+                                      setState(
+                                        () {
+                                          inputController.value =
+                                              TextEditingValue(
+                                                  text: example,
+                                                  composing:
+                                                      TextRange.collapsed(
+                                                          example.length));
+                                        },
+                                      );
+                                    }
+                                  }
+                                : null,
+                            icon: const Icon(Icons.list),
+                            tooltip: "Choose an example",
+                            splashRadius: 16,
+                          ),
                         ],
                       ),
                     ),
@@ -935,8 +958,12 @@ class _HomeViewState extends State<HomeView> {
     );
   }
 
-  showInfoDialog(dynamic info) {
-    showDialog(
+  showInfoDialog(dynamic info) async {
+    if (info == null) {
+      showMessage(context, Message("could not fetch info", Status.warn));
+      return;
+    }
+    await showDialog(
       context: context,
       builder: (infoContext) {
         List<dynamic> gpus = info["gpu"];
@@ -979,6 +1006,81 @@ class _HomeViewState extends State<HomeView> {
               )
             ],
           ],
+        );
+      },
+    );
+  }
+
+  Widget exampleGroup(
+      String groupName, List<String> items, Function(String) onSelected) {
+    return Card(
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ListTile(
+              visualDensity: VisualDensity.compact,
+              title: Text(
+                groupName,
+                style:
+                    const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ),
+            ListView.builder(
+              itemCount: items.length,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemBuilder: (listContext, idx) {
+                return ListTile(
+                  visualDensity: VisualDensity.compact,
+                  title: Text(items[idx]),
+                  onTap: () {
+                    onSelected(items[idx]);
+                  },
+                  leading: const Icon(Icons.notes),
+                );
+              },
+            )
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<String?> showExamplesDialog(dynamic examples) async {
+    if (examples == null) {
+      showMessage(context, Message("could not fetch examples", Status.warn));
+      return null;
+    }
+    return await showDialog<String?>(
+      context: context,
+      builder: (dialogContext) {
+        final exampleGroups = examples.entries
+            .map(
+              (entry) {
+                entry.value.sort();
+                return exampleGroup(
+                  entry.key,
+                  entry.value.cast<String>(),
+                  (item) {
+                    Navigator.of(dialogContext).pop(item);
+                  },
+                );
+              },
+            )
+            .toList()
+            .cast<Widget>();
+        return Dialog(
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+              child: Column(
+                children: exampleGroups
+              ),
+            ),
+          ),
         );
       },
     );

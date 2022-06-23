@@ -15,14 +15,18 @@ class APIResult {
 }
 
 class API {
-  String _baseURL = "";
+  String _apiBaseURL = "";
+  String _webBaseURL = "";
 
   API._privateConstructor() {
     if (kIsWeb) {
-      _baseURL = "http://${Uri.base.host}:12345";
+      _apiBaseURL = "http://${Uri.base.host}:12345";
+      _webBaseURL = "http://${Uri.base.host}:${Uri.base.port}";
+      debugPrint("api: $_apiBaseURL, web: $_webBaseURL");
     } else if (Platform.isAndroid) {
       // for testing on an android emulator
-      _baseURL = "http://10.0.2.2:12345";
+      _apiBaseURL = "http://10.0.2.2:12345";
+      _webBaseURL = "http://10.0.2.2:8080";
     } else {
       throw UnsupportedError("unknown platform");
     }
@@ -36,7 +40,7 @@ class API {
 
   dynamic models() async {
     try {
-      final res = await http.get(Uri.parse("$_baseURL/models"));
+      final res = await http.get(Uri.parse("$_apiBaseURL/models"));
       return jsonDecode(res.body);
     } catch (e) {
       return null;
@@ -45,7 +49,16 @@ class API {
 
   dynamic info() async {
     try {
-      final res = await http.get(Uri.parse("$_baseURL/info"));
+      final res = await http.get(Uri.parse("$_apiBaseURL/info"));
+      return jsonDecode(res.body);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  dynamic examples() async {
+    try {
+      final res = await http.get(Uri.parse("$_webBaseURL/assets/examples/examples.json"));
       return jsonDecode(res.body);
     } catch (e) {
       return null;
@@ -60,7 +73,7 @@ class API {
           "${tokenizationRepairModel ?? ""},${sedWordsModel ?? ""},${secModel ?? ""}";
       final res = await http.post(
           Uri.parse(
-              "$_baseURL/run?pipeline=${Uri.encodeComponent(pipeline)}&edited=${edited ? "true" : "false"}"),
+              "$_apiBaseURL/run?pipeline=${Uri.encodeComponent(pipeline)}&edited=${edited ? "true" : "false"}"),
           body: {"text": text});
       if (res.statusCode != 200) {
         return APIResult(res.statusCode, res.body, null);
@@ -92,7 +105,7 @@ class API {
       String task, String input, String prediction, String groundtruth) async {
     try {
       final res = await http.post(
-          Uri.parse("$_baseURL/eval?task=${Uri.encodeComponent(task)}"),
+          Uri.parse("$_apiBaseURL/eval?task=${Uri.encodeComponent(task)}"),
           body: {
             "input": input,
             "prediction": prediction,
