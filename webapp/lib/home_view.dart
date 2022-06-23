@@ -9,6 +9,7 @@ import 'package:webapp/colors.dart';
 import 'package:webapp/components/file_upload.dart';
 import 'package:webapp/components/input_or_upload.dart';
 import 'package:webapp/components/message.dart';
+import 'package:webapp/components/presets.dart';
 import 'package:webapp/components/result.dart';
 import 'package:webapp/home_model.dart';
 import 'package:webapp/utils.dart';
@@ -31,12 +32,10 @@ class HomeView extends StatefulWidget {
 }
 
 class _HomeViewState extends State<HomeView> {
-  final GlobalKey<FormFieldState> _trModelKey = GlobalKey();
-  final GlobalKey<FormFieldState> _sedwModelKey = GlobalKey();
-  final GlobalKey<FormFieldState> _secModelKey = GlobalKey();
-
   final TextEditingController inputController = TextEditingController();
   final TextEditingController outputController = TextEditingController();
+
+  bool showPipelineInfo = false;
 
   @override
   Widget build(BuildContext homeContext) {
@@ -49,27 +48,27 @@ class _HomeViewState extends State<HomeView> {
           return wrapScaffold(
               const Center(child: CircularProgressIndicator(color: uniBlue)));
         } else if (model.ready && !model.available) {
-          return wrapScaffold(Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Text(
-                    "Failed to retrieve models, please try again and reload."),
-                const SizedBox(
-                  height: 8,
-                ),
-                ElevatedButton.icon(
-                    onPressed: () async {
-                      await model.init(inputController, outputController);
-                    },
-                    icon: const Icon(Icons.refresh),
-                    label: const Text("Reload"))
-              ],
+          return wrapScaffold(
+            Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text(
+                      "Failed to retrieve models, please try again and reload."),
+                  const SizedBox(
+                    height: 8,
+                  ),
+                  ElevatedButton.icon(
+                      onPressed: () async {
+                        await model.init(inputController, outputController);
+                      },
+                      icon: const Icon(Icons.refresh),
+                      label: const Text("Reload"))
+                ],
+              ),
             ),
-          ));
+          );
         }
-        final numInputLines = inputController.text.split("\n").length;
-        final numInputBytes = numBytes(inputController.text);
         return SafeArea(
           child: Scaffold(
             appBar: AppBar(
@@ -80,59 +79,7 @@ class _HomeViewState extends State<HomeView> {
                   icon: const Icon(Icons.info),
                   tooltip: "Show backend information",
                   onPressed: () {
-                    showDialog(
-                      context: context,
-                      builder: (infoContext) {
-                        List<dynamic> gpus = model.info["gpu"];
-                        return SimpleDialog(
-                          title: const Text("Info"),
-                          children: [
-                            if (model.info == null) ...[
-                              const SimpleDialogOption(
-                                  child: Text("Info not available"))
-                            ] else ...[
-                              SimpleDialogOption(
-                                  child: Text(
-                                      "Library: nsc (version ${model.info["version"]})")),
-                              SimpleDialogOption(
-                                  child: Text(
-                                      "Timeout: ${model.info["timeout"]} seconds")),
-                              SimpleDialogOption(
-                                  child: Text(
-                                      "Precision: ${model.info["precision"]}")),
-                              SimpleDialogOption(
-                                  child: Text("CPU: ${model.info["cpu"]}")),
-                              SimpleDialogOption(
-                                child: Row(
-                                  children: [
-                                    const Text("GPUs: "),
-                                    if (gpus.isEmpty)
-                                      const Text("-")
-                                    else
-                                      Flexible(
-                                        child: Wrap(
-                                          children: gpus
-                                              .mapIndexed(
-                                                (idx, gpu) => Card(
-                                                  child: Padding(
-                                                    padding:
-                                                        const EdgeInsets.all(8),
-                                                    child:
-                                                        Text("GPU $idx: $gpu"),
-                                                  ),
-                                                ),
-                                              )
-                                              .toList(),
-                                        ),
-                                      )
-                                  ],
-                                ),
-                              )
-                            ],
-                          ],
-                        );
-                      },
-                    );
+                    showInfoDialog(model.info);
                   },
                 )
               ],
@@ -167,536 +114,45 @@ class _HomeViewState extends State<HomeView> {
                         ),
                       ),
                     ),
-                    Card(
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8)),
-                      elevation: 2,
-                      clipBehavior: Clip.antiAlias,
-                      child: ExpansionTile(
-                        initiallyExpanded: !model.validPipeline,
-                        controlAffinity: ListTileControlAffinity.leading,
-                        title: const Text(
-                          "Select a model pipeline",
-                          style: TextStyle(fontSize: 20),
-                        ),
-                        subtitle: const Text(
-                            "At least one model must be selected for a valid pipeline"),
-                        childrenPadding:
-                            const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                        children: [
-                          const SizedBox(height: 16),
-                          Row(
-                            children: [
-                              const Icon(Icons.looks_one, color: uniBlue),
-                              const SizedBox(width: 8),
-                              Flexible(
-                                child: DropdownButtonFormField<String>(
-                                  key: _trModelKey,
-                                  value: model.trModel,
-                                  decoration: const InputDecoration(
-                                      labelText: "Tokenization repair model"),
-                                  icon:
-                                      const Icon(Icons.arrow_drop_down_rounded),
-                                  items: model
-                                      .getModels("tokenization repair")
-                                      .map<DropdownMenuItem<String>>(
-                                    (modelInfo) {
-                                      return DropdownMenuItem(
-                                        value: modelInfo["name"],
-                                        child: Text(modelInfo["name"]),
-                                      );
-                                    },
-                                  ).toList(),
-                                  onChanged: (String? modelName) {
-                                    setState(
-                                      () {
-                                        model.trModel = modelName!;
-                                        model.lastInputString = "";
-                                      },
-                                    );
-                                  },
-                                ),
-                              ),
-                              if (model.trModel != null)
-                                IconButton(
-                                  splashRadius: 16,
-                                  tooltip: "Clear tokenization repair model",
-                                  color: uniRed,
-                                  icon: const Icon(Icons.clear),
-                                  onPressed: () {
-                                    setState(() {
-                                      _trModelKey.currentState!.reset();
-                                      model.trModel = null;
-                                      model.lastInputString = "";
-                                    });
-                                  },
-                                )
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              const Icon(Icons.looks_two, color: uniBlue),
-                              const SizedBox(width: 8),
-                              Flexible(
-                                child: DropdownButtonFormField<String>(
-                                  key: _sedwModelKey,
-                                  value: model.sedwModel,
-                                  decoration: const InputDecoration(
-                                      labelText:
-                                          "Word-level spelling error detection model"),
-                                  icon:
-                                      const Icon(Icons.arrow_drop_down_rounded),
-                                  items: model
-                                      .getModels("sed words")
-                                      .map<DropdownMenuItem<String>>(
-                                    (modelInfo) {
-                                      return DropdownMenuItem(
-                                        value: modelInfo["name"],
-                                        child: Text(modelInfo["name"]),
-                                      );
-                                    },
-                                  ).toList(),
-                                  onChanged: (String? modelName) {
-                                    setState(
-                                      () {
-                                        model.sedwModel = modelName!;
-                                        model.lastInputString = "";
-                                      },
-                                    );
-                                  },
-                                ),
-                              ),
-                              if (model.sedwModel != null)
-                                IconButton(
-                                  splashRadius: 16,
-                                  tooltip:
-                                      "Clear word-level spelling error detection model",
-                                  color: uniRed,
-                                  icon: const Icon(Icons.clear),
-                                  onPressed: () {
-                                    setState(() {
-                                      _sedwModelKey.currentState!.reset();
-                                      model.sedwModel = null;
-                                      model.lastInputString = "";
-                                    });
-                                  },
-                                )
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              const Icon(Icons.looks_3, color: uniBlue),
-                              const SizedBox(width: 8),
-                              Flexible(
-                                child: DropdownButtonFormField<String>(
-                                  key: _secModelKey,
-                                  value: model.secModel,
-                                  decoration: const InputDecoration(
-                                      labelText:
-                                          "Spelling error correction model"),
-                                  icon:
-                                      const Icon(Icons.arrow_drop_down_rounded),
-                                  items: model
-                                      .getModels("sec")
-                                      .map<DropdownMenuItem<String>>(
-                                    (modelInfo) {
-                                      return DropdownMenuItem(
-                                        value: modelInfo["name"],
-                                        child: Text(modelInfo["name"]),
-                                      );
-                                    },
-                                  ).toList(),
-                                  onChanged: (String? modelName) {
-                                    setState(() {
-                                      model.secModel = modelName!;
-                                      model.lastInputString = "";
-                                    });
-                                  },
-                                ),
-                              ),
-                              if (model.secModel != null)
-                                IconButton(
-                                  splashRadius: 16,
-                                  tooltip:
-                                      "Clear spelling error correction model",
-                                  color: uniRed,
-                                  icon: const Icon(Icons.clear),
-                                  onPressed: () {
-                                    setState(() {
-                                      _secModelKey.currentState!.reset();
-                                      model.secModel = null;
-                                      model.lastInputString = "";
-                                    });
-                                  },
-                                )
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: [
-                              ElevatedButton.icon(
-                                onPressed: model.validPipeline
-                                    ? () async {
-                                        await model.savePipeline();
-                                        setState(() {
-                                          showMessage(
-                                              context,
-                                              Message("Saved pipeline settings",
-                                                  Status.info));
-                                        });
-                                      }
-                                    : null,
-                                icon: const Icon(Icons.save),
-                                label: const Text("Save pipeline settings"),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                    Card(
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8)),
-                      elevation: 2,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                            vertical: 8, horizontal: 16),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Row(
-                              children: const [
-                                Expanded(
-                                  child: ListTile(
-                                    contentPadding: EdgeInsets.zero,
-                                    visualDensity: VisualDensity.compact,
-                                    title: Text(
-                                      "Input",
-                                      style: TextStyle(fontSize: 20),
-                                    ),
-                                    subtitle: Text(
-                                        "Enter some text to be spell checked below"),
-                                  ),
-                                ),
-                                SizedBox(width: 64, height: 64),
-                                Expanded(
-                                  child: ListTile(
-                                    contentPadding: EdgeInsets.zero,
-                                    visualDensity: VisualDensity.compact,
-                                    title: Text(
-                                      "Output",
-                                      style: TextStyle(fontSize: 20),
-                                    ),
-                                    subtitle: Text(
-                                        "The spell checked text will appear here"),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: TextField(
-                                      controller: model.inputController,
-                                      maxLines: model.live ? 1 : 10,
-                                      decoration: InputDecoration(
-                                        border: const OutlineInputBorder(),
-                                        hintText: model.live
-                                            ? "Enter some text to spell check while typing..."
-                                            : "Enter some text to spell check...",
-                                        suffixIcon: model.live
-                                            ? null
-                                            : Column(
-                                                children: [
-                                                  IconButton(
-                                                    icon:
-                                                        const Icon(Icons.clear),
-                                                    tooltip: "Clear text",
-                                                    splashRadius: 16,
-                                                    color: uniRed,
-                                                    onPressed: !model.waiting &&
-                                                            model.hasInput
-                                                        ? () {
-                                                            setState(() {
-                                                              model
-                                                                  .inputController
-                                                                  .text = "";
-                                                            });
-                                                          }
-                                                        : null,
-                                                  ),
-                                                  IconButton(
-                                                    icon:
-                                                        const Icon(Icons.paste),
-                                                    tooltip:
-                                                        "Paste text from clipboard",
-                                                    splashRadius: 16,
-                                                    onPressed: !model.waiting
-                                                        ? () async {
-                                                            final data =
-                                                                await Clipboard
-                                                                    .getData(
-                                                                        "text/plain");
-                                                            setState(() {
-                                                              if (data !=
-                                                                  null) {
-                                                                model.inputController
-                                                                        .text =
-                                                                    data.text!;
-                                                              } else {
-                                                                showMessage(
-                                                                  context,
-                                                                  Message(
-                                                                      "could not paste text from clipboard",
-                                                                      Status
-                                                                          .error),
-                                                                );
-                                                              }
-                                                            });
-                                                          }
-                                                        : null,
-                                                  ),
-                                                  IconButton(
-                                                    onPressed: !model.waiting
-                                                        ? () async {
-                                                            try {
-                                                              final files = await FilePicker
-                                                                  .platform
-                                                                  .pickFiles(
-                                                                      dialogTitle:
-                                                                          "Pick a text file",
-                                                                      type: FileType.custom,
-                                                                      allowedExtensions: [
-                                                                    "txt"
-                                                                  ]);
-                                                              if (files !=
-                                                                  null) {
-                                                                final file =
-                                                                    files.files
-                                                                        .single;
-                                                                final content =
-                                                                    utf8.decode(
-                                                                        file.bytes!);
-                                                                setState(() {
-                                                                  model.inputController
-                                                                          .text =
-                                                                      content;
-                                                                });
-                                                              }
-                                                            } on FormatException catch (e) {
-                                                              showMessage(
-                                                                  context,
-                                                                  Message(
-                                                                      "error decoding file, make sure that it contains valid utf8 bytes",
-                                                                      Status
-                                                                          .error));
-                                                            } on PlatformException catch (e) {
-                                                              showMessage(
-                                                                  context,
-                                                                  Message(
-                                                                      "error uploading file: ${e.message}",
-                                                                      Status
-                                                                          .error));
-                                                            }
-                                                          }
-                                                        : null,
-                                                    icon: const Icon(
-                                                        Icons.upload_file),
-                                                    tooltip:
-                                                        "Upload a text file",
-                                                    splashRadius: 16,
-                                                  ),
-                                                ],
-                                              ),
-                                      ),
-                                      enabled: !model.waiting),
-                                ),
-                                SizedBox(
-                                  width: 64,
-                                  child: Column(
-                                    children: [
-                                      if (!model.live)
-                                        Card(
-                                          color: model.validPipeline &&
-                                                  !model.waiting &&
-                                                  !model.live
-                                              ? uniBlue
-                                              : uniGray,
-                                          shape: RoundedRectangleBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(20)),
-                                          child: IconButton(
-                                              onPressed: model.validPipeline &&
-                                                      !model.waiting &&
-                                                      !model.live
-                                                  ? () async {
-                                                      final error = await model
-                                                          .runPipeline(model
-                                                              .inputController
-                                                              .text);
-                                                      if (error != null &&
-                                                          mounted) {
-                                                        showMessage(
-                                                            context, error);
-                                                      }
-                                                    }
-                                                  : null,
-                                              icon: Icon(Icons.start,
-                                                  color: model.validPipeline &&
-                                                          !model.waiting &&
-                                                          !model.live
-                                                      ? Colors.white
-                                                      : uniDarkGray),
-                                              tooltip: "Run pipeline on text"),
-                                        ),
-                                      IconButton(
-                                        icon: const Icon(Icons.stream),
-                                        color:
-                                            model.live ? uniBlue : uniDarkGray,
-                                        tooltip:
-                                            "${!model.live ? "Enable" : "Disable"} live spell checking",
-                                        splashRadius: 16,
-                                        onPressed: model.validPipeline &&
-                                                !model.waiting
-                                            ? () async {
-                                                setState(
-                                                  () {
-                                                    model.live = !model.live;
-                                                  },
-                                                );
-                                                if (model.live) {
-                                                  model.inputController.text =
-                                                      model.inputController.text
-                                                          .split("\n")[0];
-                                                  await model.runPipelineLive();
-                                                }
-                                              }
-                                            : null,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Expanded(
-                                    child: TextField(
-                                  controller: model.outputController,
-                                  maxLines: model.live ? 1 : 10,
-                                  readOnly: true,
-                                  decoration: InputDecoration(
-                                    hintText: "...",
-                                    label: outputController.text.isEmpty ? null : Icon(Icons.phone),
-                                    suffixIcon: Column(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        children: [
-                                          if (!model.waiting || model.live) ...[
-                                            IconButton(
-                                              onPressed: () {},
-                                              icon: const Icon(Icons.chevron_left),
-                                              splashRadius: 16,
-                                            ),
-                                            IconButton(
-                                              onPressed: () {},
-                                              icon: const Icon(Icons.chevron_right),
-                                              splashRadius: 16,
-                                            ),
-                                            IconButton(
-                                              splashRadius: 16,
-                                              tooltip: "Copy output to clipboard",
-                                              onPressed: () async {
-                                                await Clipboard.setData(
-                                                    ClipboardData(
-                                                        text: model
-                                                            .outputController
-                                                            .text));
-                                              },
-                                              icon: const Icon(Icons.copy),
-                                            )
-                                          ] else
-                                            const SizedBox(
-                                                height: 16,
-                                                width: 16,
-                                                child:
-                                                    CircularProgressIndicator(
-                                                  strokeWidth: 2,
-                                                ))
-                                        ]),
-                                  ),
-                                ))
-                              ],
-                            ),
-                            const SizedBox(height: 4),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    "$numInputLines line${numInputLines > 1 ? "s" : ""} with ${formatB(numInputBytes.toDouble())} of text",
-                                    style: const TextStyle(
-                                        fontSize: 12, color: uniDarkGray),
-                                  ),
-                                ),
-                                const SizedBox(width: 64),
-                                Expanded(
-                                  child: Text(
-                                    model.hasResults
-                                        ? "${formatS(model.runtimes["total"]["s"])}, ${formatB(model.runtimes["total"]["bps"])}/s"
-                                        : "",
-                                    style: const TextStyle(
-                                        fontSize: 12, color: uniDarkGray),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    if (model.waiting && !model.live) ...[
-                      const SizedBox(height: 16),
-                      const Flexible(
-                        child: Center(
-                          child: CircularProgressIndicator(),
-                        ),
-                      )
-                    ] else if (model.hasResults) ...[
+                    buildInputOutput(model),
+                    buildPipeline(model),
+                    if (model.hasResults) ...[
                       Card(
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8)),
                         elevation: 2,
-                        child: Column(children: [
-                          ListTile(
-                            title: const Text(
-                              "Results",
-                              style: TextStyle(fontSize: 20),
-                            ),
-                            subtitle: Text(
-                                "${formatS(model.runtimes["total"]["s"])}, ${formatB(model.runtimes["total"]["bps"])}/s"),
+                        clipBehavior: Clip.antiAlias,
+                        child: ExpansionTile(
+                          maintainState: true,
+                          controlAffinity: ListTileControlAffinity.leading,
+                          title: const Text(
+                            "Detailed outputs",
+                            style: TextStyle(fontSize: 20),
                           ),
-                          ResultView(
-                              input: model.input,
-                              output: model.outputs,
-                              runtimes: model.runtimes),
-                        ]),
+                          subtitle: const Text(
+                              "Inspect the ouputs of all pipeline steps"),
+                          children: [
+                            ResultView(
+                                input: model.input,
+                                output: model.outputs,
+                                runtimes: model.runtimes),
+                          ],
+                        ),
                       ),
                       Card(
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8)),
                         elevation: 2,
                         clipBehavior: Clip.antiAlias,
-                        child: Column(
-                          children: [
-                            const ListTile(
-                              title: Text(
-                                "Evaluation",
-                                style: TextStyle(fontSize: 20),
-                              ),
-                              subtitle: Text(
-                                  "Evaluate the results from above against their groundtruths"),
-                            ),
-                            buildEvaluation(model)
-                          ],
+                        child: ExpansionTile(
+                          title: const Text(
+                            "Evaluation",
+                            style: TextStyle(fontSize: 20),
+                          ),
+                          subtitle: const Text(
+                              "Evaluate the outputs of all pipeline steps against their groundtruths"),
+                          controlAffinity: ListTileControlAffinity.leading,
+                          children: [buildEvaluation(model)],
                         ),
                       )
                     ],
@@ -707,6 +163,492 @@ class _HomeViewState extends State<HomeView> {
           ),
         );
       },
+    );
+  }
+
+  Widget buildPipeline(HomeModel model) {
+    return Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      elevation: 2,
+      clipBehavior: Clip.antiAlias,
+      child: ExpansionTile(
+        initiallyExpanded: !model.validPipeline,
+        controlAffinity: ListTileControlAffinity.leading,
+        title: const Text(
+          "Select a model pipeline",
+          style: TextStyle(fontSize: 20),
+        ),
+        subtitle: const Text(
+            "The pipeline determines how the input text will be spell checked"),
+        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+        expandedCrossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 8),
+          const Text(
+              "Select at least one model for any of the three tasks below to form a valid pipeline. Once you selected a valid pipeline you can run it on "
+              "some text. Alternatively choose one of the suggested presets below depending on your use case. "
+              "You can also save the current pipeline settings such that you do not need to specify them each time you visit this site."),
+          const SizedBox(height: 16),
+          Presets(
+              presets: const [
+                Preset(Icons.bolt, "Fast whitespace correction",
+                    trModel: "eo large arxiv with errors")
+              ],
+              models: model.models,
+              onSelected: (preset) {
+                setState(() {
+                  if (preset == null) {
+                    model.trModel = null;
+                    model.sedwModel = null;
+                    model.secModel = null;
+                  } else {
+                    model.trModel = preset.trModel;
+                    model.sedwModel = preset.sedwModel;
+                    model.secModel = preset.secModel;
+                  }
+                });
+              }),
+          const SizedBox(height: 16),
+          DropdownButtonFormField<String>(
+            value: model.trModel,
+            isExpanded: true,
+            decoration: InputDecoration(
+                prefixIcon: const Icon(Icons.looks_one, color: uniBlue),
+                suffixIcon: IconButton(
+                  splashRadius: 16,
+                  tooltip: "Clear tokenization repair model",
+                  color: uniRed,
+                  icon: const Icon(Icons.clear),
+                  onPressed: model.trModel != null
+                      ? () {
+                          setState(() {
+                            model.trModel = null;
+                            model.lastInputString = "";
+                          });
+                        }
+                      : null,
+                ),
+                labelText: "Tokenization repair model",
+                helperMaxLines: 10,
+                helperText: model.trModel != null
+                    ? model.getModel(
+                        "tokenization repair", model.trModel!)["description"]
+                    : null),
+            icon: const Icon(Icons.arrow_drop_down_rounded),
+            items: model
+                .getModels("tokenization repair")
+                .map<DropdownMenuItem<String>>(
+              (modelInfo) {
+                return DropdownMenuItem(
+                  value: modelInfo["name"],
+                  child: Text(modelInfo["name"]),
+                );
+              },
+            ).toList(),
+            onChanged: (String? modelName) {
+              setState(
+                () {
+                  model.trModel = modelName!;
+                  model.lastInputString = "";
+                },
+              );
+            },
+          ),
+          const SizedBox(height: 16),
+          DropdownButtonFormField<String>(
+            value: model.sedwModel,
+            isExpanded: true,
+            decoration: InputDecoration(
+                prefixIcon: const Icon(Icons.looks_two, color: uniBlue),
+                suffixIcon: IconButton(
+                  splashRadius: 16,
+                  tooltip: "Clear spelling error detection model",
+                  color: uniRed,
+                  icon: const Icon(Icons.clear),
+                  onPressed: model.sedwModel != null
+                      ? () {
+                          setState(() {
+                            model.sedwModel = null;
+                            model.lastInputString = "";
+                          });
+                        }
+                      : null,
+                ),
+                labelText: "Word-level spelling error detection model",
+                helperMaxLines: 10,
+                helperText: model.sedwModel != null
+                    ? model.getModel(
+                        "sed words", model.sedwModel!)["description"]
+                    : null),
+            icon: const Icon(Icons.arrow_drop_down_rounded),
+            items: model.getModels("sed words").map<DropdownMenuItem<String>>(
+              (modelInfo) {
+                return DropdownMenuItem(
+                  value: modelInfo["name"],
+                  child: Text(modelInfo["name"]),
+                );
+              },
+            ).toList(),
+            onChanged: (String? modelName) {
+              setState(
+                () {
+                  model.sedwModel = modelName!;
+                  model.lastInputString = "";
+                },
+              );
+            },
+          ),
+          const SizedBox(height: 16),
+          DropdownButtonFormField<String>(
+            value: model.secModel,
+            isExpanded: true,
+            decoration: InputDecoration(
+                prefixIcon: const Icon(Icons.looks_3, color: uniBlue),
+                suffixIcon: IconButton(
+                  splashRadius: 16,
+                  tooltip: "Clear spelling error correction model",
+                  color: uniRed,
+                  icon: const Icon(Icons.clear),
+                  onPressed: model.secModel != null
+                      ? () {
+                          setState(() {
+                            model.secModel = null;
+                            model.lastInputString = "";
+                          });
+                        }
+                      : null,
+                ),
+                labelText: "Spelling error correction model",
+                helperMaxLines: 10,
+                helperText: model.secModel != null
+                    ? model.getModel("sec", model.secModel!)["description"]
+                    : null),
+            icon: const Icon(Icons.arrow_drop_down_rounded),
+            items: model.getModels("sec").map<DropdownMenuItem<String>>(
+              (modelInfo) {
+                return DropdownMenuItem(
+                  value: modelInfo["name"],
+                  child: Text(modelInfo["name"]),
+                );
+              },
+            ).toList(),
+            onChanged: (String? modelName) {
+              setState(() {
+                model.secModel = modelName!;
+                model.lastInputString = "";
+              });
+            },
+          ),
+          const SizedBox(height: 16),
+          Card(
+            margin: EdgeInsets.zero,
+            color: uniDarkGray,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: Icon(!showPipelineInfo ? Icons.info : Icons.cancel),
+                  color: Colors.white,
+                  onPressed: () {
+                    setState(() {
+                      showPipelineInfo = !showPipelineInfo;
+                    });
+                  },
+                  splashRadius: 16,
+                ),
+                if (showPipelineInfo) ...[
+                  const SizedBox(width: 8),
+                  const Flexible(
+                    child: Padding(
+                      padding: EdgeInsets.all(4),
+                      child: Text(
+                        "The models of the pipeline will be run in order such that the output of the previous model will be used as input to the next. "
+                        "If you do not specify a model for a task in the pipeline this task will be skipped. Some models (e.g. tokenization repair++) "
+                        "can perform multiple tasks in one by design (e.g. correcting whitespace and spelling errors) "
+                        "which is why its recommended to use them without any additional models in the pipeline that perform the same task.",
+                        style: TextStyle(color: Colors.white),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              ElevatedButton.icon(
+                onPressed: model.validPipeline
+                    ? () async {
+                        await model.savePipeline();
+                        setState(() {
+                          showMessage(context,
+                              Message("Saved pipeline settings", Status.info));
+                        });
+                      }
+                    : null,
+                icon: const Icon(Icons.save),
+                label: const Text("Save pipeline settings"),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget buildInputOutput(HomeModel model) {
+    final numInputLines = inputController.text.split("\n").length;
+    final numInputBytes = numBytes(inputController.text);
+    return Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: const [
+                Expanded(
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    visualDensity: VisualDensity.compact,
+                    title: Text(
+                      "Input",
+                      style: TextStyle(fontSize: 20),
+                    ),
+                    subtitle: Text("Enter some text to be spell checked below"),
+                  ),
+                ),
+                SizedBox(width: 64, height: 64),
+                Expanded(
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    visualDensity: VisualDensity.compact,
+                    title: Text(
+                      "Output",
+                      style: TextStyle(fontSize: 20),
+                    ),
+                    subtitle: Text("The spell checked text will appear here"),
+                  ),
+                ),
+              ],
+            ),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                      controller: model.inputController,
+                      maxLines: model.live ? 1 : 10,
+                      decoration: InputDecoration(
+                        border: const OutlineInputBorder(),
+                        hintText: model.live
+                            ? "Enter some text to spell check while typing..."
+                            : "Enter some text to spell check...",
+                        suffixIcon: Column(
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.clear),
+                              tooltip: "Clear text",
+                              splashRadius: 16,
+                              color: uniRed,
+                              onPressed: !model.waiting && model.hasInput
+                                  ? () {
+                                      setState(() {
+                                        model.inputController.text = "";
+                                      });
+                                    }
+                                  : null,
+                            ),
+                            if (!model.live) ...[
+                              IconButton(
+                                icon: const Icon(Icons.paste),
+                                tooltip: "Paste text from clipboard",
+                                splashRadius: 16,
+                                onPressed: !model.waiting
+                                    ? () async {
+                                        final data = await Clipboard.getData(
+                                            "text/plain");
+                                        setState(() {
+                                          if (data != null) {
+                                            model.inputController.text =
+                                                data.text!;
+                                          } else {
+                                            showMessage(
+                                              context,
+                                              Message(
+                                                  "could not paste text from clipboard",
+                                                  Status.error),
+                                            );
+                                          }
+                                        });
+                                      }
+                                    : null,
+                              ),
+                              IconButton(
+                                onPressed: !model.waiting
+                                    ? () async {
+                                        try {
+                                          final files = await FilePicker
+                                              .platform
+                                              .pickFiles(
+                                                  dialogTitle:
+                                                      "Pick a text file",
+                                                  type: FileType.custom,
+                                                  allowedExtensions: ["txt"]);
+                                          if (files != null) {
+                                            final file = files.files.single;
+                                            final content =
+                                                utf8.decode(file.bytes!);
+                                            setState(() {
+                                              model.inputController.text =
+                                                  content;
+                                            });
+                                          }
+                                        } on FormatException catch (_) {
+                                          showMessage(
+                                              context,
+                                              Message(
+                                                  "error decoding file, make sure that it contains valid utf8 bytes",
+                                                  Status.error));
+                                        } on PlatformException catch (e) {
+                                          showMessage(
+                                              context,
+                                              Message(
+                                                  "error uploading file: ${e.message}",
+                                                  Status.error));
+                                        }
+                                      }
+                                    : null,
+                                icon: const Icon(Icons.upload_file),
+                                tooltip: "Upload a text file",
+                                splashRadius: 16,
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      enabled: !model.waiting),
+                ),
+                SizedBox(
+                  width: 64,
+                  child: Column(
+                    children: [
+                      if (!model.live)
+                        Card(
+                          color: model.validPipeline &&
+                                  !model.waiting &&
+                                  !model.live
+                              ? uniBlue
+                              : uniGray,
+                          clipBehavior: Clip.antiAlias,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(20)),
+                          child: IconButton(
+                              onPressed: model.validPipeline &&
+                                      !model.waiting &&
+                                      !model.live
+                                  ? () async {
+                                      final error = await model.runPipeline(
+                                          model.inputController.text);
+                                      if (error != null && mounted) {
+                                        showMessage(context, error);
+                                      }
+                                    }
+                                  : null,
+                              icon: Icon(Icons.start,
+                                  color: model.validPipeline &&
+                                          !model.waiting &&
+                                          !model.live
+                                      ? Colors.white
+                                      : uniDarkGray),
+                              tooltip: "Run pipeline on text"),
+                        ),
+                      IconButton(
+                        icon: const Icon(Icons.stream),
+                        color: model.live ? uniBlue : uniDarkGray,
+                        tooltip:
+                            "${!model.live ? "Enable" : "Disable"} live spell checking",
+                        splashRadius: 16,
+                        onPressed: model.validPipeline && !model.waiting
+                            ? () async {
+                                setState(
+                                  () {
+                                    model.live = !model.live;
+                                  },
+                                );
+                                if (model.live) {
+                                  model.inputController.text =
+                                      model.inputController.text.split("\n")[0];
+                                  await model.runPipelineLive();
+                                }
+                              }
+                            : null,
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: TextField(
+                    controller: model.outputController,
+                    maxLines: model.live ? 1 : 10,
+                    readOnly: true,
+                    decoration: InputDecoration(
+                      suffixIcon: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          if (!model.waiting || model.live) ...[
+                            IconButton(
+                              splashRadius: 16,
+                              tooltip: "Copy output to clipboard",
+                              onPressed: () async {
+                                await Clipboard.setData(ClipboardData(
+                                    text: model.outputController.text));
+                              },
+                              icon: const Icon(Icons.copy),
+                            )
+                          ] else
+                            const SizedBox(
+                              height: 16,
+                              width: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                              ),
+                            )
+                        ],
+                      ),
+                    ),
+                  ),
+                )
+              ],
+            ),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    inputController.text.isEmpty
+                        ? ""
+                        : "$numInputLines line${numInputLines > 1 ? "s" : ""} with ${formatB(numInputBytes.toDouble())} of text",
+                    style: const TextStyle(fontSize: 12, color: uniDarkGray),
+                  ),
+                ),
+                const SizedBox(width: 64),
+                Expanded(
+                  child: Text(
+                    model.hasResults
+                        ? "${formatS(model.runtimes["total"]["s"])}, ${formatB(model.runtimes["total"]["bps"])}/s"
+                        : "",
+                    style: const TextStyle(fontSize: 12, color: uniDarkGray),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1043,6 +985,55 @@ class _HomeViewState extends State<HomeView> {
           ],
         ),
       ),
+    );
+  }
+
+  showInfoDialog(dynamic info) {
+    showDialog(
+      context: context,
+      builder: (infoContext) {
+        List<dynamic> gpus = info["gpu"];
+        return SimpleDialog(
+          title: const Text("Info"),
+          children: [
+            if (info == null) ...[
+              const SimpleDialogOption(child: Text("Info not available"))
+            ] else ...[
+              SimpleDialogOption(
+                  child: Text("Library: nsc (version ${info["version"]})")),
+              SimpleDialogOption(
+                  child: Text("Timeout: ${info["timeout"]} seconds")),
+              SimpleDialogOption(
+                  child: Text("Precision: ${info["precision"]}")),
+              SimpleDialogOption(child: Text("CPU: ${info["cpu"]}")),
+              SimpleDialogOption(
+                child: Row(
+                  children: [
+                    const Text("GPUs: "),
+                    if (gpus.isEmpty)
+                      const Text("-")
+                    else
+                      Flexible(
+                        child: Wrap(
+                          children: gpus
+                              .mapIndexed(
+                                (idx, gpu) => Card(
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(8),
+                                    child: Text("GPU $idx: $gpu"),
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                        ),
+                      )
+                  ],
+                ),
+              )
+            ],
+          ],
+        );
+      },
     );
   }
 }

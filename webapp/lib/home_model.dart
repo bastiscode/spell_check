@@ -11,6 +11,8 @@ import 'package:webapp/components/message.dart';
 class HomeModel extends BaseModel {
   dynamic _models;
 
+  dynamic get models => _models;
+
   dynamic get available => _models != null;
 
   dynamic _info;
@@ -39,10 +41,12 @@ class HomeModel extends BaseModel {
   bool get validPipeline =>
       trModel != null || sedwModel != null || secModel != null;
 
-  List<String> get tasks => _models["default"].keys.toList();
-
   List<dynamic> getModels(String task) {
     return _models.where((element) => element["task"] == task).toList();
+  }
+
+  dynamic getModel(String task, String name) {
+    return _models.firstWhere((element) => element["task"] == task && element["name"] == name);
   }
 
   bool _ready = false;
@@ -143,7 +147,7 @@ class HomeModel extends BaseModel {
         .split("\n")
         .map((s) => s.trim().replaceAll(RegExp(r"\s+"), " "))
         .toList();
-    debugPrint("input lines: $inputLines, ${inputLines.length}");
+    debugPrint("num input lines: ${inputLines.length}");
     var inputText = inputLines.join("\n");
     final result =
         await api.runPipeline(inputText, trModel, sedwModel, secModel);
