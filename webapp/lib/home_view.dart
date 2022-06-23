@@ -4,14 +4,15 @@ import 'package:file_picker/file_picker.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:webapp/api.dart';
 import 'package:webapp/base_view.dart';
 import 'package:webapp/colors.dart';
-import 'package:webapp/components/file_upload.dart';
-import 'package:webapp/components/input_or_upload.dart';
+import 'package:webapp/components/evaluation.dart';
 import 'package:webapp/components/message.dart';
 import 'package:webapp/components/presets.dart';
 import 'package:webapp/components/result.dart';
 import 'package:webapp/home_model.dart';
+import 'package:webapp/platforms/file_download_interface.dart';
 import 'package:webapp/utils.dart';
 
 Widget wrapScaffold(Widget widget) {
@@ -38,6 +39,15 @@ class _HomeViewState extends State<HomeView> {
   bool showPipelineInfo = false;
 
   @override
+  void initState() {
+    super.initState();
+
+    inputController.addListener(() {
+      setState(() {});
+    });
+  }
+
+  @override
   Widget build(BuildContext homeContext) {
     return BaseView<HomeModel>(
       onModelReady: (model) async {
@@ -46,7 +56,12 @@ class _HomeViewState extends State<HomeView> {
       builder: (context, model, child) {
         if (!model.ready) {
           return wrapScaffold(
-              const Center(child: CircularProgressIndicator(color: uniBlue)));
+            const Center(
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+              ),
+            ),
+          );
         } else if (model.ready && !model.available) {
           return wrapScaffold(
             Center(
@@ -139,22 +154,7 @@ class _HomeViewState extends State<HomeView> {
                           ],
                         ),
                       ),
-                      Card(
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8)),
-                        elevation: 2,
-                        clipBehavior: Clip.antiAlias,
-                        child: ExpansionTile(
-                          title: const Text(
-                            "Evaluation",
-                            style: TextStyle(fontSize: 20),
-                          ),
-                          subtitle: const Text(
-                              "Evaluate the outputs of all pipeline steps against their groundtruths"),
-                          controlAffinity: ListTileControlAffinity.leading,
-                          children: [buildEvaluation(model)],
-                        ),
-                      )
+                      buildEvaluation(model)
                     ],
                   ],
                 ),
@@ -210,7 +210,7 @@ class _HomeViewState extends State<HomeView> {
             ],
             models: model.models,
             trModel: model.trModel,
-              sedwModel: model.sedwModel,
+            sedwModel: model.sedwModel,
             secModel: model.secModel,
             onSelected: (preset) {
               setState(
@@ -420,8 +420,6 @@ class _HomeViewState extends State<HomeView> {
   }
 
   Widget buildInputOutput(HomeModel model) {
-    final numInputLines = inputController.text.split("\n").length;
-    final numInputBytes = numBytes(inputController.text);
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       elevation: 2,
@@ -458,16 +456,22 @@ class _HomeViewState extends State<HomeView> {
               ],
             ),
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
                   child: TextField(
                     controller: model.inputController,
-                    maxLines: model.live ? 1 : 10,
+                    maxLines: 10,
+                    maxLength: model.live ? HomeModel.maxLiveLength : null,
+                    readOnly: !model.live && model.waiting,
+                    maxLengthEnforcement: MaxLengthEnforcement.enforced,
                     decoration: InputDecoration(
                       border: const OutlineInputBorder(),
                       hintText: model.live
                           ? "Enter some text to spell check while typing..."
                           : "Enter some text to spell check...",
+                      helperText: helperTextFromTextController(inputController),
+                      helperMaxLines: 10,
                       suffixIcon: Column(
                         children: [
                           IconButton(
@@ -479,24 +483,35 @@ class _HomeViewState extends State<HomeView> {
                                 ? () {
                                     setState(() {
                                       model.lastInputString = null;
-                                      model.inputController.text = "";
+                                      model.inputController.value =
+                                          const TextEditingValue(
+                                              text: "",
+                                              selection:
+                                                  TextSelection.collapsed(
+                                                      offset: 0));
                                     });
                                   }
                                 : null,
                           ),
-                          if (!model.live) ...[
-                            IconButton(
-                              icon: const Icon(Icons.paste),
-                              tooltip: "Paste text from clipboard",
-                              splashRadius: 16,
-                              onPressed: !model.waiting
-                                  ? () async {
-                                      final data =
-                                          await Clipboard.getData("text/plain");
-                                      setState(() {
+                          IconButton(
+                            icon: const Icon(Icons.paste),
+                            tooltip: "Paste text from clipboard",
+                            splashRadius: 16,
+                            onPressed: !model.waiting
+                                ? () async {
+                                    final data =
+                                        await Clipboard.getData("text/plain");
+                                    setState(
+                                      () {
                                         if (data != null) {
-                                          model.inputController.text =
-                                              data.text!;
+                                          final truncatedText =
+                                              model.truncate(data.text!);
+                                          model.inputController.value =
+                                              TextEditingValue(
+                                            text: truncatedText,
+                                            selection: TextSelection.collapsed(
+                                                offset: truncatedText.length),
+                                          );
                                         } else {
                                           showMessage(
                                             context,
@@ -505,48 +520,54 @@ class _HomeViewState extends State<HomeView> {
                                                 Status.error),
                                           );
                                         }
-                                      },);
-                                    }
-                                  : null,
-                            ),
-                            IconButton(
-                              onPressed: !model.waiting
-                                  ? () async {
-                                      try {
-                                        final files = await FilePicker.platform
-                                            .pickFiles(
-                                                dialogTitle: "Pick a text file",
-                                                type: FileType.custom,
-                                                allowedExtensions: ["txt"]);
-                                        if (files != null) {
-                                          final file = files.files.single;
-                                          final content =
-                                              utf8.decode(file.bytes!);
-                                          setState(() {
-                                            model.inputController.text =
-                                                content;
-                                          });
-                                        }
-                                      } on FormatException catch (_) {
-                                        showMessage(
-                                            context,
-                                            Message(
-                                                "error decoding file, make sure that it contains valid utf8 bytes",
-                                                Status.error));
-                                      } on PlatformException catch (e) {
-                                        showMessage(
-                                            context,
-                                            Message(
-                                                "error uploading file: ${e.message}",
-                                                Status.error));
+                                      },
+                                    );
+                                  }
+                                : null,
+                          ),
+                          IconButton(
+                            onPressed: !model.waiting
+                                ? () async {
+                                    try {
+                                      final files = await FilePicker.platform
+                                          .pickFiles(
+                                              dialogTitle: "Pick a text file",
+                                              type: FileType.custom,
+                                              allowedExtensions: ["txt"]);
+                                      if (files != null) {
+                                        final file = files.files.single;
+                                        final content =
+                                            utf8.decode(file.bytes!);
+                                        setState(() {
+                                          final truncatedText =
+                                              model.truncate(content);
+                                          model.inputController.value =
+                                              TextEditingValue(
+                                            text: truncatedText,
+                                            selection: TextSelection.collapsed(
+                                                offset: truncatedText.length),
+                                          );
+                                        });
                                       }
+                                    } on FormatException catch (_) {
+                                      showMessage(
+                                          context,
+                                          Message(
+                                              "error decoding file, make sure that it contains valid utf8 bytes",
+                                              Status.error));
+                                    } on PlatformException catch (e) {
+                                      showMessage(
+                                          context,
+                                          Message(
+                                              "error uploading file: ${e.message}",
+                                              Status.error));
                                     }
-                                  : null,
-                              icon: const Icon(Icons.upload_file),
-                              tooltip: "Upload a text file",
-                              splashRadius: 16,
-                            ),
-                          ],
+                                  }
+                                : null,
+                            icon: const Icon(Icons.upload_file),
+                            tooltip: "Upload a text file",
+                            splashRadius: 16,
+                          ),
                         ],
                       ),
                     ),
@@ -555,37 +576,44 @@ class _HomeViewState extends State<HomeView> {
                 SizedBox(
                   width: 64,
                   child: Column(
+                    mainAxisSize: MainAxisSize.max,
                     children: [
-                      if (!model.live)
-                        Card(
-                          color: model.validPipeline &&
-                                  !model.waiting &&
-                                  !model.live
-                              ? uniBlue
-                              : uniGray,
-                          clipBehavior: Clip.antiAlias,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(20)),
-                          child: IconButton(
-                              onPressed: model.validPipeline &&
-                                      !model.waiting &&
-                                      !model.live
-                                  ? () async {
-                                      final error = await model.runPipeline(
-                                          model.inputController.text);
-                                      if (error != null && mounted) {
-                                        showMessage(context, error);
-                                      }
+                      Card(
+                        color: model.validPipeline &&
+                                !model.waiting &&
+                                !model.live &&
+                                inputController.text.isNotEmpty
+                            ? uniBlue
+                            : uniGray,
+                        clipBehavior: Clip.antiAlias,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(100)),
+                        child: IconButton(
+                            onPressed: model.validPipeline &&
+                                    !model.waiting &&
+                                    !model.live &&
+                                    inputController.text.isNotEmpty
+                                ? () async {
+                                    setState(() {
+                                      outputController.value =
+                                          const TextEditingValue();
+                                    });
+                                    final error = await model.runPipeline(
+                                        model.inputController.text);
+                                    if (error != null && mounted) {
+                                      showMessage(context, error);
                                     }
-                                  : null,
-                              icon: Icon(Icons.start,
-                                  color: model.validPipeline &&
-                                          !model.waiting &&
-                                          !model.live
-                                      ? Colors.white
-                                      : uniDarkGray),
-                              tooltip: "Run pipeline on text"),
-                        ),
+                                  }
+                                : null,
+                            icon: Icon(Icons.start,
+                                color: model.validPipeline &&
+                                        !model.waiting &&
+                                        !model.live &&
+                                        inputController.text.isNotEmpty
+                                    ? Colors.white
+                                    : uniDarkGray),
+                            tooltip: "Run pipeline on text"),
+                      ),
                       IconButton(
                         icon: const Icon(Icons.stream),
                         color: model.live ? uniBlue : uniDarkGray,
@@ -601,8 +629,14 @@ class _HomeViewState extends State<HomeView> {
                                 );
                                 if (model.live) {
                                   model.lastInputString = null;
-                                  model.inputController.text =
-                                      model.inputController.text.split("\n")[0];
+                                  final truncatedText = model
+                                      .truncate(model.inputController.text);
+                                  model.inputController.value =
+                                      TextEditingValue(
+                                    text: truncatedText,
+                                    selection: TextSelection.collapsed(
+                                        offset: truncatedText.length),
+                                  );
                                   await model.runPipelineLive();
                                 }
                               }
@@ -614,9 +648,13 @@ class _HomeViewState extends State<HomeView> {
                 Expanded(
                   child: TextField(
                     controller: model.outputController,
-                    maxLines: model.live ? 1 : 10,
+                    maxLines: 10,
                     readOnly: true,
                     decoration: InputDecoration(
+                      helperText: model.hasResults
+                          ? "${formatS(model.runtimes["total"]["s"])}, ${formatB(model.runtimes["total"]["bps"])}/s"
+                          : "",
+                      helperMaxLines: 10,
                       suffixIcon: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
@@ -627,8 +665,39 @@ class _HomeViewState extends State<HomeView> {
                               onPressed: () async {
                                 await Clipboard.setData(ClipboardData(
                                     text: model.outputController.text));
+                                if (mounted) {
+                                  showMessage(
+                                      context,
+                                      Message("Copied outputs to clipboard",
+                                          Status.info));
+                                }
                               },
                               icon: const Icon(Icons.copy),
+                            ),
+                            IconButton(
+                              splashRadius: 16,
+                              tooltip: "Download output",
+                              onPressed: () async {
+                                final fileName = await FileDownloader()
+                                    .downloadFile(
+                                        model.outputController.text, "output");
+                                if (mounted) {
+                                  if (fileName != null) {
+                                    showMessage(
+                                      context,
+                                      Message("Downloaded outputs to $fileName",
+                                          Status.info),
+                                    );
+                                  } else {
+                                    showMessage(
+                                        context,
+                                        Message(
+                                            "Unexpected error downloading outputs",
+                                            Status.error));
+                                  }
+                                }
+                              },
+                              icon: const Icon(Icons.download),
                             )
                           ] else
                             const SizedBox(
@@ -644,29 +713,7 @@ class _HomeViewState extends State<HomeView> {
                   ),
                 )
               ],
-            ),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    inputController.text.isEmpty
-                        ? ""
-                        : "$numInputLines line${numInputLines > 1 ? "s" : ""} with ${formatB(numInputBytes.toDouble())} of text",
-                    style: const TextStyle(fontSize: 12, color: uniDarkGray),
-                  ),
-                ),
-                const SizedBox(width: 64),
-                Expanded(
-                  child: Text(
-                    model.hasResults
-                        ? "${formatS(model.runtimes["total"]["s"])}, ${formatB(model.runtimes["total"]["bps"])}/s"
-                        : "",
-                    style: const TextStyle(fontSize: 12, color: uniDarkGray),
-                  ),
-                ),
-              ],
-            ),
+            )
           ],
         ),
       ),
@@ -674,216 +721,93 @@ class _HomeViewState extends State<HomeView> {
   }
 
   Widget buildEvaluation(HomeModel model) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      children: [
-        if (model.outputs.containsKey("tokenization repair")) ...[
-          Flexible(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text(
-                    "Evaluate tokenization repair",
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                    textAlign: TextAlign.center,
+    return Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      elevation: 2,
+      clipBehavior: Clip.antiAlias,
+      child: ExpansionTile(
+        maintainState: true,
+        title: const Text(
+          "Evaluation",
+          style: TextStyle(fontSize: 20),
+        ),
+        subtitle: const Text(
+            "Evaluate the outputs of all pipeline steps against their groundtruths"),
+        controlAffinity: ListTileControlAffinity.leading,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (model.outputs.containsKey("tokenization repair"))
+                Flexible(
+                  child: Padding(
+                    padding:
+                        const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                    child: EvaluationView(
+                        inputLength: model.input.length,
+                        onEvaluation: (groundtruth) async {
+                          final result = await model.evaluateTr(groundtruth);
+                          final error = errorMessageFromAPIResult(
+                              result, "error evaluating tokenization repair");
+                          if (error == null) {
+                            return trEvaluationTable(result.value);
+                          } else if (mounted) {
+                            showMessage(context, error);
+                          }
+                        },
+                        taskName: "tokenization repair"),
                   ),
-                  const SizedBox(height: 8),
-                  model.trGroundtruth == null
-                      ? ElevatedButton.icon(
-                          onPressed: () async {
-                            model.trGroundtruth = await showInputOrUploadDialog(
-                                context, "Set tokenization repair groundtruth");
-                            setState(() {});
-                          },
-                          label:
-                              const Text("Set tokenization repair groundtruth"),
-                          icon: const Icon(Icons.text_snippet))
-                      : Column(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Uploaded(
-                              title: "Got tokenization repair groundtruth",
-                              name: "Tokenization repair groundtruth",
-                              bytes: utf8.encode(model.trGroundtruth!).length,
-                              lines: model.trGroundtruth!.split("\n").length,
-                              onDelete: () {
-                                setState(() {
-                                  model.trGroundtruth = null;
-                                  model.trEvaluation = null;
-                                });
-                              },
-                            ),
-                            const SizedBox(height: 8),
-                            ElevatedButton.icon(
-                              onPressed: model.evaluating
-                                  ? null
-                                  : () async {
-                                      final error = await model.evaluateTr();
-                                      if (error != null) {
-                                        if (mounted) {
-                                          showMessage(context, error);
-                                        }
-                                      }
-                                    },
-                              icon: const Icon(Icons.analytics),
-                              label: const Text("Evaluate"),
-                            ),
-                          ],
-                        ),
-                  if (model.trEvaluation != null) ...[
-                    const SizedBox(height: 8),
-                    trEvaluationTable(model.trEvaluation),
-                  ],
-                  const SizedBox(height: 8)
-                ],
-              ),
-            ),
+                ),
+              if (model.outputs.containsKey("sed words"))
+                Flexible(
+                  child: Padding(
+                    padding:
+                        const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                    child: EvaluationView(
+                        inputLength: model.input.length,
+                        onEvaluation: (groundtruth) async {
+                          final result = await model.evaluateSedw(groundtruth);
+                          final error = errorMessageFromAPIResult(result,
+                              "error evaluating word-level spelling error detection");
+                          if (error == null) {
+                            return sedwEvaluationTable(result.value);
+                          } else if (mounted) {
+                            showMessage(context, error);
+                          }
+                        },
+                        taskName: "word-level spelling error detection"),
+                  ),
+                ),
+              if (model.outputs.containsKey("sec"))
+                Flexible(
+                  child: Padding(
+                    padding:
+                        const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                    child: EvaluationView(
+                        inputLength: model.input.length,
+                        onEvaluation: (groundtruth) async {
+                          final result = await model.evaluateSec(groundtruth);
+                          final error = errorMessageFromAPIResult(result,
+                              "error evaluating spelling error correction");
+                          if (error == null) {
+                            return secEvaluationTable(result.value);
+                          } else if (mounted) {
+                            showMessage(context, error);
+                          }
+                        },
+                        taskName: "spelling error correction"),
+                  ),
+                )
+            ],
           ),
         ],
-        if (model.outputs.containsKey("sed words")) ...[
-          Flexible(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text(
-                    "Evaluate spelling error detection",
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 8),
-                  model.sedwGroundtruth == null
-                      ? ElevatedButton.icon(
-                          onPressed: () async {
-                            model.sedwGroundtruth =
-                                await showInputOrUploadDialog(context,
-                                    "Set spelling error detection groundtruth");
-                            setState(() {});
-                          },
-                          label: const Text(
-                              "Set spelling error detection groundtruth"),
-                          icon: const Icon(Icons.text_snippet))
-                      : Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Uploaded(
-                              title: "Got spelling error detection groundtruth",
-                              name: "Spelling error detection groundtruth",
-                              bytes: utf8.encode(model.sedwGroundtruth!).length,
-                              lines: model.sedwGroundtruth!.split("\n").length,
-                              onDelete: () {
-                                setState(() {
-                                  model.sedwGroundtruth = null;
-                                  model.sedwEvaluation = null;
-                                });
-                              },
-                            ),
-                            const SizedBox(height: 8),
-                            ElevatedButton.icon(
-                              onPressed: model.evaluating
-                                  ? null
-                                  : () async {
-                                      final error = await model.evaluateSedw();
-                                      if (error != null) {
-                                        if (mounted) {
-                                          showMessage(context, error);
-                                        }
-                                      }
-                                    },
-                              icon: const Icon(Icons.analytics),
-                              label: const Text("Evaluate"),
-                            ),
-                          ],
-                        ),
-                  if (model.sedwEvaluation != null) ...[
-                    const SizedBox(height: 8),
-                    sedwEvaluationTable(model.sedwEvaluation),
-                  ],
-                  const SizedBox(height: 8)
-                ],
-              ),
-            ),
-          ),
-        ],
-        if (model.outputs.containsKey("sec")) ...[
-          Flexible(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text(
-                    "Evaluate spelling error correction",
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 8),
-                  model.secGroundtruth == null
-                      ? ElevatedButton.icon(
-                          onPressed: () async {
-                            model.secGroundtruth = await showInputOrUploadDialog(
-                                context,
-                                "Set spelling error correction groundtruth");
-                            setState(() {});
-                          },
-                          label: const Text(
-                              "Set spelling error correction groundtruth"),
-                          icon: const Icon(Icons.text_snippet))
-                      : Column(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Uploaded(
-                              title:
-                                  "Got spelling error correction groundtruth",
-                              name: "Spelling error correction groundtruth",
-                              bytes: utf8.encode(model.secGroundtruth!).length,
-                              lines: model.secGroundtruth!.split("\n").length,
-                              onDelete: () {
-                                setState(() {
-                                  model.secGroundtruth = null;
-                                  model.secEvaluation = null;
-                                });
-                              },
-                            ),
-                            const SizedBox(width: 8),
-                            ElevatedButton.icon(
-                              onPressed: model.evaluating
-                                  ? null
-                                  : () async {
-                                      final error = await model.evaluateSec();
-                                      if (error != null) {
-                                        if (mounted) {
-                                          showMessage(context, error);
-                                        }
-                                      }
-                                    },
-                              icon: const Icon(Icons.analytics),
-                              label: const Text("Evaluate"),
-                            ),
-                          ],
-                        ),
-                  if (model.secEvaluation != null) ...[
-                    const SizedBox(height: 8),
-                    secEvaluationTable(model.secEvaluation),
-                  ],
-                  const SizedBox(height: 8)
-                ],
-              ),
-            ),
-          ),
-        ],
-      ],
+      ),
     );
   }
 
   Widget trEvaluationTable(dynamic evaluation) {
     return Card(
+      elevation: 2,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
         child: Table(
@@ -923,6 +847,7 @@ class _HomeViewState extends State<HomeView> {
 
   Widget sedwEvaluationTable(dynamic evaluation) {
     return Card(
+      elevation: 2,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
         child: Table(
@@ -972,6 +897,7 @@ class _HomeViewState extends State<HomeView> {
 
   Widget secEvaluationTable(dynamic evaluation) {
     return Card(
+      elevation: 2,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
         child: Table(

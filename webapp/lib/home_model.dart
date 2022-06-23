@@ -1,12 +1,12 @@
 import 'dart:async';
 import 'dart:collection';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:webapp/api.dart';
 import 'package:webapp/base_model.dart';
 import 'package:webapp/components/message.dart';
-
 
 class HomeModel extends BaseModel {
   dynamic _models;
@@ -19,6 +19,8 @@ class HomeModel extends BaseModel {
 
   dynamic get info => _info;
 
+  static const maxLiveLength = 512;
+
   String? trModel;
   String? sedwModel;
   String? secModel;
@@ -26,13 +28,11 @@ class HomeModel extends BaseModel {
   dynamic runtimes;
   List<String> input = [];
 
-  String? trGroundtruth;
-  String? sedwGroundtruth;
-  String? secGroundtruth;
+  // sedw options (e.g. threshold)
+  // TODO: implement these
 
-  dynamic trEvaluation;
-  dynamic sedwEvaluation;
-  dynamic secEvaluation;
+  // sec options (e.g. greedy or beam search)
+  // TODO: implement these
 
   String? lastInputString;
   late TextEditingController inputController;
@@ -46,7 +46,8 @@ class HomeModel extends BaseModel {
   }
 
   dynamic getModel(String task, String name) {
-    return _models.firstWhere((element) => element["task"] == task && element["name"] == name);
+    return _models.firstWhere(
+        (element) => element["task"] == task && element["name"] == name);
   }
 
   bool _ready = false;
@@ -56,10 +57,6 @@ class HomeModel extends BaseModel {
   bool _waiting = false;
 
   bool get waiting => _waiting;
-
-  bool _evaluating = false;
-
-  bool get evaluating => _evaluating;
 
   bool _hasResults = false;
 
@@ -71,7 +68,12 @@ class HomeModel extends BaseModel {
 
   bool hidePipeline = false;
 
-  Future<void> init(TextEditingController inputController, TextEditingController outputController) async {
+  String truncate(String text) {
+    return live ? text.substring(0, min(maxLiveLength, text.length)) : text;
+  }
+
+  Future<void> init(TextEditingController inputController,
+      TextEditingController outputController) async {
     this.inputController = inputController;
     this.outputController = outputController;
 
@@ -122,7 +124,10 @@ class HomeModel extends BaseModel {
   runPipelineLive() async {
     while (live) {
       final inputString = inputController.text;
-      if (lastInputString != inputString && !waiting && validPipeline) {
+      if (lastInputString != inputString &&
+          !waiting &&
+          validPipeline &&
+          inputController.text.length <= maxLiveLength) {
         final error = await runPipeline(inputString);
         if (error == null) {
           lastInputString = inputString;
@@ -147,8 +152,7 @@ class HomeModel extends BaseModel {
         .split("\n")
         .map((s) => s.trim().replaceAll(RegExp(r"\s+"), " "))
         .toList();
-    debugPrint("num input lines: ${inputLines.length}");
-    var inputText = inputLines.join("\n");
+    var inputText = "${inputLines.join("\n")}\n";
     final result =
         await api.runPipeline(inputText, trModel, sedwModel, secModel);
     final error = errorMessageFromAPIResult(result, "error running pipeline");
@@ -159,9 +163,12 @@ class HomeModel extends BaseModel {
       if (secModel != null) {
         outputController.text = outputs["sec"]["text"].join("\n");
       } else if (sedwModel != null) {
-        outputController.text = outputs["sed words"]["detections"].map((detection) => detection.join(" ")).join("\n");
+        outputController.text = outputs["sed words"]["detections"]
+            .map((detection) => detection.join(" "))
+            .join("\n");
       } else {
-        outputController.text = outputs["tokenization repair"]["text"].join("\n");
+        outputController.text =
+            outputs["tokenization repair"]["text"].join("\n");
       }
     }
     _hasResults = error == null;
@@ -170,22 +177,12 @@ class HomeModel extends BaseModel {
     return error;
   }
 
-  Future<Message?> evaluateTr() async {
-    _evaluating = true;
-    notifyListeners();
-    final result = await api.evaluateTr(input.join("\n"), outputs["tokenization repair"]["text"].join("\n"), trGroundtruth!);
-    final error = errorMessageFromAPIResult(result, "error evaluating tokenization repair");
-    if (error == null) {
-      trEvaluation = result.value;
-    }
-    _evaluating = false;
-    notifyListeners();
-    return error;
+  Future<APIResult> evaluateTr(String groundtruth) async {
+    return await api.evaluateTr(input.join("\n"),
+        outputs["tokenization repair"]["text"].join("\n"), groundtruth);
   }
 
-  Future<Message?> evaluateSedw() async {
-    _evaluating = true;
-    notifyListeners();
+  Future<APIResult> evaluateSedw(String groundtruth) async {
     String inputString;
     if (outputs.containsKey("tokenization repair")) {
       inputString = outputs["tokenization repair"]["text"].join("\n");
@@ -196,19 +193,11 @@ class HomeModel extends BaseModel {
     for (final detection in outputs["sed words"]["detections"]) {
       rawDetections.add(detection.join(" "));
     }
-    final result = await api.evaluateSedw(inputString, rawDetections.join("\n"), sedwGroundtruth!);
-    final error = errorMessageFromAPIResult(result, "error evaluating spelling error detection");
-    if (error == null) {
-      sedwEvaluation = result.value;
-    }
-    _evaluating = false;
-    notifyListeners();
-    return error;
+    return await api.evaluateSedw(
+        inputString, rawDetections.join("\n"), groundtruth);
   }
 
-  Future<Message?> evaluateSec() async {
-    _evaluating = true;
-    notifyListeners();
+  Future<APIResult> evaluateSec(String groundtruth) async {
     String inputString;
     if (outputs.containsKey("sed words")) {
       inputString = outputs["sed words"]["text"].join("\n");
@@ -217,13 +206,7 @@ class HomeModel extends BaseModel {
     } else {
       inputString = input.join("\n");
     }
-    final result = await api.evaluateSec(inputString, outputs["sec"]["text"].join("\n"), secGroundtruth!);
-    final error = errorMessageFromAPIResult(result, "error evaluating spelling error correction");
-    if (error == null) {
-      secEvaluation = result.value;
-    }
-    _evaluating = false;
-    notifyListeners();
-    return error;
+    return await api.evaluateSec(
+        inputString, outputs["sec"]["text"].join("\n"), groundtruth);
   }
 }

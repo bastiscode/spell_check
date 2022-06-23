@@ -17,7 +17,7 @@ from nsc import (
     TokenizationRepairer,
     get_available_tokenization_repair_models,
     get_available_spelling_error_detection_models,
-    get_available_spelling_error_correction_models, version
+    get_available_spelling_error_correction_models, version, GreedySearch, BeamSearch
 )
 from nsc.api.utils import ModelInfo, get_cpu_info, get_gpu_info
 from nsc.data.utils import clean_sequence, flatten
@@ -348,7 +348,8 @@ def run() -> Response:
                 text = repaired
             elif isinstance(spell_checker, SpellingErrorDetector):
                 start = time.perf_counter()
-                detections, repaired = spell_checker.detect_text(text, show_progress=False)
+                threshold = request.args.get("threshold", 0.5)
+                detections, repaired = spell_checker.detect_text(text, threshold=threshold, show_progress=False)
                 output["sed words"] = {"text": repaired, "detections": detections}
                 end = time.perf_counter()
                 runtime = end - start
@@ -357,9 +358,21 @@ def run() -> Response:
                 text = repaired
             elif isinstance(spell_checker, SpellingErrorCorrector):
                 start = time.perf_counter()
+                search = request.args.get("search", "greedy")
+                if search == "greedy":
+                    search_method = GreedySearch()
+                elif search == "beam":
+                    search_method = BeamSearch(beam_width=request.args.get("beam_width", 5))
+                else:
+                    return abort(
+                        Response(f"unsupported option '{search}' for query parameter 'search', "
+                                 f"must be either greedy or beam", status=400)
+                    )
+
                 corrected = spell_checker.correct_text(
                     text,
                     detections=output.get("sed words", {}).get("detections"),
+                    search=search_method,
                     show_progress=False
                 )
                 output["sec"] = {"text": corrected}

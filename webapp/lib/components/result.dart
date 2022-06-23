@@ -26,7 +26,6 @@ class ResultView extends StatefulWidget {
 }
 
 class _ResultViewState extends State<ResultView> {
-  final List<String> _rawDetections = [];
   List<int> _indices = List.generate(10, (i) => i);
   final TextEditingController _filterController = TextEditingController();
 
@@ -59,9 +58,9 @@ class _ResultViewState extends State<ResultView> {
   @override
   Widget build(BuildContext context) {
     // setup data
-    bool hasTr = false;
-    bool hasSedw = false;
-    bool hasSec = false;
+    bool hasTr = widget.output.containsKey("tokenization repair");
+    bool hasSedw = widget.output.containsKey("sed words");
+    bool hasSec = widget.output.containsKey("sec");
 
     dynamic trResults;
     dynamic sedwResults;
@@ -71,21 +70,15 @@ class _ResultViewState extends State<ResultView> {
     dynamic sedwRuntimes;
     dynamic secRuntimes;
 
-    if (widget.output.containsKey("tokenization repair")) {
-      hasTr = true;
+    if (hasTr) {
       trResults = widget.output["tokenization repair"];
       trRuntimes = widget.runtimes["tokenization repair"];
     }
-    if (widget.output.containsKey("sed words")) {
-      hasSedw = true;
+    if (hasSedw) {
       sedwResults = widget.output["sed words"];
       sedwRuntimes = widget.runtimes["sed words"];
-      for (final detection in sedwResults["detections"]) {
-        _rawDetections.add(detection.join(" "));
-      }
     }
-    if (widget.output.containsKey("sec")) {
-      hasSec = true;
+    if (hasSec) {
       secResults = widget.output["sec"];
       secRuntimes = widget.runtimes["sec"];
     }
@@ -149,7 +142,7 @@ class _ResultViewState extends State<ResultView> {
                   subtitle: Text(
                       "${formatS(trRuntimes["s"])}, ${formatB(trRuntimes["bps"])}/s"),
                   trailing: resultActions(context, "tokenization repair",
-                      trResults["text"].join("\n") + "\n", "tr_results"),
+                      trResults["text"].join("\n"), "tr_results"),
                 ),
               ),
             if (hasSedw)
@@ -161,8 +154,11 @@ class _ResultViewState extends State<ResultView> {
                       style: TextStyle(fontWeight: FontWeight.bold)),
                   subtitle: Text(
                       "${formatS(sedwRuntimes["s"])}, ${formatB(sedwRuntimes["bps"])}/s"),
-                  trailing: resultActions(context, "spelling error detection",
-                      "${_rawDetections.join("\n")}\n", "sedw_results"),
+                  trailing: resultActions(
+                      context,
+                      "spelling error detection",
+                      "${sedwResults["detections"].map((detection) => detection.join(" ")).join("\n")}",
+                      "sedw_results"),
                 ),
               ),
             if (hasSec)
@@ -175,7 +171,7 @@ class _ResultViewState extends State<ResultView> {
                   subtitle: Text(
                       "${formatS(secRuntimes["s"])}, ${formatB(secRuntimes["bps"])}/s"),
                   trailing: resultActions(context, "spelling error correction",
-                      "${secResults["text"].join("\n")}\n", "sec_results"),
+                      "${secResults["text"].join("\n")}", "sec_results"),
                 ),
               ),
           ],
@@ -204,10 +200,8 @@ class _ResultViewState extends State<ResultView> {
                   Flexible(
                     flex: 1,
                     child: ListTile(
-                      title: Text(
-                        trResults["text"][idx],
-                        textAlign: TextAlign.center,
-                      ),
+                      title: buildTrText(
+                          widget.input[idx], trResults["text"][idx]),
                       visualDensity: VisualDensity.compact,
                     ),
                   ),
@@ -230,10 +224,8 @@ class _ResultViewState extends State<ResultView> {
                   Flexible(
                     flex: 1,
                     child: ListTile(
-                      title: Text(
-                        secResults["text"][idx],
-                        textAlign: TextAlign.center,
-                      ),
+                      title: buildSecText(secResults["text"][idx],
+                          secResults["edited"]["text"][idx]),
                       visualDensity: VisualDensity.compact,
                     ),
                   ),
@@ -274,23 +266,90 @@ class _ResultViewState extends State<ResultView> {
     );
   }
 
+  Widget buildTrText(String a, String b) {
+    a = a.trim().replaceAll(RegExp(r"\s+"), " ");
+    b = b.trim().replaceAll(RegExp(r"\s+"), " ");
+    if (a.replaceAll(" ", "") != b.replaceAll(" ", "")) {
+      // if a and b differ in something else than whitespaces return unformatted text
+      // should not happen but just in case
+
+      return Text(b);
+    }
+    List<TextSpan> children = [];
+    int aPtr = 0;
+    int bPtr = 0;
+    while (aPtr < a.length || bPtr < b.length) {
+      final aChar = a[aPtr];
+      final bChar = b[bPtr];
+
+      if (aChar == bChar) {
+        children.add(TextSpan(text: bChar));
+        aPtr++;
+        bPtr++;
+      } else if (aChar == " ") {
+        if (children.isNotEmpty) {
+          children.last = TextSpan(
+              text: b[bPtr - 1], style: const TextStyle(color: uniRed, fontWeight: FontWeight.bold));
+        }
+        children
+            .add(TextSpan(text: bChar, style: const TextStyle(color: uniRed, fontWeight: FontWeight.bold)));
+        aPtr += 2;
+        bPtr++;
+      } else if (bChar == " ") {
+        children.add(TextSpan(
+            text: bChar, style: const TextStyle(backgroundColor: uniGreen)));
+        bPtr++;
+      } else {
+        // should not happen
+        throw "should not happen";
+      }
+    }
+    return Text.rich(TextSpan(children: children), textAlign: TextAlign.center);
+  }
+
   Widget buildSedwText(String text, List<dynamic> detections) {
     final words = text.trim().split(" ");
-    List<TextSpan> children = [];
+    List<InlineSpan> children = [];
     for (int i = 0; i < words.length; i++) {
       int isError = i < detections.length ? detections[i] : 0;
       final word = (i > 0 ? " " : "") + words[i].trim();
       if (isError == 1) {
-        children.add(TextSpan(
+        children.add(
+          TextSpan(
             text: word,
-            style:
-                const TextStyle(color: uniRed, fontWeight: FontWeight.bold)));
+            style: const TextStyle(color: uniRed, fontWeight: FontWeight.bold),
+          ),
+        );
       } else {
         children.add(TextSpan(text: word));
       }
     }
-    return RichText(
-      text: TextSpan(children: children),
+    return Text.rich(
+      TextSpan(children: children),
+      textAlign: TextAlign.center,
+    );
+  }
+
+  Widget buildSecText(String text, List<dynamic> edited) {
+    final words = text.trim().split(" ");
+    List<InlineSpan> children = [];
+    for (int i = 0; i < words.length; i++) {
+      bool isEdited = edited.contains(i);
+      final word = (i > 0 ? " " : "") + words[i].trim();
+      if (isEdited) {
+        children.add(
+          TextSpan(
+            text: word,
+            style:
+                const TextStyle(color: uniOrange, fontWeight: FontWeight.bold),
+          ),
+        );
+      } else {
+        children.add(TextSpan(text: word));
+      }
+    }
+    return Text.rich(
+      TextSpan(children: children),
       textAlign: TextAlign.center,
     );
   }
@@ -311,7 +370,7 @@ class _ResultViewState extends State<ResultView> {
                       "Copied $taskName outputs to clipboard", Status.info));
             }
           },
-          tooltip: "Copy raw $taskName outputs",
+          tooltip: "Copy raw $taskName outputs to clipboard",
           splashRadius: 16,
           icon: const Icon(Icons.content_copy),
         ),
@@ -342,20 +401,4 @@ class _ResultViewState extends State<ResultView> {
       ],
     );
   }
-}
-
-Widget buildDeletionsText(String s, List<dynamic> edits) {
-  if (s.isEmpty) {
-    return Text(s);
-  }
-  final chars = s.characters.toList();
-  List<InlineSpan>? children = [];
-  for (int idx = 1; idx < chars.length; idx += 1) {
-    final char = chars[idx];
-    final edit = edits[idx];
-    children.add(TextSpan(
-        text: char,
-        style: edit == 2 ? const TextStyle(backgroundColor: uniRed) : null));
-  }
-  return Text.rich(TextSpan(text: chars.first, children: children));
 }

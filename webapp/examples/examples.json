@@ -1,0 +1,21 @@
+{
+  "Hard": [
+    "this is some testto ceck the models rael tme perofrmase.",
+    "The endoplasimc reitculmis part of the cell."
+  ],
+  "Context": [
+    "I am driving threw the town.",
+    "He complemented me on my new shirt.",
+    "There house is on the other side of the road."
+  ],
+  "10% whitespace errors + spelling errors": [
+    "Kinnan's husband and daughter were killed in the raid, while Kinna nwas sold by the Shawneees to a Delaware tribe, spending three years with them before she was rescued inDtetroit by her brother.",
+    "The national ceonomy withthe closest figure for the ue levant year according to the International Monetary Fund is then indicated.",
+    "Here, z\"context\" mean s a tree with exaztly one hole in it;if \"S\" is su ch a context, \"S\"[\"t\"] denotes the result f fill ing the tree \"t\" into thehole of \"S\" ."
+  ],
+  "No whitespaces + spelling errors": [
+    "Theartistisknownforhistoy-liyesculpturesandnarrativeportraits.",
+    "ThelandwaipurchasedbyMaryb'Donohuein1868andherheirscontinuedtodevelopthepropertyasasummerbeachdestination.",
+    "Inall8Wekshcountycouncilsthewholevofthecouncilwasupforelection."
+  ]
+}
