@@ -93,7 +93,7 @@ to start a spell checking server that gives you access to all models via a JSON 
 It is e.g. used as backend for the \fI\%Web app\fP\&. The server can be configured
 using a yaml file (see \fI\%server_config/server.yaml\fP for the configuration options).
 .sp
-Let’s look at some basic examples on how to use the command line tools.
+Let\(aqs look at some basic examples on how to use the command line tools.
 .sp
 \fBSpelling error correction using\fP \fBnsec\fP
 .INDENT 0.0
@@ -298,6 +298,37 @@ print(repaired_file)
 .UNINDENT
 .UNINDENT
 .SS Web app
+[image: Web app screenshot]
+[image]
+.sp
+The web app source can be found under \fIwebapp/build/web\fP\&. You can host it e.g. using Pythons
+built\-in http server:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+python \-m http.server \-d directory webapp/build/web 8080
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+The web app expects a spell checking server running under the same hostname on port 44444 (we are currently looking
+into ways to be able to set the hostname and port for the server endpoint at runtime). If you are running the web app
+locally you can simply start the spell checking server using \fBnserver\fP:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+nserver \-c server_config/server.yaml
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+Then go to your browser to port 8080 to use the web app.
 .SH DOCKER
 .sp
 This project can also be run using Docker.
@@ -347,7 +378,7 @@ make run_docker_server DOCKER_ARGS="\-p <outside_port>:44444"
 .UNINDENT
 .UNINDENT
 .sp
-Start the web app on port <outside_port>:
+Start the web app on port <outside_port> (also runs the spell checking server):
 .INDENT 0.0
 .INDENT 3.5
 .sp

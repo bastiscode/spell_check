@@ -40,18 +40,12 @@ You can host a spell checking web app on port 8080 which uses the JSON API start
 
   python -m http.server --directory webapp/build/web 8080 & nserver -c server_config/server.yaml && fg
 
-  Note: The webapp currently does not provide the full feature set of the command line tools or Python API
+  Note: The web app currently does not provide the full feature set of the command line tools or Python API
   (e.g. using beam search for spelling correction or converting outputs between tasks). However, these are special cases
-  and for over 95% of use cases the webapp is sufficient and provides a much better user experience than the command line tools.
+  and for over 95% of use cases the web app is sufficient and provides a much better user experience than the command line tools.
 
-We provide quick-start make targets for running the spell checking server and running the spell checking webapp
-(quit this container and execute one of the following two commands):
-
-  Start the spell checking server:
-    make run_docker_server
-
-  Start the spell checking web app:
-    make run_docker_webapp
+  Note: We also provide convenience make targets for running the spell checking server and running the spell checking web app (see
+  the project documentation for more information).
 
 Show the project documentation as man page:
   make show_docs

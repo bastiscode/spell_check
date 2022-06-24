@@ -242,6 +242,19 @@ the Python API see the <a class="reference external" href="#module-nsc">nsc pack
 </section>
 <section id="web-app">
 <h3>Web app<a class="headerlink" href="#web-app" title="Permalink to this headline"></a></h3>
+<img alt="Web app screenshot" src="images/web_app.png" />
+<p>The web app source can be found under <cite>webapp/build/web</cite>. You can host it e.g. using Pythons
+built-in http server:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python -m http.server -d directory webapp/build/web <span class="m">8080</span>
+</pre></div>
+</div>
+<p>The web app expects a spell checking server running under the same hostname on port 44444 (we are currently looking
+into ways to be able to set the hostname and port for the server endpoint at runtime). If you are running the web app
+locally you can simply start the spell checking server using <code class="docutils literal notranslate"><span class="pre">nserver</span></code>:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>nserver -c server_config/server.yaml
+</pre></div>
+</div>
+<p>Then go to your browser to port 8080 to use the web app.</p>
 </section>
 </section>
 <section id="docker">
@@ -266,7 +279,7 @@ to mount an additional directory inside the container use
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>make run_docker_server <span class="nv">DOCKER_ARGS</span><span class="o">=</span><span class="s2">&quot;-p &lt;outside_port&gt;:44444&quot;</span>
 </pre></div>
 </div>
-<p>Start the web app on port &lt;outside_port&gt;:</p>
+<p>Start the web app on port &lt;outside_port&gt; (also runs the spell checking server):</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>make run_docker_webapp <span class="nv">DOCKER_ARGS</span><span class="o">=</span><span class="s2">&quot;-p &lt;outside_port&gt;:8080&quot;</span>
 </pre></div>
 </div>

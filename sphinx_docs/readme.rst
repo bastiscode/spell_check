@@ -210,7 +210,25 @@ the Python API see the `nsc package documentation <#module-nsc>`_.
 Web app
 ~~~~~~~
 
+.. image:: images/web_app.png
+    :alt: Web app screenshot
 
+The web app source can be found under `webapp/build/web`. You can host it e.g. using Pythons
+built-in http server:
+
+.. code-block:: bash
+
+    python -m http.server -d directory webapp/build/web 8080
+
+The web app expects a spell checking server running under the same hostname on port 44444 (we are currently looking
+into ways to be able to set the hostname and port for the server endpoint at runtime). If you are running the web app
+locally you can simply start the spell checking server using ``nserver``:
+
+.. code-block:: bash
+
+    nserver -c server_config/server.yaml
+
+Then go to your browser to port 8080 to use the web app.
 
 Docker
 ------
@@ -244,7 +262,7 @@ Start a spell checking server on port <outside_port>:
 
     make run_docker_server DOCKER_ARGS="-p <outside_port>:44444"
 
-Start the web app on port <outside_port>:
+Start the web app on port <outside_port> (also runs the spell checking server):
 
 .. code-block:: bash
 
