@@ -18,7 +18,7 @@ build_docker:
 	@$(DOCKER_CMD) build -t nsc .
 
 .PHONY: run_docker
-run_docker_gpu:
+run_docker:
 	@echo "Running nsc image"
 	@$(DOCKER_CMD) run $(DOCKER_ARGS) -it --name nsc nsc
 

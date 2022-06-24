@@ -20,12 +20,12 @@ class API {
 
   API._privateConstructor() {
     if (kIsWeb) {
-      _apiBaseURL = "http://${Uri.base.host}:${Uri.base.port + 1}";
+      _apiBaseURL = "http://${Uri.base.host}:44444";
       _webBaseURL = "http://${Uri.base.host}:${Uri.base.port}";
       debugPrint("api: $_apiBaseURL, web: $_webBaseURL");
     } else if (Platform.isAndroid) {
       // for testing on an android emulator
-      _apiBaseURL = "http://10.0.2.2:12345";
+      _apiBaseURL = "http://10.0.2.2:44444";
       _webBaseURL = "http://10.0.2.2:8080";
     } else {
       throw UnsupportedError("unknown platform");

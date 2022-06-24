@@ -1,7 +1,7 @@
 # hostname
 host: "0.0.0.0"
 # port to run server on
-port: 12345
+port: 44444
 # inference precision for running the models (setting fp16 here might give you faster runtimes
 # if your hardware supports it)
 precision: "fp32"
