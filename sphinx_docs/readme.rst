@@ -23,21 +23,32 @@ Install from source (alternatively you can use Docker_)
 Usage
 -----
 
-There are two main ways to use this project.
-Either via the command line or by directly using the Python API.
+There are three main ways to use this project:
+
+1. Command line
+2. Python API
+3. Web app
+
+We recommend that you start out with the `Web app`_ using the Docker_ setup
+which provides the best user experience overall.
 
 Command line interfaces
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-After installation there will be three commands available in your environment:
+After installation there will be four commands available in your environment:
 
 1. ``nsec`` for neural spelling error correction
 2. ``nsed`` for neural spelling error detection
 3. ``ntr`` for neural tokenization repair
+4. ``nserver`` for running a spell checking server
 
-By default all three commands take input from `stdin`, run their respective task on the
-input line by line and print their output line by line to `stdout`. Let's look at some
-basic examples on how to use the command line tools.
+By default the first three commands take input from `stdin`, run their respective task on the
+input line by line and print their output line by line to `stdout`. The fourth command allows you
+to start a spell checking server that gives you access to all models via a JSON API.
+It is e.g. used as backend for the `Web app`_. The server can be configured
+using a yaml file (see `server_config/server.yaml`_ for the configuration options).
+
+Let's look at some basic examples on how to use the command line tools.
 
 **Spelling error correction using** ``nsec``
 
@@ -128,6 +139,13 @@ Some examples are shown below.
 There are a few other command line options available for the ``nsec``, ``nsed`` and ``ntr`` commands. Inspect
 them by passing the ``-h / --help`` flag to the commands.
 
+**Running a spell checking server using** ``nserver``
+
+.. code-block:: bash
+
+    # start the spell checking server, we provide a default config at server_config/server.yaml
+    nserver -c path/to/config.yaml
+
 Python API
 ~~~~~~~~~~
 
@@ -189,6 +207,11 @@ the Python API see the `nsc package documentation <#module-nsc>`_.
     repaired_file = tr.repair_file("path/to/file.txt")
     print(repaired_file)
 
+Web app
+~~~~~~~
+
+
+
 Docker
 ------
 
@@ -206,27 +229,39 @@ Start a Docker container:
 
 .. code-block:: bash
 
-    # run the docker container with GPU support
-    make run_docker_gpu
-    # or with CPU support only
-    make run_docker_cpu
+    make run_docker
 
 You can also pass additional Docker arguments to the make commands by specifying ``DOCKER_ARGS``. For example,
+to be able to access your GPUs inside the container run ``make run_docker DOCKER_ARGS="--gpus all"``. As another example,
 to mount an additional directory inside the container use
-``make DOCKER_ARGS="-v /path/to/outside/directory:/path/to/container/directory" run_docker_gpu``.
+``make run_docker DOCKER_ARGS="-v /path/to/outside/directory:/path/to/container/directory"``.
+
+We provide two convenience commands for starting a spell checking server or hosting the web app:
+
+Start a spell checking server on port <outside_port>:
+
+.. code-block:: bash
+
+    make run_docker_server DOCKER_ARGS="-p <outside_port>:44444"
+
+Start the web app on port <outside_port>:
+
+.. code-block:: bash
+
+    make run_docker_webapp DOCKER_ARGS="-p <outside_port>:8080"
 
 .. hint::
-
     If you build the Docker image on an AD Server you probably want to use wharfer instead of
     Docker. To do that call the make commands with the additional argument ``DOCKER_CMD=wharfer``,
-    e.g. ``make DOCKER_CMD=wharfer build_docker``.
+    e.g. ``make build_docker DOCKER_CMD=wharfer``.
 
 .. note::
-    The Docker setup is only intended to be used for running the command line tools/Python API with pretrained or
-    your own models and evaluating benchmarks, but not for training.
+    The Docker setup is only intended to be used for running the command line tools, Python API, or web app
+    with pretrained or your own models and evaluating benchmarks, but not for training.
 
 .. note::
     Running the Docker container with GPU support assumes that you have the `NVIDIA Container Toolkit`_ installed.
 
 .. _NVIDIA Container Toolkit: https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html
 .. _documentation: https://bastiscode.github.io/spell_check
+.. _server_config/server.yaml: https://github.com/bastiscode/spell_check/tree/main/server_config/server.yaml

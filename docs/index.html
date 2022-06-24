@@ -77,19 +77,29 @@ for more information on how to reproduce results and train your own models.</p>
 </section>
 <section id="usage">
 <h2>Usage<a class="headerlink" href="#usage" title="Permalink to this headline"></a></h2>
-<p>There are two main ways to use this project.
-Either via the command line or by directly using the Python API.</p>
+<p>There are three main ways to use this project:</p>
+<ol class="arabic simple">
+<li><p>Command line</p></li>
+<li><p>Python API</p></li>
+<li><p>Web app</p></li>
+</ol>
+<p>We recommend that you start out with the <a class="reference internal" href="#web-app">Web app</a> using the <a class="reference internal" href="#docker">Docker</a> setup
+which provides the best user experience overall.</p>
 <section id="command-line-interfaces">
 <h3>Command line interfaces<a class="headerlink" href="#command-line-interfaces" title="Permalink to this headline"></a></h3>
-<p>After installation there will be three commands available in your environment:</p>
+<p>After installation there will be four commands available in your environment:</p>
 <ol class="arabic simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">nsec</span></code> for neural spelling error correction</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">nsed</span></code> for neural spelling error detection</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">ntr</span></code> for neural tokenization repair</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">nserver</span></code> for running a spell checking server</p></li>
 </ol>
-<p>By default all three commands take input from <cite>stdin</cite>, run their respective task on the
-input line by line and print their output line by line to <cite>stdout</cite>. Let’s look at some
-basic examples on how to use the command line tools.</p>
+<p>By default the first three commands take input from <cite>stdin</cite>, run their respective task on the
+input line by line and print their output line by line to <cite>stdout</cite>. The fourth command allows you
+to start a spell checking server that gives you access to all models via a JSON API.
+It is e.g. used as backend for the <a class="reference internal" href="#web-app">Web app</a>. The server can be configured
+using a yaml file (see <a class="reference external" href="https://github.com/bastiscode/spell_check/tree/main/server_config/server.yaml">server_config/server.yaml</a> for the configuration options).</p>
+<p>Let’s look at some basic examples on how to use the command line tools.</p>
 <p><strong>Spelling error correction using</strong> <code class="docutils literal notranslate"><span class="pre">nsec</span></code></p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># correct text by piping into nsec,</span>
 <span class="nb">echo</span> <span class="s2">&quot;This is an incorect sentense!&quot;</span> <span class="p">|</span> nsec
@@ -170,6 +180,11 @@ nsec -c <span class="s2">&quot;core ct thissen tense!&quot;</span> -m <span clas
 </div>
 <p>There are a few other command line options available for the <code class="docutils literal notranslate"><span class="pre">nsec</span></code>, <code class="docutils literal notranslate"><span class="pre">nsed</span></code> and <code class="docutils literal notranslate"><span class="pre">ntr</span></code> commands. Inspect
 them by passing the <code class="docutils literal notranslate"><span class="pre">-h</span> <span class="pre">/</span> <span class="pre">--help</span></code> flag to the commands.</p>
+<p><strong>Running a spell checking server using</strong> <code class="docutils literal notranslate"><span class="pre">nserver</span></code></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># start the spell checking server, we provide a default config at server_config/server.yaml</span>
+nserver -c path/to/config.yaml
+</pre></div>
+</div>
 </section>
 <section id="python-api">
 <h3>Python API<a class="headerlink" href="#python-api" title="Permalink to this headline"></a></h3>
@@ -225,6 +240,9 @@ the Python API see the <a class="reference external" href="#module-nsc">nsc pack
 </pre></div>
 </div>
 </section>
+<section id="web-app">
+<h3>Web app<a class="headerlink" href="#web-app" title="Permalink to this headline"></a></h3>
+</section>
 </section>
 <section id="docker">
 <h2>Docker<a class="headerlink" href="#docker" title="Permalink to this headline"></a></h2>
@@ -236,25 +254,32 @@ You can also evaluate model predictions on benchmarks.</p>
 </pre></div>
 </div>
 <p>Start a Docker container:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># run the docker container with GPU support</span>
-make run_docker_gpu
-<span class="c1"># or with CPU support only</span>
-make run_docker_cpu
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>make run_docker
 </pre></div>
 </div>
 <p>You can also pass additional Docker arguments to the make commands by specifying <code class="docutils literal notranslate"><span class="pre">DOCKER_ARGS</span></code>. For example,
+to be able to access your GPUs inside the container run <code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">run_docker</span> <span class="pre">DOCKER_ARGS=&quot;--gpus</span> <span class="pre">all&quot;</span></code>. As another example,
 to mount an additional directory inside the container use
-<code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">DOCKER_ARGS=&quot;-v</span> <span class="pre">/path/to/outside/directory:/path/to/container/directory&quot;</span> <span class="pre">run_docker_gpu</span></code>.</p>
+<code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">run_docker</span> <span class="pre">DOCKER_ARGS=&quot;-v</span> <span class="pre">/path/to/outside/directory:/path/to/container/directory&quot;</span></code>.</p>
+<p>We provide two convenience commands for starting a spell checking server or hosting the web app:</p>
+<p>Start a spell checking server on port &lt;outside_port&gt;:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>make run_docker_server <span class="nv">DOCKER_ARGS</span><span class="o">=</span><span class="s2">&quot;-p &lt;outside_port&gt;:44444&quot;</span>
+</pre></div>
+</div>
+<p>Start the web app on port &lt;outside_port&gt;:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>make run_docker_webapp <span class="nv">DOCKER_ARGS</span><span class="o">=</span><span class="s2">&quot;-p &lt;outside_port&gt;:8080&quot;</span>
+</pre></div>
+</div>
 <div class="admonition hint">
 <p class="admonition-title">Hint</p>
 <p>If you build the Docker image on an AD Server you probably want to use wharfer instead of
 Docker. To do that call the make commands with the additional argument <code class="docutils literal notranslate"><span class="pre">DOCKER_CMD=wharfer</span></code>,
-e.g. <code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">DOCKER_CMD=wharfer</span> <span class="pre">build_docker</span></code>.</p>
+e.g. <code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">build_docker</span> <span class="pre">DOCKER_CMD=wharfer</span></code>.</p>
 </div>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
-<p>The Docker setup is only intended to be used for running the command line tools/Python API with pretrained or
-your own models and evaluating benchmarks, but not for training.</p>
+<p>The Docker setup is only intended to be used for running the command line tools, Python API, or web app
+with pretrained or your own models and evaluating benchmarks, but not for training.</p>
 </div>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
@@ -492,7 +517,7 @@ training on <a class="reference external" href="https://slurm.schedmd.com/docume
 <span class="nv">NSC_FORCE_LOCAL</span><span class="o">=</span><span class="nb">true</span> <span class="nv">NSC_CONFIG</span><span class="o">=</span>spell_checking/configs/sed_words.yaml spell_checking/scripts/train.sh
 </pre></div>
 </div>
-<p>To retrain the models of this project see the <code class="docutils literal notranslate"><span class="pre">train_slurm_&lt;task&gt;.sh</span></code> scripts in this <a class="reference external" href="https://github.com/bastiscode/spell_check/tree/main/spell_checking/scripts">directory</a> which were used for training all models.
+<p>To retrain the models of this project see the <code class="docutils literal notranslate"><span class="pre">train_slurm_&lt;task&gt;.sh</span></code> scripts in the <a class="reference external" href="https://github.com/bastiscode/spell_check/tree/main/spell_checking/scripts">scripts directory</a> which were used for training all models.
 These scripts do nothing more than setting some environment variables and calling the <a class="reference external" href="https://github.com/bastiscode/spell_check/tree/main/spell_checking/scripts/train.sh">train.sh</a>  script.</p>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
@@ -504,23 +529,24 @@ since they call the <code class="docutils literal notranslate"><span class="pre"
 <h2>Reproduce<a class="headerlink" href="#reproduce" title="Permalink to this headline"></a></h2>
 <p>We make all models that are needed to reproduce the results on the projects’ benchmarks available as
 <a class="reference external" href="#pretrained-models">pretrained models</a>.
-All pretrained models can be accessed either through the command line interface (<code class="docutils literal notranslate"><span class="pre">nsec</span></code>, <code class="docutils literal notranslate"><span class="pre">nsed</span></code>, <code class="docutils literal notranslate"><span class="pre">ntr</span></code>)
-or the Python API.</p>
-<p>The <a class="reference external" href="https://github.com/bastiscode/spell_check/tree/main/spell_checking/benchmarks/test">benchmarks can be found here</a> or under <code class="docutils literal notranslate"><span class="pre">/nfs/students/sebastian-walter/masters_thesis/benchmarks</span></code>.
+All pretrained models can be accessed either through the command line interface (<code class="docutils literal notranslate"><span class="pre">nsec</span></code>, <code class="docutils literal notranslate"><span class="pre">nsed</span></code>, <code class="docutils literal notranslate"><span class="pre">ntr</span></code>),
+the Python API, or the web app.</p>
+<p>All benchmarks as well as our and the baseline results on them can be found in this <a class="reference external" href="https://github.com/bastiscode/spell_check/tree/main/spell_checking/benchmarks/test">directory</a>.
 Every benchmark follows the same directory structure:</p>
 <ul class="simple">
 <li><p>&lt;task&gt;/&lt;benchmark_group&gt;/&lt;benchmark_split&gt;/corrupt.txt</p></li>
 <li><p>&lt;task&gt;/&lt;benchmark_group&gt;/&lt;benchmark_split&gt;/correct.txt</p></li>
 </ul>
 <p>Here corrupt.txt is the input containing misspelled text and correct.txt is the groundtruth output. We
-provide a <a class="reference external" href="https://github.com/bastiscode/spell_check/blob/main/spell_checking/benchmarks/scripts/evaluate.py">evaluation script</a> that can be used to evaluate model predictions on a given benchmark.</p>
+provide a <a class="reference external" href="https://github.com/bastiscode/spell_check/blob/main/spell_checking/benchmarks/scripts/evaluate.py">evaluation script</a> that can be used to evaluate model predictions on a given benchmark. Alternatively
+the web app also features a section where you can evaluate model predictions on benchmarks.</p>
 <p>As an example, lets look at the steps that are necessary to evaluate our gnn+ model for word level spelling error detection on
 the wikidump realistic benchmark using the command line interface:</p>
 <ol class="arabic simple">
 <li><p>Run model on benchmark:</p></li>
 </ol>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>nsed -m <span class="s2">&quot;sed words:gnn+&quot;</span> <span class="se">\ </span> <span class="c1"># choose the model</span>
--f /nfs/students/sebastian-walter/masters_thesis/benchmarks/sed_words/wikidump/realistic/corrupt.txt <span class="se">\ </span> <span class="c1"># input file</span>
+-f spell_checking/benchmarks/test/sed_words/wikidump/realistic/corrupt.txt <span class="se">\ </span> <span class="c1"># input file</span>
 -o gnn_plus_predictions.txt  <span class="c1"># save output to file</span>
 </pre></div>
 </div>
@@ -529,8 +555,8 @@ the wikidump realistic benchmark using the command line interface:</p>
 </ol>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python spell_checking/benchmarks/scripts/evaluate.py <span class="se">\</span>
 sed_words <span class="se">\ </span> <span class="c1"># benchmark type</span>
-/nfs/students/sebastian-walter/masters_thesis/benchmarks/sed_words/wikidump/realistic/corrupt.txt <span class="se">\ </span> <span class="c1"># input file</span>
-/nfs/students/sebastian-walter/masters_thesis/benchmarks/sed_words/wikidump/realistic/correct.txt <span class="se">\ </span> <span class="c1"># groundtruth file</span>
+spell_checking/benchmarks/test/sed_words/wikidump/realistic/corrupt.txt <span class="se">\ </span> <span class="c1"># input file</span>
+spell_checking/benchmarks/test/sed_words/wikidump/realistic/correct.txt <span class="se">\ </span> <span class="c1"># groundtruth file</span>
 gnn_plus_predictions.txt  <span class="c1"># predicted file</span>
 </pre></div>
 </div>
@@ -542,13 +568,13 @@ are quite large this can take some time. To cut this time all pretrained models 
 <code class="docutils literal notranslate"><span class="pre">NSC_DOWNLOAD_DIR</span></code> to this directory, the models are loaded from this directory and must not be downloaded first.
 If you are running this project using Docker you can mount the directory to the containers download directory
 by specifying an additional volume flag:
-<code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">DOCKER_ARGS=&quot;-v</span> <span class="pre">/nfs/students/sebastian-walter/masters_thesis/zipped:/nsc_download&quot;</span> <span class="pre">run_docker_cpu</span></code>.</p>
+<code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">run_docker</span> <span class="pre">DOCKER_ARGS=&quot;-v</span> <span class="pre">/nfs/students/sebastian-walter/masters_thesis/zipped:/download</span></code>.</p>
 </div>
 <div class="admonition hint">
 <p class="admonition-title">Hint</p>
 <p>To access the benchmarks if you are running this project with Docker you can mount the benchmark directory
 inside the Docker container using
-<code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">DOCKER_ARGS=&quot;-v</span> <span class="pre">/nfs/students/sebastian-walter/masters_thesis/benchmarks:/benchmarks&quot;</span> <span class="pre">run_docker_cpu</span></code>.
+<code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">run_docker</span> <span class="pre">DOCKER_ARGS=&quot;-v</span> <span class="pre">$(pwd)/spell_checking/benchmarks/test:/benchmarks&quot;</span></code>.
 The Docker container also provides additional commands for evaluating benchmarks that are basically
 wrappers around the <a class="reference external" href="https://github.com/bastiscode/spell_check/blob/main/spell_checking/benchmarks/scripts/evaluate.py">evaluation script</a> mentioned above.</p>
 </div>

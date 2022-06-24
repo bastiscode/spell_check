@@ -31,7 +31,7 @@ run_docker_server:
 .PHONY: run_docker_webapp
 run_docker_webapp:
 	@echo "Running nsc webapp"
-	@$(DOCKER_CMD) run $(DOCKER_ARGS) -it --name nsc_webapp --entrypoint bash nsc \
+	@$(DOCKER_CMD) run $(DOCKER_ARGS) -it --name nsc_webapp --entrypoint bash --port 44444:44444 nsc \
 	-c "python -m http.server --directory webapp/build/web 8080 & nserver -c server_config/server.yaml && fg"
 
 .PHONY: docs

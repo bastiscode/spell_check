@@ -117,7 +117,7 @@ training on SLURM_ clusters. Training using this script would look something lik
     # start training without sbatch
     NSC_FORCE_LOCAL=true NSC_CONFIG=spell_checking/configs/sed_words.yaml spell_checking/scripts/train.sh
 
-To retrain the models of this project see the ``train_slurm_<task>.sh`` scripts in this directory_ which were used for training all models.
+To retrain the models of this project see the ``train_slurm_<task>.sh`` scripts in the `scripts directory`_ which were used for training all models.
 These scripts do nothing more than setting some environment variables and calling the `train.sh`_  script.
 
 .. note::
@@ -130,17 +130,18 @@ Reproduce
 
 We make all models that are needed to reproduce the results on the projects' benchmarks available as
 `pretrained models <#pretrained-models>`_.
-All pretrained models can be accessed either through the command line interface (``nsec``, ``nsed``, ``ntr``)
-or the Python API.
+All pretrained models can be accessed either through the command line interface (``nsec``, ``nsed``, ``ntr``),
+the Python API, or the web app.
 
-The `benchmarks can be found here`_ or under ``/nfs/students/sebastian-walter/masters_thesis/benchmarks``.
+All benchmarks as well as our and the baseline results on them can be found in this directory_.
 Every benchmark follows the same directory structure:
 
 - <task>/<benchmark_group>/<benchmark_split>/corrupt.txt
 - <task>/<benchmark_group>/<benchmark_split>/correct.txt
 
 Here corrupt.txt is the input containing misspelled text and correct.txt is the groundtruth output. We
-provide a `evaluation script`_ that can be used to evaluate model predictions on a given benchmark.
+provide a `evaluation script`_ that can be used to evaluate model predictions on a given benchmark. Alternatively
+the web app also features a section where you can evaluate model predictions on benchmarks.
 
 As an example, lets look at the steps that are necessary to evaluate our gnn+ model for word level spelling error detection on
 the wikidump realistic benchmark using the command line interface:
@@ -150,7 +151,7 @@ the wikidump realistic benchmark using the command line interface:
 .. code-block:: bash
 
    nsed -m "sed words:gnn+" \  # choose the model
-   -f /nfs/students/sebastian-walter/masters_thesis/benchmarks/sed_words/wikidump/realistic/corrupt.txt \  # input file
+   -f spell_checking/benchmarks/test/sed_words/wikidump/realistic/corrupt.txt \  # input file
    -o gnn_plus_predictions.txt  # save output to file
 
 2. Evaluate model predictions:
@@ -159,25 +160,23 @@ the wikidump realistic benchmark using the command line interface:
 
    python spell_checking/benchmarks/scripts/evaluate.py \
    sed_words \  # benchmark type
-   /nfs/students/sebastian-walter/masters_thesis/benchmarks/sed_words/wikidump/realistic/corrupt.txt \  # input file
-   /nfs/students/sebastian-walter/masters_thesis/benchmarks/sed_words/wikidump/realistic/correct.txt \  # groundtruth file
+   spell_checking/benchmarks/test/sed_words/wikidump/realistic/corrupt.txt \  # input file
+   spell_checking/benchmarks/test/sed_words/wikidump/realistic/correct.txt \  # groundtruth file
    gnn_plus_predictions.txt  # predicted file
 
 .. hint::
-
     By default a pretrained model is downloaded as a zip file and then extracted when you first use it. Since some models
     are quite large this can take some time. To cut this time all pretrained models can also be found as zip files in the directory
     ``/nfs/students/sebastian-walter/masters_thesis/zipped``. If you set the env variable
     ``NSC_DOWNLOAD_DIR`` to this directory, the models are loaded from this directory and must not be downloaded first.
     If you are running this project using Docker you can mount the directory to the containers download directory
     by specifying an additional volume flag:
-    ``make DOCKER_ARGS="-v /nfs/students/sebastian-walter/masters_thesis/zipped:/nsc_download" run_docker_cpu``.
+    ``make run_docker DOCKER_ARGS="-v /nfs/students/sebastian-walter/masters_thesis/zipped:/download``.
 
 .. hint::
-
     To access the benchmarks if you are running this project with Docker you can mount the benchmark directory
     inside the Docker container using
-    ``make DOCKER_ARGS="-v /nfs/students/sebastian-walter/masters_thesis/benchmarks:/benchmarks" run_docker_cpu``.
+    ``make run_docker DOCKER_ARGS="-v $(pwd)/spell_checking/benchmarks/test:/benchmarks"``.
     The Docker container also provides additional commands for evaluating benchmarks that are basically
     wrappers around the `evaluation script`_ mentioned above.
 
@@ -185,7 +184,7 @@ the wikidump realistic benchmark using the command line interface:
 .. _config for this task: https://github.com/bastiscode/spell_check/tree/main/spell_checking/configs/train/sed_words.yaml
 .. _torchrun: https://pytorch.org/docs/stable/elastic/run.html
 .. _train.sh: https://github.com/bastiscode/spell_check/tree/main/spell_checking/scripts/train.sh
-.. _directory: https://github.com/bastiscode/spell_check/tree/main/spell_checking/scripts
+.. _scripts directory: https://github.com/bastiscode/spell_check/tree/main/spell_checking/scripts
 .. _SLURM: https://slurm.schedmd.com/documentation.html
 .. _evaluation script: https://github.com/bastiscode/spell_check/blob/main/spell_checking/benchmarks/scripts/evaluate.py
-.. _benchmarks can be found here: https://github.com/bastiscode/spell_check/tree/main/spell_checking/benchmarks/test
+.. _directory: https://github.com/bastiscode/spell_check/tree/main/spell_checking/benchmarks/test
