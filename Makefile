@@ -31,13 +31,13 @@ run_docker_cpu:
 run_docker_server:
 	@echo "Running nsc server"
 	@$(DOCKER_CMD) run $(DOCKER_ARGS) --rm -it --name nsc_server --entrypoint bash nsc \
- 	-c "nserver -c server_config/server.yaml"
+ 	-c "nserver -c /spell_check/server_config/server.yaml"
 
 .PHONY: run_docker_webapp
 run_docker_webapp:
 	@echo "Running nsc webapp"
 	@$(DOCKER_CMD) run $(DOCKER_ARGS) --rm -it --name nsc_webapp --entrypoint bash nsc \
-	-c "python -m http.server --directory webapp/build/web 8080 & nserver -c server_config/server.yaml && fg"
+	-c "python -m http.server --directory /spell_check/webapp/build/web 8080 & nserver -c /spell_check/server_config/server.yaml && fg"
 
 .PHONY: docs
 docs:
