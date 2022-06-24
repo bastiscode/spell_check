@@ -79993,7 +79993,7 @@ s($,"aIw","Eh",()=>new A.LU(A.bJ("/",!0),A.bJ("(^[a-zA-Z][-+.a-zA-Z\\d]*://|[^/]
 s($,"aIu","anD",()=>A.aBx())
 r($,"aBb","anB",()=>new A.a1n())
 s($,"aGL","auf",()=>{var q,p,o=new A.TZ(),n=A.Ax()
-n="http://"+n.ghw(n)+":44444"
+n="http://"+n.ghw(n)+"/api"
 o.a=n
 q=A.Ax()
 q=q.ghw(q)
