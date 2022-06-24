@@ -22,7 +22,9 @@ class API {
   API._privateConstructor() {
     final href = getHref();
     if (href != null) {
-      _apiBaseURL = "$href/api"; // http://0.0.0.0:44444 for local development
+      _apiBaseURL = href.endsWith("/") ? "${href}api" : "$href/api";
+      // for local development
+      // _apiBaseURL = "http://0.0.0.0:44444";
       _webBaseURL = href;
     } else if (Platform.isAndroid) {
       // for local development on an android emulator
