@@ -859,7 +859,7 @@ When running on CPU fp16 will be overwritten with bfp16 since only bfp16 is supp
 
 <dl class="py method">
 <dt class="sig sig-object py" id="nsc.SpellingErrorCorrector.suggest">
-<span class="sig-name descname"><span class="pre">suggest</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">text</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">detections</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#nsc.SpellingErrorCorrector.suggest" title="Permalink to this definition"></a></dt>
+<span class="sig-name descname"><span class="pre">suggest</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">text</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">detections</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#nsc.SpellingErrorCorrector.suggest" title="Permalink to this definition"></a></dt>
 <dd><p>Generate suggestions for possible corrections of a text.</p>
 <p>Note that if you use this with a model that translates each word individually (e.g. transformer word),
 the i-th suggestion string is built by joining the i-th suggestions for all words (they do not necessarily form
@@ -871,6 +871,7 @@ suggestion string on whitespaces.</p>
 <li><p><strong>text</strong> (<em>str</em>) – text to generate suggestions for</p></li>
 <li><p><strong>n</strong> (<em>int</em>) – number of suggestions to generate</p></li>
 <li><p><strong>detections</strong> (<em>Optional</em><em>[</em><em>List</em><em>[</em><em>int</em><em>]</em><em>]</em>) – optional detections to exclude some words</p></li>
+<li><p><strong>kwargs</strong> (<em>Any</em>) – </p></li>
 </ul>
 </dd>
 <dt class="field-even">Return type</dt>

@@ -20,7 +20,7 @@ class API {
 
   API._privateConstructor() {
     if (kIsWeb) {
-      _apiBaseURL = "http://${Uri.base.host}:12345";
+      _apiBaseURL = "http://${Uri.base.host}:${Uri.base.port + 1}";
       _webBaseURL = "http://${Uri.base.host}:${Uri.base.port}";
       debugPrint("api: $_apiBaseURL, web: $_webBaseURL");
     } else if (Platform.isAndroid) {
