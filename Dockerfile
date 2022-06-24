@@ -10,23 +10,26 @@ COPY nsc nsc
 COPY bin bin
 COPY setup.py .
 COPY Makefile .
+COPY help.sh .
 COPY README.rst .
 COPY sphinx_docs sphinx_docs
-COPY docker docker
 COPY tests tests
 COPY spell_checking/benchmarks/scripts/evaluate.py .
+
 # setup evaluation commands as aliases of the benchmark evaluation script
 RUN echo "alias evaluate_tr='python /spell_check/evaluate.py tokenization_repair'" >> ~/.bashrc
 RUN echo "alias evaluate_seds='python /spell_check/evaluate.py sed_sequence'" >> ~/.bashrc
 RUN echo "alias evaluate_sedw='python /spell_check/evaluate.py sed_words'" >> ~/.bashrc
 RUN echo "alias evaluate_sec='python /spell_check/evaluate.py sec'" >> ~/.bashrc
 
+# install everything
 RUN make install
 
+# setup server config and web app
 COPY server_config server_config
 COPY webapp webapp
 
+ENV PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
 ENV NSC_DOWNLOAD_DIR=/download
 ENV NSC_CACHE_DIR=/cache
-WORKDIR /spell_check/docker
 CMD make help && bash
