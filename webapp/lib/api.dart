@@ -1,10 +1,11 @@
-import 'dart:io';
+import  "dart:io";
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
 import 'package:webapp/components/message.dart';
+import 'package:window_location_href/window_location_href.dart';
 
 class APIResult {
   int statusCode;
@@ -19,12 +20,12 @@ class API {
   String _webBaseURL = "";
 
   API._privateConstructor() {
-    if (kIsWeb) {
-      _apiBaseURL = "http://${Uri.base.host}/api";
-      _webBaseURL = "http://${Uri.base.host}:${Uri.base.port}";
-      debugPrint("api: $_apiBaseURL, web: $_webBaseURL");
+    final href = getHref();
+    if (href != null) {
+      _apiBaseURL = "$href/api"; // http://0.0.0.0:44444 for local development
+      _webBaseURL = href;
     } else if (Platform.isAndroid) {
-      // for testing on an android emulator
+      // for local development on an android emulator
       _apiBaseURL = "http://10.0.2.2:44444";
       _webBaseURL = "http://10.0.2.2:8080";
     } else {

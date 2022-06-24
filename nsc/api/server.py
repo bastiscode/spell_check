@@ -35,7 +35,7 @@ server.config["MAX_CONTENT_LENGTH"] = 6 * 1000 * 1000
 server_base_url = os.environ.get("BASE_URL", "")
 flask_logger = logging.getLogger("werkzeug")
 flask_logger.disabled = True
-logger = common.get_logger("TRT_SERVER")
+logger = common.get_logger("NSC_SERVER")
 
 
 def _all_models() -> List[ModelInfo]:
