@@ -383,7 +383,7 @@ Running the Docker container with GPU support assumes that you have the \fI\%NVI
 .UNINDENT
 .UNINDENT
 .sp
-The following table shows all pretrained models available for the CLI tools and Python API:
+The following table shows all pretrained models available for the CLI, Python API, and web app:
 .TS
 center;
 |l|l|l|l|.
