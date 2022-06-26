@@ -210,7 +210,7 @@ the Python API see the `nsc package documentation <#module-nsc>`_.
 Web app
 ~~~~~~~
 
-.. image:: images/web_app.png
+.. image:: https://github.com/bastiscode/spell_check/blob/main/images/web_app.png
     :alt: Web app screenshot
 
 The web app source can be found under `webapp/build/web`. You can host it e.g. using Pythons
