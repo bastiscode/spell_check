@@ -93,7 +93,7 @@ to start a spell checking server that gives you access to all models via a JSON 
 It is e.g. used as backend for the \fI\%Web app\fP\&. The server can be configured
 using a yaml file (see \fI\%server_config/server.yaml\fP for the configuration options).
 .sp
-Let’s look at some basic examples on how to use the command line tools.
+Let\(aqs look at some basic examples on how to use the command line tools.
 .sp
 \fBSpelling error correction using\fP \fBnsec\fP
 .INDENT 0.0
