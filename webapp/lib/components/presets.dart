@@ -83,14 +83,12 @@ class _PresetsState extends State<Presets> {
 
   @override
   Widget build(BuildContext context) {
-    final presetInfos = widget.presets.map((preset) => presetInfo(preset));
     return Wrap(
       runSpacing: 8,
       spacing: 8,
-      children:
-          presetInfos.where((info) => info.valid).mapIndexed(
-        (idx, info) {
-          final preset = widget.presets[idx];
+      children: widget.presets.where((preset) => presetInfo(preset).valid).map(
+        (preset) {
+          final info = presetInfo(preset);
           return ChoiceChip(
             label: Text(preset.label),
             labelStyle:
