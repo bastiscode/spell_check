@@ -23,7 +23,7 @@ from nsc.tasks import Task
 from nsc.utils import config, common, DataInput, InfoInput, Batch
 
 _BASE_URL = "https://ad-publications.informatik.uni-freiburg.de/" \
-            "EMNLP_tokenization_repair_transformer_BHW_2022.materials/nsc"
+            "EMNLP_whitespace_correction_transformer_BHW_2022.materials/nsc"
 _CONFIGS_URL = f"{_BASE_URL}/configs.zip"
 _DATA_URL = f"{_BASE_URL}/data.zip"
 _TASK_AND_NAME_TO_URL = {
