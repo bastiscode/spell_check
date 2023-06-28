@@ -27,12 +27,12 @@ _BASE_URL = "https://ad-publications.informatik.uni-freiburg.de/" \
 _CONFIGS_URL = f"{_BASE_URL}/configs.zip"
 _DATA_URL = f"{_BASE_URL}/data.zip"
 _TASK_AND_NAME_TO_URL = {
-    "tokenization repair": {
-        "eo small arxiv with errors": f"{_BASE_URL}/tokenization_repair_eo_small_arxiv_with_errors_ported.zip",
-        "eo medium arxiv with errors": f"{_BASE_URL}/tokenization_repair_eo_medium_arxiv_with_errors_ported.zip",
-        "eo large arxiv with errors": f"{_BASE_URL}/tokenization_repair_eo_large_arxiv_with_errors_ported.zip",
-        "tokenization repair+": f"{_BASE_URL}/tokenization_repair_plus_sed.zip",
-        "tokenization repair++": f"{_BASE_URL}/tokenization_repair_plus_sed_plus_sec.zip",
+    "whitespace correction": {
+        "eo small": f"{_BASE_URL}/tokenization_repair_eo_small_arxiv_with_errors_ported.zip",
+        "eo medium": f"{_BASE_URL}/tokenization_repair_eo_medium_arxiv_with_errors_ported.zip",
+        "eo large": f"{_BASE_URL}/tokenization_repair_eo_large_arxiv_with_errors_ported.zip",
+        "whitespace correction+": f"{_BASE_URL}/tokenization_repair_plus_sed.zip",
+        "whitespace correction++": f"{_BASE_URL}/tokenization_repair_plus_sed_plus_sec.zip",
     },
     "sed words": {
         "gnn": f"{_BASE_URL}/sed_words_gnn_no_feat.zip",
@@ -43,20 +43,21 @@ _TASK_AND_NAME_TO_URL = {
         "transformer neuspell": f"{_BASE_URL}/sed_words_transformer_no_feat_neuspell.zip",
         "transformer+": f"{_BASE_URL}/sed_words_transformer.zip",
         "transformer+ neuspell": f"{_BASE_URL}/sed_words_transformer_neuspell.zip",
-        "tokenization repair+": f"{_BASE_URL}/tokenization_repair_plus_sed.zip",
-        "tokenization repair++": f"{_BASE_URL}/tokenization_repair_plus_sed_plus_sec.zip",
+        "whitespace correction+": f"{_BASE_URL}/tokenization_repair_plus_sed.zip",
+        "whitespace correction++": f"{_BASE_URL}/tokenization_repair_plus_sed_plus_sec.zip",
     },
     "sec": {
         "transformer nmt": f"{_BASE_URL}/sec_transformer_nmt.zip",
         "transformer nmt neuspell": f"{_BASE_URL}/sec_transformer_nmt_neuspell.zip",
-        "transformer with tokenization repair nmt": f"{_BASE_URL}/sec_transformer_with_tokenization_repair_nmt.zip",
+        "transformer with whitespace correction nmt": f"{_BASE_URL}/sec_transformer_with_tokenization_repair_nmt.zip",
         "transformer words nmt": f"{_BASE_URL}/sec_transformer_words_nmt.zip",
         "transformer words nmt neuspell": f"{_BASE_URL}/sec_transformer_words_nmt_neuspell.zip",
-        "tokenization repair++": f"{_BASE_URL}/tokenization_repair_plus_sed_plus_sec.zip"
+        "whitespace correction++": f"{_BASE_URL}/tokenization_repair_plus_sed_plus_sec.zip"
     }
 }
 
-ModelInfo = collections.namedtuple("ModelInfo", ["task", "name", "description"])
+ModelInfo = collections.namedtuple(
+    "ModelInfo", ["task", "name", "description"])
 StringInputOutput = Union[str, List[str]]
 
 
@@ -139,12 +140,15 @@ class _APIBase:
         if isinstance(inputs, str):
             inputs = load_text_file(inputs)
 
-        inputs = [clean_sequence(ipt, fix_unicode_errors, fix_all_uppercase) for ipt in inputs]
+        inputs = [clean_sequence(
+            ipt, fix_unicode_errors, fix_all_uppercase) for ipt in inputs]
         num_inputs = len(inputs)
         invalid_inputs = set(i for i in range(num_inputs) if inputs[i] == "")
-        inputs = [ipt for i, ipt in enumerate(inputs) if i not in invalid_inputs]
+        inputs = [ipt for i, ipt in enumerate(
+            inputs) if i not in invalid_inputs]
 
-        num_workers = 0 if len(inputs) <= 16 else len(os.sched_getaffinity(0)) - 1
+        num_workers = 0 if len(inputs) <= 16 else len(
+            os.sched_getaffinity(0)) - 1
         dataset, loader = get_inference_dataset_and_loader(
             sequences=inputs,
             task=self.task,
@@ -187,9 +191,11 @@ class _APIBase:
                         dtype=self._mixed_precision_dtype,
                         enabled=self.mixed_precision_enabled
                 ):
-                    outputs = self.task.inference(self.model, batch, **inference_kwargs)
+                    outputs = self.task.inference(
+                        self.model, batch, **inference_kwargs)
             else:
-                outputs = self.task.inference(self.model, batch, **inference_kwargs)
+                outputs = self.task.inference(
+                    self.model, batch, **inference_kwargs)
 
             all_outputs.extend(outputs)
             pbar.update(batch_bytes)
@@ -234,7 +240,8 @@ class _APIBase:
             mixed_precision_dtype = torch.bfloat16
 
         if self.device.type == "cpu" and precision == "fp16":
-            self.logger.info("Setting precision to bfp16 instead of fp16, because fp16 is not supported on CPU yet")
+            self.logger.info(
+                "Setting precision to bfp16 instead of fp16, because fp16 is not supported on CPU yet")
             mixed_precision_dtype = torch.bfloat16
 
         self._mixed_precision_dtype = mixed_precision_dtype
@@ -296,8 +303,10 @@ class _APIBase:
     ) -> Tuple[str, str, str]:
         logger = common.get_logger("DOWNLOAD")
 
-        data_dir = download_data(force_download, logger, download_dir, cache_dir)
-        config_dir = download_configs(force_download, logger, download_dir, cache_dir)
+        data_dir = download_data(
+            force_download, logger, download_dir, cache_dir)
+        config_dir = download_configs(
+            force_download, logger, download_dir, cache_dir)
 
         model_dir = download_model(
             task=task,
@@ -367,7 +376,8 @@ def download_data(
     zip_file_path = os.path.join(download_dir, "data.zip")
     data_zip_not_downloaded = not os.path.exists(zip_file_path)
     if data_zip_not_downloaded or force_download:
-        logger.info(f"downloading data files from {_DATA_URL} to data directory {download_dir}")
+        logger.info(
+            f"downloading data files from {_DATA_URL} to data directory {download_dir}")
         _download_zip(
             _DATA_URL,
             zip_file_path,
@@ -394,7 +404,8 @@ def download_configs(
     zip_file_path = os.path.join(download_dir, "configs.zip")
     config_zip_not_downloaded = not os.path.exists(zip_file_path)
     if config_zip_not_downloaded or force_download:
-        logger.info(f"downloading config files from {_CONFIGS_URL} to directory {download_dir}")
+        logger.info(
+            f"downloading config files from {_CONFIGS_URL} to directory {download_dir}")
         _download_zip(
             _CONFIGS_URL,
             zip_file_path,
@@ -432,14 +443,16 @@ def download_model(
     :return: path of the model directory
     """
     if task not in _TASK_AND_NAME_TO_URL or name not in _TASK_AND_NAME_TO_URL[task]:
-        raise RuntimeError(f"no URL for task {task} and model {name}, should not happen")
+        raise RuntimeError(
+            f"no URL for task {task} and model {name}, should not happen")
     url = _TASK_AND_NAME_TO_URL[task][name]
 
     download_dir = download_dir or get_download_dir()
     zip_file_path = os.path.join(download_dir, url.split("/")[-1])
     model_zip_not_downloaded = not os.path.exists(zip_file_path)
     if model_zip_not_downloaded or force_download:
-        logger.info(f"downloading model {name} for task {task} from {url} to directory {download_dir}")
+        logger.info(
+            f"downloading model {name} for task {task} from {url} to directory {download_dir}")
         _download_zip(
             url,
             zip_file_path,
@@ -448,7 +461,8 @@ def download_model(
 
     cache_dir = cache_dir or get_cache_dir()
     # replace whitespaces in task and name with underscores to avoid any file system issues
-    model_dir = os.path.join(cache_dir, task.replace(" ", "_"), name.replace(" ", "_"))
+    model_dir = os.path.join(cache_dir, task.replace(
+        " ", "_"), name.replace(" ", "_"))
     model_zip_not_extracted = not os.path.exists(model_dir)
     if model_zip_not_extracted or force_download:
         shutil.rmtree(model_dir, ignore_errors=True)
@@ -529,9 +543,11 @@ def load_experiment(
     if keep_existing_env_vars is None:
         keep_existing_env_vars = _SPECIAL_ENV_VARS
     else:
-        keep_existing_env_vars = keep_existing_env_vars.union(_SPECIAL_ENV_VARS)
+        keep_existing_env_vars = keep_existing_env_vars.union(
+            _SPECIAL_ENV_VARS)
 
-    cfg = load_experiment_config(experiment, override_env_vars, keep_existing_env_vars)
+    cfg = load_experiment_config(
+        experiment, override_env_vars, keep_existing_env_vars)
 
     # disable some config options here that are only used for training
     cfg.start_from_checkpoint = None
@@ -658,7 +674,8 @@ class InferenceDataset(Dataset):
             self.indices = [idx for idx, _ in indices_lengths]
 
     def __getitem__(self, idx: int) -> Tuple[Tuple[DataInput, InfoInput], utils.InferenceInfo, int]:
-        data = self.task.variant.get_inputs(self.samples[self.indices[idx]], is_inference=True)
+        data = self.task.variant.get_inputs(
+            self.samples[self.indices[idx]], is_inference=True)
         return data, self.sample_infos[self.indices[idx]], self.indices[idx]
 
     def __len__(self) -> int:
@@ -680,7 +697,8 @@ class InferenceDataset(Dataset):
 
     @staticmethod
     def collate_fn(
-            items: List[Tuple[Tuple[DataInput, InfoInput], utils.InferenceInfo, int]]
+            items: List[Tuple[Tuple[DataInput, InfoInput],
+                              utils.InferenceInfo, int]]
     ) -> Tuple[Batch, List[utils.InferenceInfo], List[int]]:
         data, infos, indices = list(zip(*items))
         return utils.collate(data), infos, indices
@@ -764,7 +782,8 @@ def generate_report(
     elif precision == torch.float32:
         precision_str = "fp32"
     else:
-        raise ValueError(f"expected precision to be one of torch.float16, torch.bfloat16 or torch.float32")
+        raise ValueError(
+            f"expected precision to be one of torch.float16, torch.bfloat16 or torch.float32")
 
     parameter_str = f"{parameters['used'] / 1e6:,.1f}"
     if parameters["fixed"] > 0:
@@ -798,7 +817,8 @@ def generate_report(
                 precision_str,
                 str(batch_size),
                 "yes" if sort_by_length else "no",
-                f"{torch.cuda.get_device_name(device)}, {get_cpu_info()}" if device.type == "cuda" else get_cpu_info()
+                f"{torch.cuda.get_device_name(device)}, {get_cpu_info()}" if device.type == "cuda" else get_cpu_info(
+                )
             ]
         ],
         fmt="markdown"

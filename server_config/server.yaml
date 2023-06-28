@@ -15,7 +15,7 @@ max_models_per_gpu: 3
 dictionary: dictionary.txt
 # which models to load for which tasks (use all as a special tag to load all models for a task)
 models:
-  tokenization repair:
+  whitespace correction:
     - all
   sed words:
     - all

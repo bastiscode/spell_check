@@ -92,16 +92,16 @@ def get_available_spelling_error_detection_models() -> List[ModelInfo]:
         ),
         ModelInfo(
             task="sed words",
-            name="tokenization repair+",
-            description="Transformer based model that detects errors in sequences by first correcting the tokenization "
+            name="whitespace correction+",
+            description="Transformer based model that detects errors in sequences by first correcting the whitespaces "
                         "and then detecting spelling errors for each word in the repaired text."
         ),
         ModelInfo(
             task="sed words",
-            name="tokenization repair++",
-            description="Transformer based model that detects errors in sequences by first correcting the tokenization "
+            name="whitespace correction++",
+            description="Transformer based model that detects errors in sequences by first correcting the whitespaces "
                         "and then detecting spelling errors for each word in the repaired text. Different from "
-                        "tokenization repair+ because this model was trained to also correct "
+                        "whitespace correction+ because this model was trained to also correct "
                         "spelling errors (it is also available in nsec)."
         )
     ]
@@ -145,11 +145,11 @@ class SpellingErrorDetector(_APIBase):
         )
 
         assert (
-                isinstance(task, graph_sed_words.GraphSEDWords)
-                or isinstance(task, sed_words.SEDWords)
-                or isinstance(task, graph_sed_sequence.GraphSEDSequence)
-                or isinstance(task, sed_sequence.SEDSequence)
-                or isinstance(task, tokenization_repair_plus.TokenizationRepairPlus)
+            isinstance(task, graph_sed_words.GraphSEDWords)
+            or isinstance(task, sed_words.SEDWords)
+            or isinstance(task, graph_sed_sequence.GraphSEDSequence)
+            or isinstance(task, sed_sequence.SEDSequence)
+            or isinstance(task, tokenization_repair_plus.TokenizationRepairPlus)
         ), \
             f"expected experiment to be of type SEDWords, GraphSEDWords, " \
             f"SEDSequence, GraphSEDSequence or TokenizationRepairPlus, but got {task.__class__.__name__}"
@@ -220,10 +220,12 @@ class SpellingErrorDetector(_APIBase):
         inference_kwargs = {
             "threshold": threshold
         }
-        is_tokenization_repair_plus = isinstance(self.task, tokenization_repair_plus.TokenizationRepairPlus)
+        is_tokenization_repair_plus = isinstance(
+            self.task, tokenization_repair_plus.TokenizationRepairPlus)
         if is_tokenization_repair_plus:
             inference_kwargs["output_type"] = "sed"
-            inference_kwargs["no_repair"] = kwargs.get("tokenization_repair_plus_no_repair", False)
+            inference_kwargs["no_repair"] = kwargs.get(
+                "tokenization_repair_plus_no_repair", False)
 
         if isinstance(inputs, str):
             inputs = load_text_file(inputs)
@@ -240,8 +242,10 @@ class SpellingErrorDetector(_APIBase):
 
         if is_tokenization_repair_plus:
             return (
-                [output["sed"] if output is not None else [] for output in all_outputs],
-                [output["tokenization_repair"] if output is not None else "" for output in all_outputs]
+                [output["sed"] if output is not None else []
+                    for output in all_outputs],
+                [output["tokenization_repair"]
+                    if output is not None else "" for output in all_outputs]
             )
         else:
             fill_invalid = 0 if self.task_name == "sed_sequence" else []
@@ -278,8 +282,8 @@ class SpellingErrorDetector(_APIBase):
         """
         input_is_string = isinstance(inputs, str)
         assert (
-                input_is_string
-                or (isinstance(inputs, list) and all(isinstance(ipt, str) for ipt in inputs))
+            input_is_string
+            or (isinstance(inputs, list) and all(isinstance(ipt, str) for ipt in inputs))
         ), f"input needs to be a string or a list of strings"
 
         detections, output_strings = self._detect_text_raw(
@@ -328,6 +332,7 @@ class SpellingErrorDetector(_APIBase):
             input_file_path, threshold, batch_size, batch_max_length_factor, sort_by_length, show_progress, **kwargs
         )
         if output_file_path is not None:
-            save_text_file(output_file_path, iter(inference.inference_output_to_str(output) for output in outputs))
+            save_text_file(output_file_path, iter(
+                inference.inference_output_to_str(output) for output in outputs))
         else:
             return outputs

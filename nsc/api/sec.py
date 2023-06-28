@@ -52,8 +52,8 @@ def get_available_spelling_error_correction_models() -> List[ModelInfo]:
         ),
         ModelInfo(
             task="sec",
-            name="tokenization repair++",
-            description="Transformer based model that corrects sequences by first correcting the tokenization, then "
+            name="whitespace correction++",
+            description="Transformer based model that corrects sequences by first correcting the whitespaces, then "
                         "detecting spelling errors for each word in the repaired text and then translating "
                         "every detected misspelled word to its corrected version."
         ),
@@ -72,11 +72,11 @@ def get_available_spelling_error_correction_models() -> List[ModelInfo]:
         ),
         ModelInfo(
             task="sec",
-            name="transformer with tokenization repair nmt",
-            description="Transformer model that translates a sequence with spelling and tokenization errors "
-                        "into a sequence without spelling and tokenization errors. Different from "
+            name="transformer with whitespace correction nmt",
+            description="Transformer model that translates a sequence with spelling and whitespace errors "
+                        "into a sequence without spelling and whitespace errors. Different from "
                         "transformer nmt because this model tokenizes into characters and "
-                        "was trained on text with spelling and tokenization errors, "
+                        "was trained on text with spelling and whitespaces errors, "
                         "whereas transformer nmt tokenizes into sub-words and "
                         "was trained only on text with spelling errors."
         )
@@ -179,7 +179,8 @@ def inference_kwargs_from_search_and_score(
     elif isinstance(search, BestFirstSearch):
         inference_kwargs["search_mode"] = "best_first"
     else:
-        raise RuntimeError(f"unknown search specification {search.__class__.__name__}")
+        raise RuntimeError(
+            f"unknown search specification {search.__class__.__name__}")
 
     if score.mode == "dictionary" and score.prefix_index is None:
         logger = common.get_logger("DOWNLOAD")
@@ -187,7 +188,8 @@ def inference_kwargs_from_search_and_score(
                     f"our precomputed prefix index")
         data_dir = download_data(False, logger)
         score.prefix_index = index.PrefixIndex(
-            os.path.join(data_dir, "prefix_index", "merged_train_100k_prefix_index.pkl")
+            os.path.join(data_dir, "prefix_index",
+                         "merged_train_100k_prefix_index.pkl")
         )
 
     inference_kwargs["normalize_by_length"] = score.normalize_by_length
@@ -246,12 +248,12 @@ class SpellingErrorCorrector(_APIBase):
         )
 
         assert (
-                isinstance(task, graph_sec_nmt.GraphSECNMT)
-                or isinstance(task, sec_nmt.SECNMT)
-                or isinstance(task, graph_sec_words_nmt.GraphSECWordsNMT)
-                or isinstance(task, sec_words_nmt.SECWordsNMT)
-                or (isinstance(task, tokenization_repair_plus.TokenizationRepairPlus)
-                    and model.cfg.output_type == "tokenization_repair_plus_sed_plus_sec")
+            isinstance(task, graph_sec_nmt.GraphSECNMT)
+            or isinstance(task, sec_nmt.SECNMT)
+            or isinstance(task, graph_sec_words_nmt.GraphSECWordsNMT)
+            or isinstance(task, sec_words_nmt.SECWordsNMT)
+            or (isinstance(task, tokenization_repair_plus.TokenizationRepairPlus)
+                and model.cfg.output_type == "tokenization_repair_plus_sed_plus_sec")
         ), f"expected experiment to be of type SECNMT, GraphSECNMT, SECWordsNMT, GraphSECWordsNMT or " \
            f"TokenizationRepairPlus (with sec output type), but got {task.__class__.__name__}"
 
@@ -332,26 +334,34 @@ class SpellingErrorCorrector(_APIBase):
         inputs = [clean_sequence(ipt) for ipt in inputs]
         num_inputs = len(inputs)
         invalid_inputs = set(i for i in range(num_inputs) if inputs[i] == "")
-        inputs = [inputs[i] for i in range(num_inputs) if i not in invalid_inputs]
+        inputs = [inputs[i]
+                  for i in range(num_inputs) if i not in invalid_inputs]
 
-        inference_kwargs = inference_kwargs_from_search_and_score(search, score, self._get_output_tokenizer())
-        is_tokenization_repair_plus = isinstance(self.task, tokenization_repair_plus.TokenizationRepairPlus)
+        inference_kwargs = inference_kwargs_from_search_and_score(
+            search, score, self._get_output_tokenizer())
+        is_tokenization_repair_plus = isinstance(
+            self.task, tokenization_repair_plus.TokenizationRepairPlus)
         if is_tokenization_repair_plus:
             # ignore detections with tr+, because tr+ has a detection capabilities in itself
             detections = None
             inference_kwargs["output_type"] = "sec"
-            inference_kwargs["no_repair"] = kwargs.get("tokenization_repair_plus_no_repair", False)
-            inference_kwargs["no_detect"] = kwargs.get("tokenization_repair_plus_no_detect", False)
-            inference_kwargs["threshold"] = kwargs.get("tokenization_repair_plus_threshold", 0.5)
+            inference_kwargs["no_repair"] = kwargs.get(
+                "tokenization_repair_plus_no_repair", False)
+            inference_kwargs["no_detect"] = kwargs.get(
+                "tokenization_repair_plus_no_detect", False)
+            inference_kwargs["threshold"] = kwargs.get(
+                "tokenization_repair_plus_threshold", 0.5)
 
         if detections is not None:
-            detections = [detections[i] for i in range(num_inputs) if i not in invalid_inputs]
+            detections = [detections[i]
+                          for i in range(num_inputs) if i not in invalid_inputs]
             assert (
-                    len(detections) == len(inputs)
-                    and all(len(det) == len(ipt.split()) for det, ipt in zip(detections, inputs))
+                len(detections) == len(inputs)
+                and all(len(det) == len(ipt.split()) for det, ipt in zip(detections, inputs))
             ), "expected one detection for every word in every input sequence"
 
-        num_workers = 0 if len(inputs) <= 16 else min(4, len(os.sched_getaffinity(0)))
+        num_workers = 0 if len(inputs) <= 16 else min(
+            4, len(os.sched_getaffinity(0)))
         dataset, loader = get_inference_dataset_and_loader(
             sequences=inputs,
             task=self.task,
@@ -372,14 +382,18 @@ class SpellingErrorCorrector(_APIBase):
                     input_idx += 1
                 sequence = inputs[input_idx]
                 detection = detections[input_idx]
-                num_words_before_context = len(sequence[:info.ctx_start].split())
-                num_words_until_context_end = len(sequence[:info.ctx_end].split())
+                num_words_before_context = len(
+                    sequence[:info.ctx_start].split())
+                num_words_until_context_end = len(
+                    sequence[:info.ctx_end].split())
                 assert (
-                        num_words_before_context + len(sequence[info.ctx_start:info.ctx_end].split())
-                        == num_words_until_context_end
+                    num_words_before_context +
+                    len(sequence[info.ctx_start:info.ctx_end].split())
+                    == num_words_until_context_end
                 ), "when using detections for spelling error correction, too long sequences must be split between " \
                    "and not within whitespace separated words"
-                new_detections.append(detection[num_words_before_context:num_words_until_context_end])
+                new_detections.append(
+                    detection[num_words_before_context:num_words_until_context_end])
 
             assert input_idx == len(inputs) - 1
             detections = new_detections
@@ -420,9 +434,11 @@ class SpellingErrorCorrector(_APIBase):
                         dtype=self._mixed_precision_dtype,
                         enabled=self.mixed_precision_enabled
                 ):
-                    outputs = self.task.inference(self.model, batch, **inference_kwargs)
+                    outputs = self.task.inference(
+                        self.model, batch, **inference_kwargs)
             else:
-                outputs = self.task.inference(self.model, batch, **inference_kwargs)
+                outputs = self.task.inference(
+                    self.model, batch, **inference_kwargs)
 
             all_outputs.extend(outputs)
             pbar.update(batch_bytes)
@@ -485,8 +501,8 @@ class SpellingErrorCorrector(_APIBase):
         """
         input_is_string = isinstance(inputs, str)
         assert (
-                input_is_string
-                or (isinstance(inputs, list) and all(isinstance(ipt, str) for ipt in inputs))
+            input_is_string
+            or (isinstance(inputs, list) and all(isinstance(ipt, str) for ipt in inputs))
         ), f"input needs to be a string or a list of strings"
 
         outputs = self._correct_text_raw(
@@ -539,7 +555,8 @@ class SpellingErrorCorrector(_APIBase):
         """
         if detections is not None and isinstance(detections, str):
             detections = load_text_file(detections)
-            detections = [[int(det) for det in detection.split()] for detection in detections]
+            detections = [[int(det) for det in detection.split()]
+                          for detection in detections]
 
         outputs = self._correct_text_raw(
             input_file_path,

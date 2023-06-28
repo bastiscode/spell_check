@@ -40,9 +40,9 @@ logger = common.get_logger("NSC_SERVER")
 
 def _all_models() -> List[ModelInfo]:
     return (
-            get_available_tokenization_repair_models()
-            + get_available_spelling_error_detection_models()
-            + get_available_spelling_error_correction_models()
+        get_available_tokenization_repair_models()
+        + get_available_spelling_error_detection_models()
+        + get_available_spelling_error_correction_models()
     )
 
 
@@ -80,12 +80,13 @@ class Models:
         self.dictionary = dictionary_from_file(dictionary_path)
 
         for i, model_info in enumerate(model_infos):
-            logger.info(f"loading model {model_info.name} for task {model_info.task}")
+            logger.info(
+                f"loading model {model_info.name} for task {model_info.task}")
             name = _full_name(model_info)
 
             if model_info.task == "sed words" or model_info.task == "sed sequence":
                 cls = SpellingErrorDetector
-            elif model_info.task == "tokenization repair":
+            elif model_info.task == "whitespace correction":
                 cls = TokenizationRepairer
             elif model_info.task == "sec":
                 cls = SpellingErrorCorrector
@@ -123,7 +124,7 @@ class Models:
 
     @property
     def pipeline_tasks(self) -> List[str]:
-        return ["tokenization repair", "sed words", "sec"]
+        return ["whitespace correction", "sed words", "sec"]
 
     def is_valid_pipeline(self, pipeline_models: Tuple[Optional[str], ...]) -> bool:
         if (
@@ -164,7 +165,8 @@ class Models:
                     # should only be true if self.max_models_per_device < 3 (max number of pipeline steps)
                     if model_to_move is None:
                         model_to_move = next(iter(self.models_on_gpu[device]))
-                    logger.info(f"moving '{model_to_move}' to CPU to make space for '{name}' on {device}")
+                    logger.info(
+                        f"moving '{model_to_move}' to CPU to make space for '{name}' on {device}")
                     self.models_on_gpu[device].remove(model_to_move)
                     self.__getattribute__(model_to_move).to("cpu")
                 self.__getattribute__(name).to(device)
@@ -177,7 +179,8 @@ models = Models()
 
 @server.after_request
 def after_request(response: Response) -> Response:
-    response.headers.add("Access-Control-Allow-Origin", os.environ.get("CORS_ORIGIN", "*"))
+    response.headers.add("Access-Control-Allow-Origin",
+                         os.environ.get("CORS_ORIGIN", "*"))
     response.headers.add("Access-Control-Allow-Private-Network", "true")
     return response
 
@@ -220,9 +223,9 @@ def evaluate() -> Response:
     task = request.args.get("task")
     if task is None:
         return abort(Response("request missing required 'task' query parameter", status=400))
-    elif task not in {"tokenization repair", "sed words", "sec"}:
+    elif task not in {"whitespace correction", "sed words", "sec"}:
         return abort(
-            Response(f"invalid value for query parameter 'task', must be one of tokenization repair, "
+            Response(f"invalid value for query parameter 'task', must be one of whitespace correction, "
                      f"sed words, or sec, but got {task}", status=400)
         )
 
@@ -237,7 +240,7 @@ def evaluate() -> Response:
     gt = [clean_sequence(p) for p in gt.split("\n")]
     if len(gt) > 1 and gt[-1] == "":
         gt = gt[:-1]
-    if task == "tokenization repair":
+    if task == "whitespace correction":
         try:
             _, (f1, prec, rec) = metrics.tok_rep_f1_prec_rec(ipt, pred, gt)
             seq_acc = metrics.accuracy(pred, gt)
@@ -249,7 +252,8 @@ def evaluate() -> Response:
             }
         except Exception as e:
             return abort(
-                Response(f"data does not have the right format: {e}", status=400)
+                Response(
+                    f"data does not have the right format: {e}", status=400)
             )
     elif task == "sed words":
         try:
@@ -279,7 +283,8 @@ def evaluate() -> Response:
             }
         except Exception as e:
             return abort(
-                Response(f"data does not have the right format: {e}", status=400)
+                Response(
+                    f"data does not have the right format: {e}", status=400)
             )
     else:
         try:
@@ -293,7 +298,8 @@ def evaluate() -> Response:
             }
         except Exception as e:
             return abort(
-                Response(f"data does not have the right format: {e}", status=400)
+                Response(
+                    f"data does not have the right format: {e}", status=400)
             )
     end = time.perf_counter()
     logger.info(f"evaluating text with {sum(len(i.encode('utf8')) for i in ipt)} bytes "
@@ -317,7 +323,7 @@ def run() -> Response:
     pipeline = tuple(m or None for m in pipeline)
     if not models.is_valid_pipeline(pipeline):
         return abort(
-            Response(f"invalid pipeline specification, expected exactly 3 models for tokenization repair, "
+            Response(f"invalid pipeline specification, expected exactly 3 models for whitespace correction, "
                      f"word-level spelling error detection and spelling error correction respectively, "
                      f"but got {pipeline}", status=400)
         )
@@ -337,24 +343,29 @@ def run() -> Response:
             if isinstance(spell_checker, TokenizationRepairer):
                 start = time.perf_counter()
                 repaired = spell_checker.repair_text(text, show_progress=False)
-                output["tokenization repair"] = {"text": repaired}
+                output["whitespace correction"] = {"text": repaired}
                 if request.args.get("edited", "false") == "true":
-                    edited = [get_whitespace_operations(ipt, rep) for ipt, rep in zip(text, repaired)]
-                    output["tokenization repair"]["edited"] = edited
+                    edited = [get_whitespace_operations(
+                        ipt, rep) for ipt, rep in zip(text, repaired)]
+                    output["whitespace correction"]["edited"] = edited
                 end = time.perf_counter()
                 runtime = end - start
                 text_bytes = sum(len(line.encode("utf8")) for line in text)
-                runtimes["tokenization repair"] = {"s": runtime, "bps": text_bytes / runtime}
+                runtimes["whitespace correction"] = {
+                    "s": runtime, "bps": text_bytes / runtime}
                 text = repaired
             elif isinstance(spell_checker, SpellingErrorDetector):
                 start = time.perf_counter()
                 threshold = request.args.get("threshold", 0.5)
-                detections, repaired = spell_checker.detect_text(text, threshold=threshold, show_progress=False)
-                output["sed words"] = {"text": repaired, "detections": detections}
+                detections, repaired = spell_checker.detect_text(
+                    text, threshold=threshold, show_progress=False)
+                output["sed words"] = {
+                    "text": repaired, "detections": detections}
                 end = time.perf_counter()
                 runtime = end - start
                 text_bytes = sum(len(line.encode("utf8")) for line in text)
-                runtimes["sed words"] = {"s": runtime, "bps": text_bytes / runtime}
+                runtimes["sed words"] = {
+                    "s": runtime, "bps": text_bytes / runtime}
                 text = repaired
             elif isinstance(spell_checker, SpellingErrorCorrector):
                 start = time.perf_counter()
@@ -362,7 +373,8 @@ def run() -> Response:
                 if search == "greedy":
                     search_method = GreedySearch()
                 elif search == "beam":
-                    search_method = BeamSearch(beam_width=request.args.get("beam_width", 5))
+                    search_method = BeamSearch(
+                        beam_width=request.args.get("beam_width", 5))
                 else:
                     return abort(
                         Response(f"unsupported option '{search}' for query parameter 'search', "
@@ -377,7 +389,8 @@ def run() -> Response:
                 )
                 output["sec"] = {"text": corrected}
                 if request.args.get("edited", "false") == "true":
-                    edited_in_input, edited_in_correction = get_edited_words(text, corrected)
+                    edited_in_input, edited_in_correction = get_edited_words(
+                        text, corrected)
                     output["sec"]["edited"] = {
                         "input": [sorted(list(e)) for e in edited_in_input],
                         "text": [sorted(list(e)) for e in edited_in_correction]
@@ -395,8 +408,10 @@ def run() -> Response:
 
     end_total = time.perf_counter()
     total_runtime = end_total - start_total
-    logger.info(f"processing text with {org_text_bytes} bytes with pipeline {pipeline} took {total_runtime:.2f}s")
-    runtimes["total"] = {"s": total_runtime, "bps": org_text_bytes / total_runtime}
+    logger.info(
+        f"processing text with {org_text_bytes} bytes with pipeline {pipeline} took {total_runtime:.2f}s")
+    runtimes["total"] = {"s": total_runtime,
+                         "bps": org_text_bytes / total_runtime}
     return jsonify(
         {
             "output": output,
@@ -421,7 +436,8 @@ def run_flask_server(config_path: str) -> None:
         raise RuntimeError(f"server config file {config_path} does not exist")
 
     dict_config = omegaconf.OmegaConf.load(config_path)
-    config: ServerConfig = omegaconf.OmegaConf.structured(ServerConfig(**dict_config))
+    config: ServerConfig = omegaconf.OmegaConf.structured(
+        ServerConfig(**dict_config))
 
     logger.info(f"loaded config for server:\n{pprint.pformat(config)}")
 
@@ -437,7 +453,8 @@ def run_flask_server(config_path: str) -> None:
         timeout=config.timeout,
         precision=config.precision,
         max_models_per_gpu=max(1, config.max_models_per_gpu),
-        dictionary_path=os.path.join(os.path.dirname(config_path), config.dictionary)
+        dictionary_path=os.path.join(
+            os.path.dirname(config_path), config.dictionary)
     )
 
     logger.info(f"starting server on {config.host}:{config.port}...")

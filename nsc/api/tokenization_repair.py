@@ -19,47 +19,47 @@ from nsc.utils import common
 
 def get_available_tokenization_repair_models() -> List[ModelInfo]:
     """
-    Get available tokenization repair models
+    Get available whitespace correction models
 
-    Returns: list of tokenization repair model infos each containing the task name, model name and a short description
+    Returns: list of whitespace correction model infos each containing the task name, model name and a short description
 
     """
     return [
         ModelInfo(
-            task="tokenization repair",
-            name="eo large arxiv with errors",
+            task="whitespace correction",
+            name="eo large",
             description="Large-sized Transformer model (12 layers) that repairs sequences by predicting repair tokens "
-                        "for each character (ported from https://github.com/ad-freiburg/trt)."
+                        "for each character (ported from https://github.com/ad-freiburg/whitespace-correction)."
         ),
         ModelInfo(
-            task="tokenization repair",
-            name="eo medium arxiv with errors",
+            task="whitespace correction",
+            name="eo medium",
             description="Medium-sized Transformer model (6 layers) that repairs sequences by predicting repair tokens "
-                        "for each character (ported from https://github.com/ad-freiburg/trt)."
+                        "for each character (ported from https://github.com/ad-freiburg/whitespace-correction)."
         ),
         ModelInfo(
-            task="tokenization repair",
-            name="eo small arxiv with errors",
+            task="whitespace correction",
+            name="eo small",
             description="Small-sized Transformer model (3 layers) that repairs sequences by predicting repair tokens "
-                        "for each character (ported from https://github.com/ad-freiburg/trt)."
+                        "for each character (ported from https://github.com/ad-freiburg/whitespace-correction)."
         ),
         ModelInfo(
-            task="tokenization repair",
-            name="tokenization repair+",
+            task="whitespace correction",
+            name="whitespace correction+",
             description="Same as eo medium arxiv with errors, available here for completeness."
         ),
         ModelInfo(
-            task="tokenization repair",
-            name="tokenization repair++",
+            task="whitespace correction",
+            name="whitespace correction++",
             description="Same as eo medium arxiv with errors, available here for completeness."
         )
     ]
 
 
 class TokenizationRepairer(_APIBase):
-    """Tokenization repair
+    """whitespace correction
 
-    Class to run tokenization repair models.
+    Class to run whitespace correction models.
 
     """
 
@@ -69,7 +69,7 @@ class TokenizationRepairer(_APIBase):
             device: Union[str, int],
             **kwargs: Dict[str, Any]
     ) -> None:
-        """Tokenization repair constructor.
+        """whitespace correction constructor.
 
         Do not use this explicitly.
         Use the static TokenizationRepairer.from_pretrained() and TokenizationRepairer.from_experiment() methods
@@ -94,8 +94,8 @@ class TokenizationRepairer(_APIBase):
         )
 
         assert (
-                isinstance(task, tokenization_repair.TokenizationRepair)
-                or isinstance(task, tokenization_repair_plus.TokenizationRepairPlus)
+            isinstance(task, tokenization_repair.TokenizationRepair)
+            or isinstance(task, tokenization_repair_plus.TokenizationRepairPlus)
         ), f"expected experiment to be of type TokenizationRepair or TokenizationRepairPlus, " \
            f"but got {task.__class__.__name__}"
 
@@ -103,11 +103,11 @@ class TokenizationRepairer(_APIBase):
 
     @property
     def task_name(self) -> str:
-        return "tokenization repair"
+        return "whitespace correction"
 
     @staticmethod
     def from_pretrained(
-            task: str = "tokenization repair",
+            task: str = "whitespace correction",
             model: str = "eo large arxiv with errors",
             device: Union[str, int] = "cuda",
             download_dir: Optional[str] = None,
@@ -119,7 +119,7 @@ class TokenizationRepairer(_APIBase):
             f"{pprint.pformat(get_available_tokenization_repair_models())}"
 
         model_dir, data_dir, config_dir = TokenizationRepairer._download(
-            "tokenization repair",
+            "whitespace correction",
             model,
             download_dir,
             cache_dir,
@@ -163,7 +163,8 @@ class TokenizationRepairer(_APIBase):
         inputs = [clean_sequence(ipt) for ipt in inputs]
 
         inference_kwargs = {}
-        is_tokenization_repair_plus = isinstance(self.task, tokenization_repair_plus.TokenizationRepairPlus)
+        is_tokenization_repair_plus = isinstance(
+            self.task, tokenization_repair_plus.TokenizationRepairPlus)
         if is_tokenization_repair_plus:
             inference_kwargs["output_type"] = "tokenization_repair"
 
@@ -208,8 +209,8 @@ class TokenizationRepairer(_APIBase):
         """
         input_is_string = isinstance(inputs, str)
         assert (
-                input_is_string
-                or (isinstance(inputs, list) and all(isinstance(ipt, str) for ipt in inputs))
+            input_is_string
+            or (isinstance(inputs, list) and all(isinstance(ipt, str) for ipt in inputs))
         ), f"input needs to be a string or a list of strings"
 
         outputs = self._repair_text_raw(
