@@ -31277,7 +31277,7 @@ acL(a,b){var s,r,q,p=this,o=t.G,n=o.a(J.ak(o.a(a.hi(b)),"data"))
 o=J.aa(n)
 s=A.cC(o.h(n,"message"))
 if(s!=null&&s.length!==0){r=A.f9(o.h(n,"assertiveness"))
-q=B.Fh[r==null?0:r]===B.n_?"assertive":"polite"
+q=B.Fg[r==null?0:r]===B.n_?"assertive":"polite"
 A.N(p.gAH(),"setAttribute",["aria-live",q])
 p.gAH().textContent=s
 o=self.document.body
@@ -50358,7 +50358,7 @@ A.H8.prototype={
 Nt(a,b,c,d,e,f){return A.aEl(a,b,c,d,e,f)}}
 A.Kb.prototype={
 zU(a){var s=t.Tr
-return A.aj(new A.al(B.F_,new A.a6i(a),s),!0,s.i("ba.E"))},
+return A.aj(new A.al(B.EZ,new A.a6i(a),s),!0,s.i("ba.E"))},
 j(a,b){var s,r=this
 if(b==null)return!1
 if(r===b)return!0
@@ -79572,7 +79572,7 @@ x6(a,b,c){return this.abJ(a,b,c)},
 abJ(a,b,c){var s=0,r=A.S(t.f4),q,p=this
 var $async$x6=A.T(function(d,e){if(d===1)return A.P(e,r)
 while(true)switch(s){case 0:s=3
-return A.V(p.nE("tokenization repair",a,b,c),$async$x6)
+return A.V(p.nE("whitespace correction",a,b,c),$async$x6)
 case 3:q=e
 s=1
 break
@@ -79750,7 +79750,7 @@ J(a){var s=this.a.c,r=A.a7(s),q=r.i("cN<1,nG>")
 return A.asa(A.aj(new A.cN(new A.ar(s,new A.akA(this),r.i("ar<1>")),new A.akB(this),q),!0,q.i("p.E")),8,8)}}
 A.akC.prototype={
 $1(a){var s,r=J.aa(a)
-if(J.e(r.h(a,"task"),"tokenization repair")){r=r.h(a,"name")
+if(J.e(r.h(a,"task"),"whitespace correction")){r=r.h(a,"name")
 s=this.a.c
 s.toString
 s=J.e(r,s)
@@ -79816,7 +79816,7 @@ p.toString
 A.e1(p,new A.dq("got invalid pattern '"+o+"' in filter",B.d7))}}}}if(i.length===0){j=J.ard(10,t.S)
 for(k=0;k<10;++k)j[k]=k
 B.b.O(i,j)}return i},
-J(a0){var s,r,q,p,o,n,m,l,k,j,i,h=this,g=null,f="tokenization repair",e="sed words",d={},c=J.cL(h.a.d,f),b=J.cL(h.a.d,e),a=J.cL(h.a.d,"sec")
+J(a0){var s,r,q,p,o,n,m,l,k,j,i,h=this,g=null,f="whitespace correction",e="sed words",d={},c=J.cL(h.a.d,f),b=J.cL(h.a.d,e),a=J.cL(h.a.d,"sec")
 d.a=d.b=d.c=null
 if(c){s=d.c=J.ak(h.a.d,f)
 r=J.ak(h.a.e,f)}else{s=g
@@ -79833,11 +79833,11 @@ m=A.a([],l)
 if(h.a.c.length>1)m.push(A.eo(A.a([A.Ii(new A.br(B.cL,A.adO(h.e,B.E1,g,g,1,new A.alC(h),!1),g))],l),B.K,B.P,B.a5))
 j=h.a.c.length
 i=j>1?"s":""
-l=A.a([new A.dm(1,B.as,A.i8(g,g,g,A.bn(""+j+" line"+i,g,g,g,g,g,g),B.Q5,g,B.aA),g)],l)
+l=A.a([new A.dm(1,B.as,A.i8(g,g,g,A.bn(""+j+" line"+i,g,g,g,g,g,g),B.Q6,g,B.aA),g)],l)
 if(c){j=J.aa(r)
-l.push(new A.dm(1,B.as,A.i8(g,g,g,A.bn(A.ap8(j.h(r,"s"))+", "+A.Wq(j.h(r,"bps"))+"/s",g,g,g,g,g,g),B.Q8,h.FD(a0,f,J.fd(J.ak(s,"text"),"\n"),"tr_results"),B.aA),g))}if(b){s=J.aa(p)
+l.push(new A.dm(1,B.as,A.i8(g,g,g,A.bn(A.ap8(j.h(r,"s"))+", "+A.Wq(j.h(r,"bps"))+"/s",g,g,g,g,g,g),B.Q3,h.FD(a0,f,J.fd(J.ak(s,"text"),"\n"),"tr_results"),B.aA),g))}if(b){s=J.aa(p)
 l.push(new A.dm(1,B.as,A.i8(g,g,g,A.bn(A.ap8(s.h(p,"s"))+", "+A.Wq(s.h(p,"bps"))+"/s",g,g,g,g,g,g),B.PZ,h.FD(a0,"spelling error detection",A.i(J.fd(J.aqm(J.ak(q,"detections"),new A.alD()),"\n")),"sedw_results"),B.aA),g))}if(a){s=J.aa(n)
-l.push(new A.dm(1,B.as,A.i8(g,g,g,A.bn(A.ap8(s.h(n,"s"))+", "+A.Wq(s.h(n,"bps"))+"/s",g,g,g,g,g,g),B.PN,h.FD(a0,"spelling error correction",A.i(J.fd(J.ak(o,"text"),"\n")),"sec_results"),B.aA),g))}m.push(A.eo(l,B.K,B.v0,B.a5))
+l.push(new A.dm(1,B.as,A.i8(g,g,g,A.bn(A.ap8(s.h(n,"s"))+", "+A.Wq(s.h(n,"bps"))+"/s",g,g,g,g,g,g),B.PO,h.FD(a0,"spelling error correction",A.i(J.fd(J.ak(o,"text"),"\n")),"sec_results"),B.aA),g))}m.push(A.eo(l,B.K,B.v0,B.a5))
 m.push(new A.dm(1,B.as,A.avH(new A.alE(d,h,k,c,b,a),k.length,B.T,B.vh,!0),g))
 return A.ef(m,B.K,B.P,B.aB)},
 a9p(a,b){var s,r,q,p,o,n=null,m=B.c.fd(a),l=A.bQ("\\s+",!0)
@@ -79939,7 +79939,7 @@ if(l!=null&&!t.yp.b(l)){k=J.e2(l,t.N)
 l=k.dX(k)
 n.n(o,"pipeline",l)}o=l==null?null:J.aqq(l)
 t.Xb.a(o)
-if(q.x!=null&&o!=null){if(!J.e(o[0],"")&&B.b.dj(q.n9("tokenization repair"),new A.a3q(o),new A.a3r())!=null)q.Q=o[0]
+if(q.x!=null&&o!=null){if(!J.e(o[0],"")&&B.b.dj(q.n9("whitespace correction"),new A.a3q(o),new A.a3r())!=null)q.Q=o[0]
 if(!J.e(o[1],"")&&B.b.dj(q.n9("sed words"),new A.a3s(o),new A.a3t())!=null)q.as=o[1]
 if(!J.e(o[2],"")&&B.b.dj(q.n9("sec"),new A.a3u(o),new A.a3v())!=null)q.at=o[2]}s=4
 return A.V(p.xA(),$async$lr)
@@ -80016,7 +80016,7 @@ i=p.ax
 h=J.aa(i)
 if(k!=null){j===$&&A.b()
 j.scA(0,J.fd(J.aqm(J.ak(h.h(i,"sed words"),"detections"),new A.a3y()),"\n"))}else{j===$&&A.b()
-j.scA(0,J.fd(J.ak(h.h(i,"tokenization repair"),"text"),"\n"))}}}p.dy=o
+j.scA(0,J.fd(J.ak(h.h(i,"whitespace correction"),"text"),"\n"))}}}p.dy=o
 p.dx=!1
 if(!p.b)p.pQ()
 q=l
@@ -80028,7 +80028,7 @@ x5(a){return this.abK(a)},
 abK(a){var s=0,r=A.S(t.f4),q,p=this
 var $async$x5=A.T(function(b,c){if(b===1)return A.P(c,r)
 while(true)switch(s){case 0:s=3
-return A.V($.Fa().x6(B.b.b4(p.ch,"\n"),J.fd(J.ak(J.ak(p.ax,"tokenization repair"),"text"),"\n"),a),$async$x5)
+return A.V($.Fa().x6(B.b.b4(p.ch,"\n"),J.fd(J.ak(J.ak(p.ax,"whitespace correction"),"text"),"\n"),a),$async$x5)
 case 3:q=c
 s=1
 break
@@ -80037,7 +80037,7 @@ return A.R($async$x5,r)},
 x3(a){return this.abI(a)},
 abI(a){var s=0,r=A.S(t.f4),q,p=this,o,n,m
 var $async$x3=A.T(function(b,c){if(b===1)return A.P(c,r)
-while(true)switch(s){case 0:n=J.cL(p.ax,"tokenization repair")?J.fd(J.ak(J.ak(p.ax,"tokenization repair"),"text"),"\n"):B.b.b4(p.ch,"\n")
+while(true)switch(s){case 0:n=J.cL(p.ax,"whitespace correction")?J.fd(J.ak(J.ak(p.ax,"whitespace correction"),"text"),"\n"):B.b.b4(p.ch,"\n")
 m=A.a([],t.s)
 for(o=J.aE(J.ak(J.ak(p.ax,"sed words"),"detections"));o.u();)m.push(J.fd(o.gH(o)," "))
 s=3
@@ -80051,7 +80051,7 @@ x_(a){return this.abG(a)},
 abG(a){var s=0,r=A.S(t.f4),q,p=this,o
 var $async$x_=A.T(function(b,c){if(b===1)return A.P(c,r)
 while(true)switch(s){case 0:if(J.cL(p.ax,"sed words"))o=J.fd(J.ak(J.ak(p.ax,"sed words"),"text"),"\n")
-else o=J.cL(p.ax,"tokenization repair")?J.fd(J.ak(J.ak(p.ax,"tokenization repair"),"text"),"\n"):B.b.b4(p.ch,"\n")
+else o=J.cL(p.ax,"whitespace correction")?J.fd(J.ak(J.ak(p.ax,"whitespace correction"),"text"),"\n"):B.b.b4(p.ch,"\n")
 s=3
 return A.V($.Fa().x0(o,J.fd(J.ak(J.ak(p.ax,"sec"),"text"),"\n"),a),$async$x_)
 case 3:q=c
@@ -80101,8 +80101,8 @@ A.Qs.prototype={
 aG(){this.aX()
 this.d.Y(0,new A.aiY(this))},
 J(a){return new A.q8(new A.aiT(this),new A.aiU(this),null,t.Qh)},
-a9j(a0){var s,r,q,p,o,n,m=this,l=null,k="tokenization repair",j="description",i="sed words",h=A.ny(8),g=a0.gpn(),f=a0.x,e=a0.Q,d=a0.as,c=a0.at,b=e!=null,a=A.dH(B.cd,B.dz,l,b?new A.aiF(m,a0):l,16,"Clear tokenization repair model")
-a=A.r6(l,l,l,l,l,l,l,l,!0,l,l,l,l,l,l,l,l,l,l,l,l,l,10,l,b?J.ak(a0.yW(k,e),j):l,l,l,l,l,l,l,l,!1,l,l,l,"Tokenization repair model",l,B.DR,l,l,l,l,l,l,a,l,l,l,l)
+a9j(a0){var s,r,q,p,o,n,m=this,l=null,k="whitespace correction",j="description",i="sed words",h=A.ny(8),g=a0.gpn(),f=a0.x,e=a0.Q,d=a0.as,c=a0.at,b=e!=null,a=A.dH(B.cd,B.dz,l,b?new A.aiF(m,a0):l,16,"Clear whitespace correction model")
+a=A.r6(l,l,l,l,l,l,l,l,!0,l,l,l,l,l,l,l,l,l,l,l,l,l,10,l,b?J.ak(a0.yW(k,e),j):l,l,l,l,l,l,l,l,!1,l,l,l,"Whitespace correction model",l,B.DR,l,l,l,l,l,l,a,l,l,l,l)
 s=a0.n9(k)
 r=A.a7(s).i("al<1,hf<o>>")
 q=t.N
@@ -80125,8 +80125,8 @@ b=t.p
 a=A.a([A.dH(B.k,A.IU(!m.f?B.oA:B.oz,l),l,new A.aiP(m),16,l)],b)
 if(m.f)B.b.O(a,A.a([B.fW,B.D4],b))
 a=A.hW(A.eo(a,B.K,B.P,B.aB),l,B.eM,l,B.T,l)
-return A.hW(A.aqZ(A.a([B.ek,B.Q1,B.ej,new A.yR(B.EU,f,e,d,c,new A.aiQ(m,a0),l),B.ej,r,B.ej,s,B.ej,q,B.ej,a,B.ek,A.eo(A.a([A.asg(B.DK,B.Q2,a0.gpn()?new A.aiI(m,a0):l)],b),B.K,B.v_,B.a5)],b),B.CC,B.dJ,B.cI,!g,!0,B.PP,B.Q4),B.bn,l,2,l,new A.ch(h,B.n))},
-a9i(a){var s,r,q,p,o,n,m,l,k,j,i=this,h=null,g=A.ny(8),f=A.eo(B.Fb,B.K,B.P,B.a5),e=a.cx
+return A.hW(A.aqZ(A.a([B.ek,B.Q1,B.ej,new A.yR(B.Fk,f,e,d,c,new A.aiQ(m,a0),l),B.ej,r,B.ej,s,B.ej,q,B.ej,a,B.ek,A.eo(A.a([A.asg(B.DK,B.Q2,a0.gpn()?new A.aiI(m,a0):l)],b),B.K,B.v_,B.a5)],b),B.CC,B.dJ,B.cI,!g,!0,B.PQ,B.Q5),B.bn,l,2,l,new A.ch(h,B.n))},
+a9i(a){var s,r,q,p,o,n,m,l,k,j,i=this,h=null,g=A.ny(8),f=A.eo(B.Fa,B.K,B.P,B.a5),e=a.cx
 e===$&&A.b()
 s=a.fr
 r=s?512:h
@@ -80156,11 +80156,11 @@ r=A.a([],j)
 if(!a.dx||a.fr)B.b.O(r,A.a([A.dH(h,B.oC,h,new A.aiu(i,a),16,"Copy output to clipboard"),A.dH(h,B.DO,h,new A.aiv(i,a),16,"Download output")],j))
 else r.push(B.xK)
 return A.hW(new A.br(B.c0,A.ef(A.a([f,A.eo(A.a([q,s,A.Ii(A.adO(p,A.r6(h,h,h,h,h,h,h,h,!0,h,h,h,h,h,h,h,h,h,h,h,h,h,10,h,e,h,h,h,h,h,h,h,!1,h,h,h,h,h,h,h,h,h,h,h,h,A.ef(r,B.K,B.iT,B.a5),h,h,h,h),h,h,10,h,!0))],j),B.cI,B.P,B.a5)],j),B.K,B.P,B.aB),h),h,h,2,h,new A.ch(g,B.n))},
-a9h(a){var s=null,r="tokenization repair",q=A.ny(8),p=t.p,o=A.a([],p)
+a9h(a){var s=null,r="whitespace correction",q=A.ny(8),p=t.p,o=A.a([],p)
 if(J.cL(a.ax,r))o.push(new A.dm(1,B.as,new A.br(B.c0,new A.nV(a.ch.length,new A.aif(this,a),r,s),s),s))
 if(J.cL(a.ax,"sed words"))o.push(new A.dm(1,B.as,new A.br(B.c0,new A.nV(a.ch.length,new A.aig(this,a),"word-level spelling error detection",s),s),s))
 if(J.cL(a.ax,"sec"))o.push(new A.dm(1,B.as,new A.br(B.c0,new A.nV(a.ch.length,new A.aih(this,a),"spelling error correction",s),s),s))
-return A.hW(A.aqZ(A.a([A.eo(o,B.cI,B.P,B.a5)],p),s,B.dJ,s,!1,!0,B.Q_,B.Q6),B.bn,s,2,s,new A.ch(q,B.n))},
+return A.hW(A.aqZ(A.a([A.eo(o,B.cI,B.P,B.a5)],p),s,B.dJ,s,!1,!0,B.Q_,B.Q7),B.bn,s,2,s,new A.ch(q,B.n))},
 u7(a){var s=0,r=A.S(t.z),q,p=this,o
 var $async$u7=A.T(function(b,c){if(b===1)return A.P(c,r)
 while(true)switch(s){case 0:if(a==null){o=p.c
@@ -80211,13 +80211,13 @@ A.aiT.prototype={
 $3(a,b,c){var s,r,q,p,o,n=null
 if(!b.db)return A.oV(!0,A.arG(n,B.AR),B.T,!0)
 else{s=b.x
-if(s==null)return A.oV(!0,A.arG(n,A.nE(A.ef(A.a([B.PO,B.ek,A.asg(B.DJ,B.PG,new A.aiR(this.a,b))],t.p),B.K,B.iT,B.a5),n,n)),B.T,!0)}s=this.a
+if(s==null)return A.oV(!0,A.arG(n,A.nE(A.ef(A.a([B.PP,B.ek,A.asg(B.DJ,B.PG,new A.aiR(this.a,b))],t.p),B.K,B.iT,B.a5),n,n)),B.T,!0)}s=this.a
 r=t.p
 q=A.a([A.dH(n,B.DW,n,new A.aiS(s,b),n,"Show backend information")],r)
 p=A.ny(8)
-p=A.a([A.hW(new A.br(B.c0,A.ef(B.Fj,B.dr,B.P,B.aB),n),n,n,2,n,new A.ch(p,B.n)),s.a9i(b),s.a9j(b)],r)
+p=A.a([A.hW(new A.br(B.c0,A.ef(B.Fi,B.dr,B.P,B.aB),n),n,n,2,n,new A.ch(p,B.n)),s.a9i(b),s.a9j(b)],r)
 if(b.dy){o=A.ny(8)
-B.b.O(p,A.a([A.hW(A.aqZ(A.a([new A.zv(b.ch,b.ax,b.ay,n)],r),n,B.dJ,n,!1,!0,B.PQ,B.Q3),B.bn,n,2,n,new A.ch(o,B.n)),s.a9h(b)],r))}return A.oV(!0,A.arG(new A.vy(B.PE,q,B.bE,new A.Sj(n,n,1/0,56),n),A.arN(new A.br(B.be,A.ef(p,B.K,B.P,B.aB),n),n)),B.T,!0)},
+B.b.O(p,A.a([A.hW(A.aqZ(A.a([new A.zv(b.ch,b.ax,b.ay,n)],r),n,B.dJ,n,!1,!0,B.PR,B.Q4),B.bn,n,2,n,new A.ch(o,B.n)),s.a9h(b)],r))}return A.oV(!0,A.arG(new A.vy(B.PE,q,B.bE,new A.Sj(n,n,1/0,56),n),A.arN(new A.br(B.be,A.ef(p,B.K,B.P,B.aB),n),n)),B.T,!0)},
 $C:"$3",
 $R:3,
 $S:470}
@@ -80487,7 +80487,7 @@ var $async$$1=A.T(function(b,c){if(b===1)return A.P(c,r)
 while(true)switch(s){case 0:s=3
 return A.V(p.b.x5(a),$async$$1)
 case 3:l=c
-k=A.ap1(l,"error evaluating tokenization repair")
+k=A.ap1(l,"error evaluating whitespace correction")
 if(k==null){o=l.c
 n=J.aa(o)
 m=t.p
@@ -80508,7 +80508,7 @@ k=A.ap1(l,"error evaluating word-level spelling error detection")
 if(k==null){o=l.c
 n=J.aa(o)
 m=t.p
-q=A.hW(new A.br(B.c0,A.arV(A.a([B.md,new A.cV(A.a([B.mo,A.bn(B.d.V(100*n.h(o,"f1"),2),null,null,null,null,null,null)],m)),new A.cV(A.a([B.mn,A.bn(B.d.V(100*n.h(o,"prec"),2),null,null,null,null,null,null)],m)),new A.cV(A.a([B.mm,A.bn(B.d.V(100*n.h(o,"rec"),2),null,null,null,null,null,null)],m)),new A.cV(A.a([B.Q0,A.bn(B.d.V(100*n.h(o,"word_acc"),2),null,null,null,null,null,null)],m)),new A.cV(A.a([B.PR,A.bn(B.d.V(100*n.h(o,"rw_detections")/n.h(o,"rw_errors"),2)+" ("+A.i(n.h(o,"rw_detections"))+"/"+A.i(n.h(o,"rw_errors"))+")",null,null,null,null,null,null)],m)),new A.cV(A.a([B.PM,A.bn(B.d.V(100*n.h(o,"nw_detections")/n.h(o,"nw_errors"),2)+" ("+A.i(n.h(o,"nw_detections"))+"/"+A.i(n.h(o,"nw_errors"))+")",null,null,null,null,null,null)],m))],t.nk),B.mc),null),null,null,2,null,null)
+q=A.hW(new A.br(B.c0,A.arV(A.a([B.md,new A.cV(A.a([B.mo,A.bn(B.d.V(100*n.h(o,"f1"),2),null,null,null,null,null,null)],m)),new A.cV(A.a([B.mn,A.bn(B.d.V(100*n.h(o,"prec"),2),null,null,null,null,null,null)],m)),new A.cV(A.a([B.mm,A.bn(B.d.V(100*n.h(o,"rec"),2),null,null,null,null,null,null)],m)),new A.cV(A.a([B.Q0,A.bn(B.d.V(100*n.h(o,"word_acc"),2),null,null,null,null,null,null)],m)),new A.cV(A.a([B.PS,A.bn(B.d.V(100*n.h(o,"rw_detections")/n.h(o,"rw_errors"),2)+" ("+A.i(n.h(o,"rw_detections"))+"/"+A.i(n.h(o,"rw_errors"))+")",null,null,null,null,null,null)],m)),new A.cV(A.a([B.PM,A.bn(B.d.V(100*n.h(o,"nw_detections")/n.h(o,"nw_errors"),2)+" ("+A.i(n.h(o,"nw_detections"))+"/"+A.i(n.h(o,"nw_errors"))+")",null,null,null,null,null,null)],m))],t.nk),B.mc),null),null,null,2,null,null)
 s=1
 break}else{o=p.a.c
 if(o!=null)A.e1(o,k)}case 1:return A.Q(q,r)}})
@@ -80525,7 +80525,7 @@ k=A.ap1(l,"error evaluating spelling error correction")
 if(k==null){o=l.c
 n=J.aa(o)
 m=t.p
-q=A.hW(new A.br(B.c0,A.arV(A.a([B.md,new A.cV(A.a([B.mo,A.bn(B.d.V(100*n.h(o,"f1"),2),null,null,null,null,null,null)],m)),new A.cV(A.a([B.mn,A.bn(B.d.V(100*n.h(o,"prec"),2),null,null,null,null,null,null)],m)),new A.cV(A.a([B.mm,A.bn(B.d.V(100*n.h(o,"rec"),2),null,null,null,null,null,null)],m)),new A.cV(A.a([B.Q7,A.bn(J.aDu(n.h(o,"mned"),4),null,null,null,null,null,null)],m))],t.nk),B.mc),null),null,null,2,null,null)
+q=A.hW(new A.br(B.c0,A.arV(A.a([B.md,new A.cV(A.a([B.mo,A.bn(B.d.V(100*n.h(o,"f1"),2),null,null,null,null,null,null)],m)),new A.cV(A.a([B.mn,A.bn(B.d.V(100*n.h(o,"prec"),2),null,null,null,null,null,null)],m)),new A.cV(A.a([B.mm,A.bn(B.d.V(100*n.h(o,"rec"),2),null,null,null,null,null,null)],m)),new A.cV(A.a([B.Q8,A.bn(J.aDu(n.h(o,"mned"),4),null,null,null,null,null,null)],m))],t.nk),B.mc),null),null,null,2,null,null)
 s=1
 break}else{o=p.a.c
 if(o!=null)A.e1(o,k)}case 1:return A.Q(q,r)}})
@@ -80534,11 +80534,11 @@ $S:91}
 A.aj2.prototype={
 $1(a){var s,r=null,q=this.a,p=J.aa(q),o=p.h(q,"gpu"),n=t.p,m=A.a([],n),l=A.Mb(A.bn("Library: nsc (version "+A.i(p.h(q,"version"))+")",r,r,r,r,r,r)),k=A.Mb(A.bn("Timeout: "+A.i(p.h(q,"timeout"))+" seconds",r,r,r,r,r,r)),j=A.Mb(A.bn("Precision: "+A.i(p.h(q,"precision")),r,r,r,r,r,r))
 q=A.Mb(A.bn("CPU: "+A.i(p.h(q,"cpu")),r,r,r,r,r,r))
-p=A.a([B.PT],n)
+p=A.a([B.PU],n)
 if(J.iL(o))p.push(B.PX)
 else{s=A.avD(o,new A.aj1(),t.z,t.y_)
 p.push(new A.dm(1,B.as,A.asa(A.aj(s,!0,s.$ti.i("p.E")),0,0),r))}B.b.O(m,A.a([l,k,j,q,A.Mb(A.eo(p,B.K,B.P,B.a5))],n))
-return new A.te(B.PV,m,r)},
+return new A.te(B.PW,m,r)},
 $S:474}
 A.aj1.prototype={
 $2(a,b){var s=null
@@ -83548,8 +83548,8 @@ B.D3=new A.lT(2,"medium")
 B.oq=new A.lT(3,"high")
 B.as=new A.x2(1,"loose")
 B.y6=new A.u(!0,B.k,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null)
-B.PW=new A.bv("The models of the pipeline will be run in order such that the output of the previous model will be used as input to the next. If you do not specify a model for a task in the pipeline this task will be skipped. Some models (e.g. tokenization repair++) can perform multiple tasks in one by design (e.g. correcting whitespace and spelling errors) which is why its recommended to use them without any additional models in the pipeline that perform the same task.",null,B.y6,null,null,null,null,null,null)
-B.JC=new A.br(B.hV,B.PW,null)
+B.PN=new A.bv("The models of the pipeline will be run in order such that the output of the previous model will be used as input to the next. If you do not specify a model for a task in the pipeline this task will be skipped. Some models can perform multiple tasks in one by design (e.g. correcting whitespace and spelling errors) which is why its recommended to use them without any additional models in the pipeline that perform the same task.",null,B.y6,null,null,null,null,null,null)
+B.JC=new A.br(B.hV,B.PN,null)
 B.D4=new A.dm(1,B.as,B.JC,null)
 B.D5=new A.qP(null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null)
 B.or=new A.qQ(0,"Start")
@@ -83735,14 +83735,6 @@ B.fI=new A.zK(1,"page")
 B.fJ=new A.eF(B.x,B.fI)
 B.EB=A.a(s([B.zX,B.fJ]),A.a8("t<aX>"))
 B.EC=A.a(s(["S","M","T","W","T","F","S"]),t.s)
-B.JS=new A.eE("Best full pipeline","eo large arxiv with errors","gnn+","transformer nmt")
-B.JT=new A.eE("Fast full pipeline","eo large arxiv with errors","transformer+","transformer words nmt")
-B.JU=new A.eE("Best all in one",null,null,"tokenization repair++")
-B.JV=new A.eE("Best for highly corrupted text",null,null,"transformer with tokenization repair nmt")
-B.JW=new A.eE("Whitespace correction only","eo large arxiv with errors",null,null)
-B.JQ=new A.eE("Error detection only",null,"gnn+",null)
-B.JR=new A.eE("Error correction only",null,null,"transformer words nmt")
-B.EU=A.a(s([B.JS,B.JT,B.JU,B.JV,B.JW,B.JQ,B.JR]),A.a8("t<eE>"))
 B.dU=new A.fr(0,"controlModifier")
 B.dV=new A.fr(1,"shiftModifier")
 B.dW=new A.fr(2,"altModifier")
@@ -83756,29 +83748,37 @@ B.oO=A.a(s([B.dU,B.dV,B.dW,B.dX,B.vc,B.vd,B.ve,B.vf,B.IY]),A.a8("t<fr>"))
 B.bO=new A.dw(1,"fuchsia")
 B.bP=new A.dw(3,"linux")
 B.bQ=new A.dw(5,"windows")
-B.F_=A.a(s([B.aE,B.bO,B.af,B.bP,B.b8,B.bQ]),t.r6)
-B.Fa=A.a(s(["Before Christ","Anno Domini"]),t.s)
+B.EZ=A.a(s([B.aE,B.bO,B.af,B.bP,B.b8,B.bQ]),t.r6)
+B.F9=A.a(s(["Before Christ","Anno Domini"]),t.s)
 B.ep=new A.u(!0,null,null,null,null,null,20,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null)
 B.PH=new A.bv("Input",null,B.ep,null,null,null,null,null,null)
-B.PU=new A.bv("Enter some text to be spell checked below",null,null,null,null,null,null,null,null)
+B.PV=new A.bv("Enter some text to be spell checked below",null,null,null,null,null,null,null,null)
 B.aA=new A.l1(-2,-2)
-B.Ex=new A.ks(null,B.PH,B.PU,null,B.aA,B.T,null,null)
+B.Ex=new A.ks(null,B.PH,B.PV,null,B.aA,B.T,null,null)
 B.CN=new A.nX(1,B.dy,B.Ex,null)
 B.Lt=new A.hA(64,64,null,null)
 B.PI=new A.bv("Output",null,B.ep,null,null,null,null,null,null)
 B.PY=new A.bv("The spell checked text will appear here",null,null,null,null,null,null,null,null)
 B.Ew=new A.ks(null,B.PI,B.PY,null,B.aA,B.T,null,null)
 B.CM=new A.nX(1,B.dy,B.Ew,null)
-B.Fb=A.a(s([B.CN,B.Lt,B.CM]),t.p)
-B.Fg=A.a(s(["AM","PM"]),t.s)
+B.Fa=A.a(s([B.CN,B.Lt,B.CM]),t.p)
+B.Ff=A.a(s(["AM","PM"]),t.s)
 B.yS=new A.q5(0,"polite")
-B.Fh=A.a(s([B.yS,B.n_]),A.a8("t<q5>"))
-B.Fi=A.a(s(["BC","AD"]),t.s)
+B.Fg=A.a(s([B.yS,B.n_]),A.a8("t<q5>"))
+B.Fh=A.a(s(["BC","AD"]),t.s)
 B.NI=new A.u(!0,null,null,null,null,null,22,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null)
-B.PS=new A.bv("Detect and correct spelling errors in text with or without space errors.",null,B.NI,null,null,null,null,null,null)
-B.Ev=new A.ks(null,B.PS,null,null,B.aA,B.T,null,null)
-B.Fj=A.a(s([B.Ev]),t.p)
+B.PT=new A.bv("Detect and correct spelling errors in text with or without space errors.",null,B.NI,null,null,null,null,null,null)
+B.Ev=new A.ks(null,B.PT,null,null,B.aA,B.T,null,null)
+B.Fi=A.a(s([B.Ev]),t.p)
 B.fc=A.a(s([0,0,65490,45055,65535,34815,65534,18431]),t.t)
+B.JU=new A.eE("Best full pipeline","eo large arxiv with errors","gnn+","transformer nmt")
+B.JV=new A.eE("Fast full pipeline","eo large arxiv with errors","transformer+","transformer words nmt")
+B.JR=new A.eE("Best all in one",null,null,"whitespace correction++")
+B.JQ=new A.eE("Best for highly corrupted text",null,null,"transformer with whitespace correction nmt")
+B.JW=new A.eE("Whitespace correction only","eo large arxiv with errors",null,null)
+B.JS=new A.eE("Error detection only",null,"gnn+",null)
+B.JT=new A.eE("Error correction only",null,null,"transformer words nmt")
+B.Fk=A.a(s([B.JU,B.JV,B.JR,B.JQ,B.JW,B.JS,B.JT]),A.a8("t<eE>"))
 B.my=new A.cX(0,"DoubleQuote")
 B.dc=new A.cX(1,"SingleQuote")
 B.aG=new A.cX(2,"HebrewLetter")
@@ -84004,8 +84004,8 @@ B.zD=new A.bb(3,B.A,B.bo,B.Ja,38)
 B.zE=new A.bb(8,B.A,B.bd,B.vk,46)
 B.FN=A.a(s([B.zN,B.zD,B.zE]),t.V)
 B.Ih=new A.bP([0,B.G5,1,B.FO,2,B.Fs,3,B.Ft,4,B.FP,6,B.FQ,8,B.Fm,9,B.Fn,12,B.Gj,16,B.Fu,24,B.FN],A.a8("bP<m,B<bb>>"))
-B.EZ=A.a(s(["KeyA","KeyB","KeyC","KeyD","KeyE","KeyF","KeyG","KeyH","KeyI","KeyJ","KeyK","KeyL","KeyM","KeyN","KeyO","KeyP","KeyQ","KeyR","KeyS","KeyT","KeyU","KeyV","KeyW","KeyX","KeyY","KeyZ","Digit1","Digit2","Digit3","Digit4","Digit5","Digit6","Digit7","Digit8","Digit9","Digit0","Minus","Equal","BracketLeft","BracketRight","Backslash","Semicolon","Quote","Backquote","Comma","Period","Slash"]),t.s)
-B.iU=new A.b4(47,{KeyA:"a",KeyB:"b",KeyC:"c",KeyD:"d",KeyE:"e",KeyF:"f",KeyG:"g",KeyH:"h",KeyI:"i",KeyJ:"j",KeyK:"k",KeyL:"l",KeyM:"m",KeyN:"n",KeyO:"o",KeyP:"p",KeyQ:"q",KeyR:"r",KeyS:"s",KeyT:"t",KeyU:"u",KeyV:"v",KeyW:"w",KeyX:"x",KeyY:"y",KeyZ:"z",Digit1:"1",Digit2:"2",Digit3:"3",Digit4:"4",Digit5:"5",Digit6:"6",Digit7:"7",Digit8:"8",Digit9:"9",Digit0:"0",Minus:"-",Equal:"=",BracketLeft:"[",BracketRight:"]",Backslash:"\\",Semicolon:";",Quote:"'",Backquote:"`",Comma:",",Period:".",Slash:"/"},B.EZ,t.li)
+B.EY=A.a(s(["KeyA","KeyB","KeyC","KeyD","KeyE","KeyF","KeyG","KeyH","KeyI","KeyJ","KeyK","KeyL","KeyM","KeyN","KeyO","KeyP","KeyQ","KeyR","KeyS","KeyT","KeyU","KeyV","KeyW","KeyX","KeyY","KeyZ","Digit1","Digit2","Digit3","Digit4","Digit5","Digit6","Digit7","Digit8","Digit9","Digit0","Minus","Equal","BracketLeft","BracketRight","Backslash","Semicolon","Quote","Backquote","Comma","Period","Slash"]),t.s)
+B.iU=new A.b4(47,{KeyA:"a",KeyB:"b",KeyC:"c",KeyD:"d",KeyE:"e",KeyF:"f",KeyG:"g",KeyH:"h",KeyI:"i",KeyJ:"j",KeyK:"k",KeyL:"l",KeyM:"m",KeyN:"n",KeyO:"o",KeyP:"p",KeyQ:"q",KeyR:"r",KeyS:"s",KeyT:"t",KeyU:"u",KeyV:"v",KeyW:"w",KeyX:"x",KeyY:"y",KeyZ:"z",Digit1:"1",Digit2:"2",Digit3:"3",Digit4:"4",Digit5:"5",Digit6:"6",Digit7:"7",Digit8:"8",Digit9:"9",Digit0:"0",Minus:"-",Equal:"=",BracketLeft:"[",BracketRight:"]",Backslash:"\\",Semicolon:";",Quote:"'",Backquote:"`",Comma:",",Period:".",Slash:"/"},B.EY,t.li)
 B.Fl=A.a(s(["d","E","EEEE","LLL","LLLL","M","Md","MEd","MMM","MMMd","MMMEd","MMMM","MMMMd","MMMMEEEEd","QQQ","QQQQ","y","yM","yMd","yMEd","yMMM","yMMMd","yMMMEd","yMMMM","yMMMMd","yMMMMEEEEd","yQQQ","yQQQQ","H","Hm","Hms","j","jm","jms","jmv","jmz","jz","m","ms","s","v","z","zzzz","ZZZZ"]),t.s)
 B.Ik=new A.b4(44,{d:"d",E:"EEE",EEEE:"EEEE",LLL:"LLL",LLLL:"LLLL",M:"L",Md:"M/d",MEd:"EEE, M/d",MMM:"LLL",MMMd:"MMM d",MMMEd:"EEE, MMM d",MMMM:"LLLL",MMMMd:"MMMM d",MMMMEEEEd:"EEEE, MMMM d",QQQ:"QQQ",QQQQ:"QQQQ",y:"y",yM:"M/y",yMd:"M/d/y",yMEd:"EEE, M/d/y",yMMM:"MMM y",yMMMd:"MMM d, y",yMMMEd:"EEE, MMM d, y",yMMMM:"MMMM y",yMMMMd:"MMMM d, y",yMMMMEEEEd:"EEEE, MMMM d, y",yQQQ:"QQQ y",yQQQQ:"QQQQ y",H:"HH",Hm:"HH:mm",Hms:"HH:mm:ss",j:"h a",jm:"h:mm a",jms:"h:mm:ss a",jmv:"h:mm a v",jmz:"h:mm a z",jz:"h a z",m:"m",ms:"mm:ss",s:"s",v:"v",z:"z",zzzz:"zzzz",ZZZZ:"ZZZZ"},B.Fl,t.li)
 B.Fq=A.a(s(["Abort","Again","AltLeft","AltRight","ArrowDown","ArrowLeft","ArrowRight","ArrowUp","AudioVolumeDown","AudioVolumeMute","AudioVolumeUp","Backquote","Backslash","Backspace","BracketLeft","BracketRight","BrightnessDown","BrightnessUp","BrowserBack","BrowserFavorites","BrowserForward","BrowserHome","BrowserRefresh","BrowserSearch","BrowserStop","CapsLock","Comma","ContextMenu","ControlLeft","ControlRight","Convert","Copy","Cut","Delete","Digit0","Digit1","Digit2","Digit3","Digit4","Digit5","Digit6","Digit7","Digit8","Digit9","DisplayToggleIntExt","Eject","End","Enter","Equal","Esc","Escape","F1","F10","F11","F12","F13","F14","F15","F16","F17","F18","F19","F2","F20","F21","F22","F23","F24","F3","F4","F5","F6","F7","F8","F9","Find","Fn","FnLock","GameButton1","GameButton10","GameButton11","GameButton12","GameButton13","GameButton14","GameButton15","GameButton16","GameButton2","GameButton3","GameButton4","GameButton5","GameButton6","GameButton7","GameButton8","GameButton9","GameButtonA","GameButtonB","GameButtonC","GameButtonLeft1","GameButtonLeft2","GameButtonMode","GameButtonRight1","GameButtonRight2","GameButtonSelect","GameButtonStart","GameButtonThumbLeft","GameButtonThumbRight","GameButtonX","GameButtonY","GameButtonZ","Help","Home","Hyper","Insert","IntlBackslash","IntlRo","IntlYen","KanaMode","KeyA","KeyB","KeyC","KeyD","KeyE","KeyF","KeyG","KeyH","KeyI","KeyJ","KeyK","KeyL","KeyM","KeyN","KeyO","KeyP","KeyQ","KeyR","KeyS","KeyT","KeyU","KeyV","KeyW","KeyX","KeyY","KeyZ","KeyboardLayoutSelect","Lang1","Lang2","Lang3","Lang4","Lang5","LaunchApp1","LaunchApp2","LaunchAssistant","LaunchControlPanel","LaunchMail","LaunchScreenSaver","MailForward","MailReply","MailSend","MediaFastForward","MediaPause","MediaPlay","MediaPlayPause","MediaRecord","MediaRewind","MediaSelect","MediaStop","MediaTrackNext","MediaTrackPrevious","MetaLeft","MetaRight","MicrophoneMuteToggle","Minus","NonConvert","NumLock","Numpad0","Numpad1","Numpad2","Numpad3","Numpad4","Numpad5","Numpad6","Numpad7","Numpad8","Numpad9","NumpadAdd","NumpadBackspace","NumpadClear","NumpadClearEntry","NumpadComma","NumpadDecimal","NumpadDivide","NumpadEnter","NumpadEqual","NumpadMemoryAdd","NumpadMemoryClear","NumpadMemoryRecall","NumpadMemoryStore","NumpadMemorySubtract","NumpadMultiply","NumpadParenLeft","NumpadParenRight","NumpadSubtract","Open","PageDown","PageUp","Paste","Pause","Period","Power","PrintScreen","PrivacyScreenToggle","Props","Quote","Resume","ScrollLock","Select","SelectTask","Semicolon","ShiftLeft","ShiftRight","ShowAllWindows","Slash","Sleep","Space","Super","Suspend","Tab","Turbo","Undo","WakeUp","ZoomToggle"]),t.s)
@@ -84797,18 +84797,18 @@ B.p6=A.a(s(["*","+","-",".","/","0","1","2","3","4","5","6","7","8","9","Alt","A
 B.ER=A.a(s([42,null,null,8589935146]),t.Z)
 B.ES=A.a(s([43,null,null,8589935147]),t.Z)
 B.ET=A.a(s([45,null,null,8589935149]),t.Z)
-B.EV=A.a(s([46,null,null,8589935150]),t.Z)
-B.EW=A.a(s([47,null,null,8589935151]),t.Z)
-B.EX=A.a(s([48,null,null,8589935152]),t.Z)
-B.EY=A.a(s([49,null,null,8589935153]),t.Z)
-B.F0=A.a(s([50,null,null,8589935154]),t.Z)
-B.F1=A.a(s([51,null,null,8589935155]),t.Z)
-B.F2=A.a(s([52,null,null,8589935156]),t.Z)
-B.F3=A.a(s([53,null,null,8589935157]),t.Z)
-B.F4=A.a(s([54,null,null,8589935158]),t.Z)
-B.F5=A.a(s([55,null,null,8589935159]),t.Z)
-B.F6=A.a(s([56,null,null,8589935160]),t.Z)
-B.F7=A.a(s([57,null,null,8589935161]),t.Z)
+B.EU=A.a(s([46,null,null,8589935150]),t.Z)
+B.EV=A.a(s([47,null,null,8589935151]),t.Z)
+B.EW=A.a(s([48,null,null,8589935152]),t.Z)
+B.EX=A.a(s([49,null,null,8589935153]),t.Z)
+B.F_=A.a(s([50,null,null,8589935154]),t.Z)
+B.F0=A.a(s([51,null,null,8589935155]),t.Z)
+B.F1=A.a(s([52,null,null,8589935156]),t.Z)
+B.F2=A.a(s([53,null,null,8589935157]),t.Z)
+B.F3=A.a(s([54,null,null,8589935158]),t.Z)
+B.F4=A.a(s([55,null,null,8589935159]),t.Z)
+B.F5=A.a(s([56,null,null,8589935160]),t.Z)
+B.F6=A.a(s([57,null,null,8589935161]),t.Z)
 B.GC=A.a(s([8589934852,8589934852,8589934853,null]),t.Z)
 B.EG=A.a(s([4294967555,null,4294967555,null]),t.Z)
 B.EH=A.a(s([4294968065,null,null,8589935154]),t.Z)
@@ -84826,7 +84826,7 @@ B.GE=A.a(s([8589934854,8589934854,8589934855,null]),t.Z)
 B.EN=A.a(s([4294968071,null,null,8589935155]),t.Z)
 B.EO=A.a(s([4294968072,null,null,8589935161]),t.Z)
 B.GF=A.a(s([8589934850,8589934850,8589934851,null]),t.Z)
-B.v5=new A.b4(32,{"*":B.ER,"+":B.ES,"-":B.ET,".":B.EV,"/":B.EW,"0":B.EX,"1":B.EY,"2":B.F0,"3":B.F1,"4":B.F2,"5":B.F3,"6":B.F4,"7":B.F5,"8":B.F6,"9":B.F7,Alt:B.GC,AltGraph:B.EG,ArrowDown:B.EH,ArrowLeft:B.EI,ArrowRight:B.EJ,ArrowUp:B.EK,Clear:B.EP,Control:B.GD,Delete:B.EF,End:B.EL,Enter:B.EE,Home:B.EM,Insert:B.EQ,Meta:B.GE,PageDown:B.EN,PageUp:B.EO,Shift:B.GF},B.p6,A.a8("b4<o,B<m?>>"))
+B.v5=new A.b4(32,{"*":B.ER,"+":B.ES,"-":B.ET,".":B.EU,"/":B.EV,"0":B.EW,"1":B.EX,"2":B.F_,"3":B.F0,"4":B.F1,"5":B.F2,"6":B.F3,"7":B.F4,"8":B.F5,"9":B.F6,Alt:B.GC,AltGraph:B.EG,ArrowDown:B.EH,ArrowLeft:B.EI,ArrowRight:B.EJ,ArrowUp:B.EK,Clear:B.EP,Control:B.GD,Delete:B.EF,End:B.EL,Enter:B.EE,Home:B.EM,Insert:B.EQ,Meta:B.GE,PageDown:B.EN,PageUp:B.EO,Shift:B.GF},B.p6,A.a8("b4<o,B<m?>>"))
 B.Fw=A.a(s([B.pe,null,null,B.uV]),t.L)
 B.Fx=A.a(s([B.uH,null,null,B.uW]),t.L)
 B.Fy=A.a(s([B.uI,null,null,B.uX]),t.L)
@@ -84842,24 +84842,24 @@ B.GA=A.a(s([B.uR,null,null,B.iN]),t.L)
 B.GB=A.a(s([B.uS,null,null,B.iO]),t.L)
 B.FK=A.a(s([B.uT,null,null,B.iP]),t.L)
 B.FL=A.a(s([B.uU,null,null,B.iQ]),t.L)
-B.Fc=A.a(s([B.dR,B.dR,B.fl,null]),t.L)
+B.Fb=A.a(s([B.dR,B.dR,B.fl,null]),t.L)
 B.Gl=A.a(s([B.fh,null,B.fh,null]),t.L)
 B.FD=A.a(s([B.bH,null,null,B.iJ]),t.L)
 B.FE=A.a(s([B.bf,null,null,B.iL]),t.L)
 B.FF=A.a(s([B.bg,null,null,B.iN]),t.L)
 B.ED=A.a(s([B.bI,null,null,B.iP]),t.L)
-B.F8=A.a(s([B.iD,null,null,B.iM]),t.L)
-B.Fd=A.a(s([B.dQ,B.dQ,B.fk,null]),t.L)
+B.F7=A.a(s([B.iD,null,null,B.iM]),t.L)
+B.Fc=A.a(s([B.dQ,B.dQ,B.fk,null]),t.L)
 B.Fr=A.a(s([B.aU,null,null,B.iG]),t.L)
 B.FG=A.a(s([B.cp,null,null,B.iI]),t.L)
 B.FX=A.a(s([B.fg,null,null,B.iF]),t.L)
 B.FH=A.a(s([B.cq,null,null,B.iO]),t.L)
-B.F9=A.a(s([B.iE,null,null,B.iH]),t.L)
-B.Fe=A.a(s([B.dS,B.dS,B.fm,null]),t.L)
+B.F8=A.a(s([B.iE,null,null,B.iH]),t.L)
+B.Fd=A.a(s([B.dS,B.dS,B.fm,null]),t.L)
 B.FI=A.a(s([B.dO,null,null,B.iK]),t.L)
 B.Gm=A.a(s([B.dP,null,null,B.iQ]),t.L)
-B.Ff=A.a(s([B.c6,B.c6,B.cr,null]),t.L)
-B.IM=new A.b4(32,{"*":B.Fw,"+":B.Fx,"-":B.Fy,".":B.Fz,"/":B.FA,"0":B.Gu,"1":B.Gv,"2":B.Gw,"3":B.Gx,"4":B.Gy,"5":B.Gz,"6":B.GA,"7":B.GB,"8":B.FK,"9":B.FL,Alt:B.Fc,AltGraph:B.Gl,ArrowDown:B.FD,ArrowLeft:B.FE,ArrowRight:B.FF,ArrowUp:B.ED,Clear:B.F8,Control:B.Fd,Delete:B.Fr,End:B.FG,Enter:B.FX,Home:B.FH,Insert:B.F9,Meta:B.Fe,PageDown:B.FI,PageUp:B.Gm,Shift:B.Ff},B.p6,A.a8("b4<o,B<f?>>"))
+B.Fe=A.a(s([B.c6,B.c6,B.cr,null]),t.L)
+B.IM=new A.b4(32,{"*":B.Fw,"+":B.Fx,"-":B.Fy,".":B.Fz,"/":B.FA,"0":B.Gu,"1":B.Gv,"2":B.Gw,"3":B.Gx,"4":B.Gy,"5":B.Gz,"6":B.GA,"7":B.GB,"8":B.FK,"9":B.FL,Alt:B.Fb,AltGraph:B.Gl,ArrowDown:B.FD,ArrowLeft:B.FE,ArrowRight:B.FF,ArrowUp:B.ED,Clear:B.F7,Control:B.Fc,Delete:B.Fr,End:B.FG,Enter:B.FX,Home:B.FH,Insert:B.F8,Meta:B.Fd,PageDown:B.FI,PageUp:B.Gm,Shift:B.Fe},B.p6,A.a8("b4<o,B<f?>>"))
 B.IN=new A.bP([0,"FontWeight.w100",1,"FontWeight.w200",2,"FontWeight.w300",3,"FontWeight.w400",4,"FontWeight.w500",5,"FontWeight.w600",6,"FontWeight.w700",7,"FontWeight.w800",8,"FontWeight.w900"],A.a8("bP<m,o>"))
 B.Ll=new A.aI(B.iF,!1,!1,!1,!1)
 B.L4=new A.aI(B.dM,!1,!1,!1,!1)
@@ -85492,13 +85492,13 @@ B.PG=new A.bv("Reload",null,null,null,null,null,null,null,null)
 B.PJ=new A.bv("Sequence accuracy",null,null,null,null,null,null,null,null)
 B.PL=new A.bv("Evaluate",null,null,null,null,null,null,null,null)
 B.PM=new A.bv("Nonword error detection rate",null,null,null,null,null,null,null,null)
-B.PN=new A.bv("Spelling error correction",null,B.cz,null,null,null,null,null,null)
-B.PO=new A.bv("Failed to retrieve models, please try again and reload.",null,null,null,null,null,null,null,null)
-B.PP=new A.bv("The pipeline determines how the input text will be spell checked",null,null,null,null,null,null,null,null)
-B.PQ=new A.bv("Inspect the ouputs of all pipeline steps",null,null,null,null,null,null,null,null)
-B.PR=new A.bv("Real-word error detection rate",null,null,null,null,null,null,null,null)
-B.PT=new A.bv("GPUs: ",null,null,null,null,null,null,null,null)
-B.PV=new A.bv("Info",null,null,null,null,null,null,null,null)
+B.PO=new A.bv("Spelling error correction",null,B.cz,null,null,null,null,null,null)
+B.PP=new A.bv("Failed to retrieve models, please try again and reload.",null,null,null,null,null,null,null,null)
+B.PQ=new A.bv("The pipeline determines how the input text will be spell checked",null,null,null,null,null,null,null,null)
+B.PR=new A.bv("Inspect the ouputs of all pipeline steps",null,null,null,null,null,null,null,null)
+B.PS=new A.bv("Real-word error detection rate",null,null,null,null,null,null,null,null)
+B.PU=new A.bv("GPUs: ",null,null,null,null,null,null,null,null)
+B.PW=new A.bv("Info",null,null,null,null,null,null,null,null)
 B.PX=new A.bv("-",null,null,null,null,null,null,null,null)
 B.mm=new A.bv("Recall",null,null,null,null,null,null,null,null)
 B.PZ=new A.bv("Word-level spelling error detection",null,B.cz,null,null,null,null,null,null)
@@ -85507,13 +85507,13 @@ B.Q_=new A.bv("Evaluate the outputs of all pipeline steps against their groundtr
 B.Q0=new A.bv("Word accuracy",null,null,null,null,null,null,null,null)
 B.Q1=new A.bv("Select at least one model for any of the three tasks below to form a valid pipeline. Once you selected a valid pipeline you can run it on some text. Alternatively choose one of the presets below depending on your use case. You can also save the current pipeline settings to avoid specifying them each time you visit this site.",null,null,null,null,null,null,null,null)
 B.Q2=new A.bv("Save pipeline settings",null,null,null,null,null,null,null,null)
-B.Q3=new A.bv("Detailed outputs",null,B.ep,null,null,null,null,null,null)
-B.Q4=new A.bv("Select a model pipeline",null,B.ep,null,null,null,null,null,null)
-B.Q5=new A.bv("Input",null,B.cz,null,null,null,null,null,null)
-B.Q6=new A.bv("Evaluation",null,B.ep,null,null,null,null,null,null)
-B.Q7=new A.bv("MNED",null,null,null,null,null,null,null,null)
+B.Q3=new A.bv("Whitespace correction",null,B.cz,null,null,null,null,null,null)
+B.Q4=new A.bv("Detailed outputs",null,B.ep,null,null,null,null,null,null)
+B.Q5=new A.bv("Select a model pipeline",null,B.ep,null,null,null,null,null,null)
+B.Q6=new A.bv("Input",null,B.cz,null,null,null,null,null,null)
+B.Q7=new A.bv("Evaluation",null,B.ep,null,null,null,null,null,null)
+B.Q8=new A.bv("MNED",null,null,null,null,null,null,null,null)
 B.mo=new A.bv("F1",null,null,null,null,null,null,null,null)
-B.Q8=new A.bv("Tokenization repair",null,B.cz,null,null,null,null,null,null)
 B.Tm=new A.Ni(0,"system")
 B.h0=new A.AJ(0)
 B.Q9=new A.AJ(0.5)
@@ -85651,8 +85651,8 @@ B.RM=new A.tX(0,"inside")
 B.RN=new A.tX(1,"higher")
 B.RO=new A.tX(2,"lower")
 B.Bs=new A.E(67108864)
-B.Fk=A.a(s([B.Bs,B.S]),t.t_)
-B.RP=new A.ix(B.Fk)
+B.Fj=A.a(s([B.Bs,B.S]),t.t_)
+B.RP=new A.ix(B.Fj)
 B.RQ=new A.ix(null)
 B.mD=new A.l6(0,"backButton")
 B.mE=new A.l6(1,"nextButton")
@@ -86317,7 +86317,7 @@ s($,"aRT","aCn",()=>A.bQ('"(?:[^"\\x00-\\x1F\\x7F]|\\\\.)*"',!0))
 s($,"aRS","aCm",()=>A.bQ("\\\\(.)",!0))
 s($,"aSG","aCO",()=>A.bQ('[()<>@,;:"\\\\/\\[\\]?={} \\t\\x00-\\x1F\\x7F]',!0))
 s($,"aSR","aCS",()=>A.bQ("(?:"+$.aCl().a+")*",!0))
-r($,"aSA","aCL",()=>new A.YY("en_US",B.Fi,B.Fa,B.p4,B.p4,B.oW,B.oW,B.p1,B.p1,B.p5,B.p5,B.p0,B.p0,B.EC,B.FC,B.FW,B.Fg))
+r($,"aSA","aCL",()=>new A.YY("en_US",B.Fh,B.F9,B.p4,B.p4,B.oW,B.oW,B.p1,B.p1,B.p5,B.p5,B.p0,B.p0,B.EC,B.FC,B.FW,B.Ff))
 r($,"aRa","aq9",()=>A.axo("initializeDateFormatting(<locale>)",$.aCL()))
 r($,"aSx","atN",()=>A.axo("initializeDateFormatting(<locale>)",B.Ik))
 s($,"aSq","aCI",()=>48)

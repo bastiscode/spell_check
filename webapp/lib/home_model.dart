@@ -90,7 +90,7 @@ class HomeModel extends BaseModel {
     final List<String>? pipeline = prefs.getStringList("pipeline");
     if (available && pipeline != null) {
       if (pipeline[0] != "" &&
-          getModels("tokenization repair").firstWhere(
+          getModels("whitespace correction").firstWhere(
                   (element) => element["name"] == pipeline[0],
                   orElse: () => null) !=
               null) {
@@ -173,7 +173,7 @@ class HomeModel extends BaseModel {
             .join("\n");
       } else {
         outputController.text =
-            outputs["tokenization repair"]["text"].join("\n");
+            outputs["whitespace correction"]["text"].join("\n");
       }
     }
     _hasResults = error == null;
@@ -184,13 +184,13 @@ class HomeModel extends BaseModel {
 
   Future<APIResult> evaluateTr(String groundtruth) async {
     return await api.evaluateTr(input.join("\n"),
-        outputs["tokenization repair"]["text"].join("\n"), groundtruth);
+        outputs["whitespace correction"]["text"].join("\n"), groundtruth);
   }
 
   Future<APIResult> evaluateSedw(String groundtruth) async {
     String inputString;
-    if (outputs.containsKey("tokenization repair")) {
-      inputString = outputs["tokenization repair"]["text"].join("\n");
+    if (outputs.containsKey("whitespace correction")) {
+      inputString = outputs["whitespace correction"]["text"].join("\n");
     } else {
       inputString = input.join("\n");
     }
@@ -206,8 +206,8 @@ class HomeModel extends BaseModel {
     String inputString;
     if (outputs.containsKey("sed words")) {
       inputString = outputs["sed words"]["text"].join("\n");
-    } else if (outputs.containsKey("tokenization repair")) {
-      inputString = outputs["tokenization repair"]["text"].join("\n");
+    } else if (outputs.containsKey("whitespace correction")) {
+      inputString = outputs["whitespace correction"]["text"].join("\n");
     } else {
       inputString = input.join("\n");
     }

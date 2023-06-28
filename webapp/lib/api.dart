@@ -101,7 +101,7 @@ class API {
   Future<APIResult> evaluateTr(
       String input, String prediction, String groundtruth) async {
     return await _evaluate(
-        "tokenization repair", input, prediction, groundtruth);
+        "whitespace correction", input, prediction, groundtruth);
   }
 
   Future<APIResult> _evaluate(

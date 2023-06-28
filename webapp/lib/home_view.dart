@@ -200,9 +200,9 @@ class _HomeViewState extends State<HomeView> {
                   trModel: "eo large arxiv with errors",
                   sedwModel: "transformer+",
                   secModel: "transformer words nmt"),
-              Preset("Best all in one", secModel: "tokenization repair++"),
+              Preset("Best all in one", secModel: "whitespace correction++"),
               Preset("Best for highly corrupted text",
-                  secModel: "transformer with tokenization repair nmt"),
+                  secModel: "transformer with whitespace correction nmt"),
               Preset("Whitespace correction only",
                   trModel: "eo large arxiv with errors"),
               Preset("Error detection only", sedwModel: "gnn+"),
@@ -237,7 +237,7 @@ class _HomeViewState extends State<HomeView> {
                 prefixIcon: const Icon(Icons.looks_one, color: uniBlue),
                 suffixIcon: IconButton(
                   splashRadius: 16,
-                  tooltip: "Clear tokenization repair model",
+                  tooltip: "Clear whitespace correction model",
                   color: uniRed,
                   icon: const Icon(Icons.clear),
                   onPressed: model.trModel != null
@@ -249,15 +249,15 @@ class _HomeViewState extends State<HomeView> {
                         }
                       : null,
                 ),
-                labelText: "Tokenization repair model",
+                labelText: "Whitespace correction model",
                 helperMaxLines: 10,
                 helperText: model.trModel != null
                     ? model.getModel(
-                        "tokenization repair", model.trModel!)["description"]
+                        "whitespace correction", model.trModel!)["description"]
                     : null),
             icon: const Icon(Icons.arrow_drop_down_rounded),
             items: model
-                .getModels("tokenization repair")
+                .getModels("whitespace correction")
                 .map<DropdownMenuItem<String>>(
               (modelInfo) {
                 return DropdownMenuItem(
@@ -384,7 +384,7 @@ class _HomeViewState extends State<HomeView> {
                       padding: EdgeInsets.all(4),
                       child: Text(
                         "The models of the pipeline will be run in order such that the output of the previous model will be used as input to the next. "
-                        "If you do not specify a model for a task in the pipeline this task will be skipped. Some models (e.g. tokenization repair++) "
+                        "If you do not specify a model for a task in the pipeline this task will be skipped. Some models "
                         "can perform multiple tasks in one by design (e.g. correcting whitespace and spelling errors) "
                         "which is why its recommended to use them without any additional models in the pipeline that perform the same task.",
                         style: TextStyle(color: Colors.white),
@@ -761,7 +761,7 @@ class _HomeViewState extends State<HomeView> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (model.outputs.containsKey("tokenization repair"))
+              if (model.outputs.containsKey("whitespace correction"))
                 Flexible(
                   child: Padding(
                     padding:
@@ -771,14 +771,14 @@ class _HomeViewState extends State<HomeView> {
                         onEvaluation: (groundtruth) async {
                           final result = await model.evaluateTr(groundtruth);
                           final error = errorMessageFromAPIResult(
-                              result, "error evaluating tokenization repair");
+                              result, "error evaluating whitespace correction");
                           if (error == null) {
                             return trEvaluationTable(result.value);
                           } else if (mounted) {
                             showMessage(context, error);
                           }
                         },
-                        taskName: "tokenization repair"),
+                        taskName: "whitespace correction"),
                   ),
                 ),
               if (model.outputs.containsKey("sed words"))

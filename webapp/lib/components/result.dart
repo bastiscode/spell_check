@@ -58,7 +58,7 @@ class _ResultViewState extends State<ResultView> {
   @override
   Widget build(BuildContext context) {
     // setup data
-    bool hasTr = widget.output.containsKey("tokenization repair");
+    bool hasTr = widget.output.containsKey("whitespace correction");
     bool hasSedw = widget.output.containsKey("sed words");
     bool hasSec = widget.output.containsKey("sec");
 
@@ -71,8 +71,8 @@ class _ResultViewState extends State<ResultView> {
     dynamic secRuntimes;
 
     if (hasTr) {
-      trResults = widget.output["tokenization repair"];
-      trRuntimes = widget.runtimes["tokenization repair"];
+      trResults = widget.output["whitespace correction"];
+      trRuntimes = widget.runtimes["whitespace correction"];
     }
     if (hasSedw) {
       sedwResults = widget.output["sed words"];
@@ -136,12 +136,12 @@ class _ResultViewState extends State<ResultView> {
                 child: ListTile(
                   visualDensity: VisualDensity.compact,
                   title: const Text(
-                    "Tokenization repair",
+                    "Whitespace correction",
                     style: TextStyle(fontWeight: FontWeight.bold),
                   ),
                   subtitle: Text(
                       "${formatS(trRuntimes["s"])}, ${formatB(trRuntimes["bps"])}/s"),
-                  trailing: resultActions(context, "tokenization repair",
+                  trailing: resultActions(context, "whitespace correction",
                       trResults["text"].join("\n"), "tr_results"),
                 ),
               ),

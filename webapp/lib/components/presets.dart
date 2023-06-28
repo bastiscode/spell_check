@@ -54,7 +54,7 @@ class _PresetsState extends State<Presets> {
     if (preset.trModel != null &&
         widget.models.firstWhere(
                 (element) =>
-                    element["task"] == "tokenization repair" &&
+                    element["task"] == "whitespace correction" &&
                     element["name"] == preset.trModel!,
                 orElse: () => null) ==
             null) {
