@@ -193,18 +193,17 @@ class _HomeViewState extends State<HomeView> {
           Presets(
             presets: const [
               Preset("Best full pipeline",
-                  trModel: "eo large arxiv with errors",
+                  trModel: "eo large",
                   sedwModel: "gnn+",
                   secModel: "transformer nmt"),
               Preset("Fast full pipeline",
-                  trModel: "eo large arxiv with errors",
+                  trModel: "eo large",
                   sedwModel: "transformer+",
                   secModel: "transformer words nmt"),
               Preset("Best all in one", secModel: "whitespace correction++"),
               Preset("Best for highly corrupted text",
                   secModel: "transformer with whitespace correction nmt"),
-              Preset("Whitespace correction only",
-                  trModel: "eo large arxiv with errors"),
+              Preset("Whitespace correction only", trModel: "eo large"),
               Preset("Error detection only", sedwModel: "gnn+"),
               Preset("Error correction only", secModel: "transformer words nmt")
             ],
@@ -1076,9 +1075,7 @@ class _HomeViewState extends State<HomeView> {
           child: SingleChildScrollView(
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
-              child: Column(
-                children: exampleGroups
-              ),
+              child: Column(children: exampleGroups),
             ),
           ),
         );
