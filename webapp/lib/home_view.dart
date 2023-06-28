@@ -123,7 +123,7 @@ class _HomeViewState extends State<HomeView> {
                                 "Detect and correct spelling errors in text with or without space errors.",
                                 style: TextStyle(fontSize: 22),
                               ),
-                              subtitle: Text("Last updated: Jun 22, 2022"),
+                              // subtitle: Text("Last updated: Jun 22, 2022"),
                             )
                           ],
                         ),
